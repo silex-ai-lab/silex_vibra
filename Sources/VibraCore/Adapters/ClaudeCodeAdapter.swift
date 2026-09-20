@@ -68,9 +68,11 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         var newest: Date?
         var lastRecordType: String?
         var lastAssistantStopReason: String?
+        var parsedRecords = 0
 
         for line in lines {
             guard let record = jsonObject(line) else { continue }
+            parsedRecords += 1
 
             let type = record["type"] as? String
             if let type { lastRecordType = type }
@@ -98,6 +100,12 @@ public struct ClaudeCodeAdapter: AgentAdapter {
                 )
             }
         }
+
+        // A file with nothing parseable in it is not a session. Without this,
+        // an empty or corrupt .jsonl yields a phantom row: no tokens, no model,
+        // and a project name derived from the process's current directory
+        // rather than the session's. Observed during robustness testing.
+        guard parsedRecords > 0 else { return nil }
 
         let sessionID = id ?? file.deletingPathExtension().lastPathComponent
         let started = oldest ?? fileModificationDate(file) ?? Date()

@@ -66,12 +66,22 @@ public struct CodexAdapter: AgentAdapter {
         var lastActivity: Date?
         var threadUsage: [String: Any]?
         var lastRecordType: String?
+        var lastEventKind: String?
 
         for line in lines {
             guard let record = jsonObject(line) else { continue }
 
             let type = record["type"] as? String
             if let type { lastRecordType = type }
+
+            // The end-of-turn signal lives in payload.type, not the outer
+            // type: every lifecycle event arrives as an "event_msg" whose
+            // payload carries task_started / item_completed / task_complete.
+            if type == "event_msg",
+               let payload = record["payload"] as? [String: Any],
+               let eventType = payload["type"] as? String {
+                lastEventKind = eventType
+            }
 
             if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
                 if startedAt == nil || ts < startedAt! { startedAt = ts }
@@ -117,13 +127,22 @@ public struct CodexAdapter: AgentAdapter {
         let started = startedAt ?? fileModificationDate(file) ?? Date()
         let last = lastActivity ?? started
 
-        // Codex has no explicit end-of-turn marker in the rollout record
-        // stream: a trailing event_msg / response_item means it is still
-        // emitting. Anything else is indistinguishable from "cannot tell".
+        // Codex does mark end of turn, but in payload.type rather than the
+        // outer record type: a trailing `task_complete` means the turn is
+        // finished and the human has the ball. Reading only the outer type
+        // makes every finished Codex session look like it is still producing,
+        // so it ages into `stalled` and never reports "your turn".
         let lastEvent: LastEventKind
-        switch lastRecordType {
-        case "event_msg", "response_item": lastEvent = .producing
-        default: lastEvent = .unknown
+        switch lastEventKind {
+        case "task_complete":
+            lastEvent = .turnComplete
+        case "task_started", "item_completed", "token_count":
+            lastEvent = .producing
+        default:
+            switch lastRecordType {
+            case "event_msg", "response_item": lastEvent = .producing
+            default: lastEvent = .unknown
+            }
         }
 
         return Session(

@@ -30,8 +30,19 @@ public extension AgentAdapter {
 /// Standard locations the adapters read. Overridable so tests can point at
 /// fixtures instead of the developer's real, live agent state.
 public enum VibraPaths {
+    /// Root under which all agent state is looked up.
+    ///
+    /// `VIBRA_HOME` overrides it. A bundled app resolves `NSHomeDirectory()`
+    /// from the password database rather than `$HOME`, so without an explicit
+    /// override there is no way to point vibra at a fixture tree — which makes
+    /// it impossible to test behaviour against malformed or absent agent data
+    /// without touching the developer's real sessions.
     public static var home: URL {
-        URL(fileURLWithPath: NSHomeDirectory())
+        if let override = ProcessInfo.processInfo.environment["VIBRA_HOME"],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override)
+        }
+        return URL(fileURLWithPath: NSHomeDirectory())
     }
     public static var claudeProjects: URL {
         home.appendingPathComponent(".claude/projects")
