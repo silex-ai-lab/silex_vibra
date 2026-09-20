@@ -98,14 +98,18 @@ evidence it does, but the transition has not been observed live.
 
 ## Phase 0b — Runs in parallel, blocks nothing
 
-### P0b.1 — Make `Notifier` testable
+### P0b.1 — Make `Notifier` testable — **DONE 2026-09-20**
 
-It lives in `VibraApp`, outside the test target, so the debounce logic is
-manually verified only — the weakest spot in the suite. Move it into
-`VibraCore` behind a protocol.
+Split in two. `AttentionNotifier` in `VibraCore` owns every decision —
+transition detection and debounce — and takes its clock as a parameter, so the
+rules are exercised without a signed bundle, user authorization, or waiting a
+real minute. `UserNotificationSink` in `VibraApp` only delivers, and contains
+no decisions, because it is the part a test genuinely cannot drive: macOS
+silently drops whatever it will not show.
 
-**AC:** a test proving no second notification fires for the same session+state
-within 60s.
+10 tests cover it. Both rules were mutation-tested — removing the debounce and
+removing the transition check each make the suite fail — because a test that
+cannot fail is worse than no test.
 
 ---
 

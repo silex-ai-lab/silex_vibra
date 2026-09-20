@@ -11,7 +11,8 @@ final class MenuBarController {
     private var statusItem: NSStatusItem?
     private let store: SessionStore
     private let notchOverlay: NotchOverlay?
-    private let notifier = Notifier()
+    private let notificationSink = UserNotificationSink()
+    private lazy var notifier = AttentionNotifier(sink: notificationSink)
 
     init(store: SessionStore) {
         self.store = store
@@ -28,7 +29,7 @@ final class MenuBarController {
         // Ask once, up front. Delivery is not guaranteed for an ad-hoc signed
         // bundle, so a refusal here must not be fatal - the menu bar still
         // shows everything the notification would have said.
-        notifier.requestAuthorizationIfNeeded()
+        notificationSink.requestAuthorizationIfNeeded()
 
         store.onChange = { [weak self] previous, sessions in
             guard let self else { return }
