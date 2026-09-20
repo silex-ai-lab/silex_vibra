@@ -24,12 +24,22 @@ public actor SessionIngest {
     /// calls alone would miss a wasted read that parsed nothing.
     public private(set) var bytesRead: Int = 0
 
+    /// Sources untouched for longer than this are never opened.
+    ///
+    /// This is the difference between parsing 342 MB to display four sessions
+    /// and parsing almost nothing. A transcript not written to in this long
+    /// cannot contain activity inside the display window, so reading it is
+    /// pure waste. Set nil to read everything (used by full-parse tests).
+    private let horizon: TimeInterval?
+
     public init(
         adapters: [any AgentAdapter],
-        reader: IncrementalLineReader = IncrementalLineReader()
+        reader: IncrementalLineReader = IncrementalLineReader(),
+        horizon: TimeInterval? = 12 * 3600
     ) {
         self.adapters = adapters
         self.reader = reader
+        self.horizon = horizon
     }
 
     /// Bytes read during the most recent `refresh()`.
@@ -51,7 +61,13 @@ public actor SessionIngest {
                 continue
             }
 
+            let now = Date()
             for source in sources {
+                // Skip stale sources without opening them. Cheap: we already
+                // have the mtime from the stat done in sources().
+                if let horizon, now.timeIntervalSince(source.modified) > horizon {
+                    continue
+                }
                 seen.insert(source.url)
                 let previous = entries[source.url]
 
@@ -64,27 +80,59 @@ public actor SessionIngest {
                 let needsReset = previous.map { source.requiresReset(comparedTo: $0.descriptor) } ?? true
                 let startOffset = needsReset ? 0 : (previous?.offset ?? 0)
 
-                let input: SourceInput
                 var nextOffset = startOffset
+                var carried = needsReset ? nil : previous?.state
+                var produced: ParsedState?
+
                 if source.url.pathExtension == "jsonl" {
-                    guard let result = try? reader.read(url: source.url, from: startOffset) else {
-                        continue
+                    // Fold in bounded batches. A cold pass over a large
+                    // transcript would otherwise hold every line of the file
+                    // in memory at once; folding is already incremental, so
+                    // applying it repeatedly costs nothing extra.
+                    var isFirstBatch = true
+                    while true {
+                        guard let result = try? reader.read(url: source.url, from: nextOffset) else { break }
+                        bytesRead += result.bytesRead
+                        lastRefreshBytesRead += result.bytesRead
+
+                        let advanced = result.nextOffset > nextOffset
+                        nextOffset = result.nextOffset
+
+                        if result.lines.isEmpty && !advanced {
+                            if isFirstBatch, produced == nil, needsReset {
+                                produced = try? adapter.update(
+                                    source: source,
+                                    input: .records([], reset: true),
+                                    previous: nil
+                                )
+                            }
+                            break
+                        }
+
+                        // JSONSerialization hands back autoreleased objects.
+                        // Without draining per batch they accumulate for the
+                        // whole cold pass - 342 MB of transcripts turned into
+                        // ~880 MB resident before this pool was added.
+                        produced = autoreleasepool {
+                            try? adapter.update(
+                                source: source,
+                                input: .records(result.lines, reset: needsReset && isFirstBatch),
+                                previous: carried
+                            )
+                        }
+                        carried = produced
+                        isFirstBatch = false
+                        if !advanced { break }
                     }
-                    bytesRead += result.bytesRead
-                    lastRefreshBytesRead += result.bytesRead
-                    nextOffset = result.nextOffset
-                    input = .records(result.lines, reset: needsReset)
                 } else {
-                    input = .databaseSnapshot
+                    produced = try? adapter.update(
+                        source: source,
+                        input: .databaseSnapshot,
+                        previous: carried
+                    )
                 }
 
-                let carried = needsReset ? nil : previous?.state
-                guard let state = try? adapter.update(
-                    source: source,
-                    input: input,
-                    previous: carried
-                ) else { continue }
-
+                guard let state = produced else { continue }
                 entries[source.url] = Entry(
                     descriptor: source,
                     offset: nextOffset,

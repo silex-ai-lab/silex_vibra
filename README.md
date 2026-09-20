@@ -247,10 +247,18 @@ layered on the menu bar, which is the real interface.
 
 ## Status
 
-Early, and **currently expensive**: the running app sustains ~97% CPU and
-626 MB RSS because `SessionStore` re-parses every session file every 2 seconds.
-Fixing that is Phase 0 of [the roadmap](docs/ROADMAP.md) and blocks everything
-else.
+Early, but no longer expensive. Phase 0 of [the roadmap](docs/ROADMAP.md) is
+done: idle CPU went from ~97% to 0.0% and resident memory from 626 MB to
+~61 MB, measured on a 488-file, 339 MB corpus.
+
+| | before | after |
+|---|---|---|
+| idle CPU | ~97% | **0.0%** |
+| RSS | 626 MB | **~61 MB** |
+| cold start | 12.4s | **0.37s** |
+| unchanged refresh | full re-parse | **0 bytes read** |
+
+Run `make bench` to reproduce those numbers on your own corpus.
 
 Working against real data: the menu bar, all three adapters, state
 classification, and usage/cost accounting. Not yet done: terminal jump-back,

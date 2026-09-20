@@ -25,6 +25,47 @@ public struct OpenCodeAdapter: AgentAdapter {
         return FileManager.default.fileExists(atPath: dbURL.path, isDirectory: &isDir) && !isDir.boolValue
     }
 
+    // MARK: - Incremental ingest
+
+    /// SQLite is not JSONL, so this returns a single descriptor and the ingest
+    /// layer re-runs the query on every change. The descriptor folds the WAL
+    /// sidecar files into size/mtime — see `describeDatabase`.
+    public func sources() throws -> [SourceDescriptor] {
+        guard isAvailable else { return [] }
+        guard let descriptor = Self.describeDatabase(dbURL) else { return [] }
+        return [descriptor]
+    }
+
+    /// Change-detection descriptor for a SQLite database. In WAL mode the main
+    /// `.db` file's size and mtime can stay FIXED while data flows through
+    /// `opencode.db-wal`; fingerprinting only the `.db` would make vibra go
+    /// permanently stale. Fold `-wal` (and `-shm`) in when they exist.
+    static func describeDatabase(_ url: URL) -> SourceDescriptor? {
+        guard let main = SourceDescriptor.describing(url) else { return nil }
+
+        let walURL = URL(fileURLWithPath: url.path + "-wal")
+        let shmURL = URL(fileURLWithPath: url.path + "-shm")
+
+        var size = main.size
+        var modified = main.modified
+        if let wal = SourceDescriptor.describing(walURL) {
+            size += wal.size
+            if wal.modified > modified { modified = wal.modified }
+        }
+        if let shm = SourceDescriptor.describing(shmURL) {
+            size += shm.size
+            if shm.modified > modified { modified = shm.modified }
+        }
+
+        return SourceDescriptor(
+            url: main.url,
+            deviceID: main.deviceID,
+            fileID: main.fileID,
+            size: size,
+            modified: modified
+        )
+    }
+
     // MARK: - Allowlist
 
     /// The single table this adapter may read.

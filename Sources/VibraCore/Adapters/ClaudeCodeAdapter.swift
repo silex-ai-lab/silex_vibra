@@ -7,6 +7,11 @@ import Foundation
 /// records in the file so the session reflects the whole conversation, not one
 /// API response. The oldest timestamp becomes `startedAt`, the newest becomes
 /// `lastActivity`.
+///
+/// Steady-state polling goes through `sources()` + `update(...)`: the ingest
+/// layer hands over only the records appended since the last poll, and the
+/// checkpoint folds them into a running summary. The full-parse path reuses the
+/// same folding logic, so the two paths are identical by construction.
 public struct ClaudeCodeAdapter: AgentAdapter {
     public let kind: AgentKind = .claudeCode
 
@@ -35,6 +40,54 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         return FileManager.default.fileExists(atPath: projectsRoot.path, isDirectory: &isDir) && isDir.boolValue
     }
 
+    // MARK: - Incremental ingest
+
+    public func sources() throws -> [SourceDescriptor] {
+        let files: [URL]
+        if let file {
+            files = [file]
+        } else if let projectsRoot {
+            files = try jsonlFiles(under: projectsRoot)
+        } else {
+            files = []
+        }
+        // Stat only - never open or read a file here.
+        return files.compactMap { SourceDescriptor.describing($0) }
+    }
+
+    public func update(
+        source: SourceDescriptor,
+        input: SourceInput,
+        previous: ParsedState?
+    ) throws -> ParsedState {
+        guard case .records(let lines, let reset) = input else {
+            // Not a JSONL source. Fall back to a full parse.
+            return ParsedState(sessions: try discoverSessions(), checkpoint: nil)
+        }
+
+        var checkpoint: ClaudeCheckpoint
+        if reset {
+            checkpoint = ClaudeCheckpoint()
+        } else if let previous, let carried = previous.checkpoint as? ClaudeCheckpoint {
+            checkpoint = carried
+        } else {
+            checkpoint = ClaudeCheckpoint()
+        }
+
+        for line in lines {
+            checkpoint.fold(line)
+        }
+
+        let session = checkpoint.buildSession(
+            agent: kind,
+            fallbackID: source.url.deletingPathExtension().lastPathComponent,
+            fallbackDate: source.modified
+        )
+        return ParsedState(sessions: session.map { [$0] } ?? [], checkpoint: checkpoint)
+    }
+
+    // MARK: - Full parse
+
     public func discoverSessions() throws -> [Session] {
         let files: [URL]
         if let file {
@@ -54,66 +107,79 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         return sessions.sorted { $0.lastActivity > $1.lastActivity }
     }
 
-    // MARK: - Parsing
-
     private func parseSession(at file: URL) -> Session? {
-        guard let lines = readLines(file) else { return nil }
-
-        var id: String?
-        var cwd: String?
-        var gitBranch: String?
-        var model: String?
-        var usage = TokenUsage.zero
-        var oldest: Date?
-        var newest: Date?
-        var lastRecordType: String?
-        var lastAssistantStopReason: String?
-        var parsedRecords = 0
-
+        let lines = readLines(file) ?? []
+        var checkpoint = ClaudeCheckpoint()
         for line in lines {
-            guard let record = jsonObject(line) else { continue }
-            parsedRecords += 1
+            checkpoint.fold(line)
+        }
+        return checkpoint.buildSession(
+            agent: kind,
+            fallbackID: file.deletingPathExtension().lastPathComponent,
+            fallbackDate: fileModificationDate(file) ?? Date()
+        )
+    }
+}
 
-            let type = record["type"] as? String
-            if let type { lastRecordType = type }
+// MARK: - Claude checkpoint
 
-            if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
-                if oldest == nil || ts < oldest! { oldest = ts }
-                if newest == nil || ts > newest! { newest = ts }
-            }
+/// Per-file running summary for a Claude Code transcript. Folding is the same
+/// code whether it runs over the whole file at once or over a trailing slice.
+struct ClaudeCheckpoint: AdapterCheckpoint {
+    var sessionID: String?
+    var cwd: String?
+    var gitBranch: String?
+    var model: String?
+    var usage = TokenUsage.zero
+    var earliest: Date?
+    var latest: Date?
+    var lastRecordType: String?
+    var lastAssistantStopReason: String?
+    var parsedRecords = 0
 
-            if id == nil { id = (record["sessionId"] as? String) ?? (record["session_id"] as? String) }
-            if cwd == nil { cwd = record["cwd"] as? String }
-            if gitBranch == nil { gitBranch = record["gitBranch"] as? String }
+    mutating func fold(_ line: String) {
+        guard let record = jsonObject(line) else { return }
+        parsedRecords += 1
 
-            guard type == "assistant" else { continue }
-            guard let message = record["message"] as? [String: Any] else { continue }
+        let type = record["type"] as? String
+        if let type { lastRecordType = type }
 
-            if model == nil { model = message["model"] as? String }
-            if let stopReason = message["stop_reason"] as? String { lastAssistantStopReason = stopReason }
-            if let u = message["usage"] as? [String: Any] {
-                usage += TokenUsage(
-                    input: jsonInt(u["input_tokens"]),
-                    output: jsonInt(u["output_tokens"]),
-                    cacheCreation: jsonInt(u["cache_creation_input_tokens"]),
-                    cacheRead: jsonInt(u["cache_read_input_tokens"])
-                )
-            }
+        if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
+            if earliest == nil || ts < earliest! { earliest = ts }
+            if latest == nil || ts > latest! { latest = ts }
         }
 
-        // A file with nothing parseable in it is not a session. Without this,
-        // an empty or corrupt .jsonl yields a phantom row: no tokens, no model,
-        // and a project name derived from the process's current directory
-        // rather than the session's. Observed during robustness testing.
+        if sessionID == nil { sessionID = (record["sessionId"] as? String) ?? (record["session_id"] as? String) }
+        if cwd == nil { cwd = record["cwd"] as? String }
+        if gitBranch == nil { gitBranch = record["gitBranch"] as? String }
+
+        guard type == "assistant" else { return }
+        guard let message = record["message"] as? [String: Any] else { return }
+
+        if model == nil { model = message["model"] as? String }
+        if let stopReason = message["stop_reason"] as? String { lastAssistantStopReason = stopReason }
+        if let u = message["usage"] as? [String: Any] {
+            // Claude usage is per-response: accumulate across every assistant
+            // record, never replace.
+            usage += TokenUsage(
+                input: jsonInt(u["input_tokens"]),
+                output: jsonInt(u["output_tokens"]),
+                cacheCreation: jsonInt(u["cache_creation_input_tokens"]),
+                cacheRead: jsonInt(u["cache_read_input_tokens"])
+            )
+        }
+    }
+
+    func buildSession(agent: AgentKind, fallbackID: String, fallbackDate: Date) -> Session? {
+        // A file with nothing parseable in it is not a session.
         guard parsedRecords > 0 else { return nil }
 
-        let sessionID = id ?? file.deletingPathExtension().lastPathComponent
-        let started = oldest ?? fileModificationDate(file) ?? Date()
-        let last = newest ?? started
+        let sessionID = sessionID ?? fallbackID
+        let started = earliest ?? fallbackDate
+        let last = latest ?? started
 
         // A trailing permission-mode record means the agent is parked on an
-        // approval prompt; otherwise the last assistant stop_reason decides
-        // whether it is still producing or has handed the turn back.
+        // approval prompt; otherwise the last assistant stop_reason decides.
         let lastEvent: LastEventKind
         if lastRecordType == "permission-mode" {
             lastEvent = .permissionPrompt
@@ -127,7 +193,7 @@ public struct ClaudeCodeAdapter: AgentAdapter {
 
         return Session(
             id: sessionID,
-            agent: kind,
+            agent: agent,
             cwd: cwd ?? "",
             gitBranch: gitBranch,
             model: model,
@@ -173,9 +239,12 @@ func jsonInt(_ value: Any?) -> Int {
     }
 }
 
+/// Streams complete lines out of a file in bounded memory. The previous
+/// whole-file string load was what ballooned resident size to 626 MB on a
+/// 262 MB transcript tree.
 func readLines(_ url: URL) -> [String]? {
-    guard let data = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-    return data.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    guard let result = try? IncrementalLineReader().read(url: url, from: 0) else { return nil }
+    return result.lines
 }
 
 func fileModificationDate(_ url: URL) -> Date? {

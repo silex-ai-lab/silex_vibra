@@ -48,7 +48,7 @@ struct CodexAdapterTests {
         """
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("codex-midturn-\(UUID().uuidString).jsonl")
-        try body.write(to: url, atomically: true, encoding: .utf8)
+        try (body + "\n").write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
         let session = try #require(CodexAdapter(file: url).discoverSessions().first)

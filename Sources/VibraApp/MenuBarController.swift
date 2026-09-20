@@ -131,5 +131,5 @@ final class MenuBarController {
         }
     }
 
-    @objc private func refreshNow() { store.refresh() }
+    @objc private func refreshNow() { Task { await store.requestRefresh() } }
 }

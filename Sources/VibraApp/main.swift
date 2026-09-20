@@ -52,6 +52,48 @@ if CommandLine.arguments.contains("--test-notification") {
     exit(0)
 }
 
+// `Vibra --bench` measures the Phase 0 acceptance criteria directly: how long
+// a cold pass takes, and how many bytes a warm pass reads when nothing has
+// changed. The warm number must be 0.
+if CommandLine.arguments.contains("--bench") {
+    let ingest = SessionIngest(adapters: AdapterRegistry.all())
+    // Top-level code in main.swift is MainActor-isolated under Swift 6, so a
+    // plain Task{} here inherits the main actor and blocking on a semaphore
+    // deadlocks against the very actor the work needs. Detach, and spin the
+    // runloop instead of blocking it.
+    nonisolated(unsafe) var finished = false
+    Task.detached {
+        var t0 = Date()
+        let cold = await ingest.refresh()
+        let coldSeconds = Date().timeIntervalSince(t0)
+        let coldBytes = await ingest.lastRefreshBytesRead
+
+        t0 = Date()
+        _ = await ingest.refresh()
+        let warmSeconds = Date().timeIntervalSince(t0)
+        let warmBytes = await ingest.lastRefreshBytesRead
+
+        t0 = Date()
+        for _ in 0..<10 { _ = await ingest.refresh() }
+        let tenWarm = Date().timeIntervalSince(t0)
+
+        print(String(format: "cold refresh : %6.2fs  %10d bytes  %d sessions",
+                     coldSeconds, coldBytes, cold.count))
+        print(String(format: "warm refresh : %6.2fs  %10d bytes", warmSeconds, warmBytes))
+        print(String(format: "10x warm     : %6.2fs  (%.1f ms each)",
+                     tenWarm, tenWarm * 100))
+        print(warmBytes == 0
+              ? "PASS: an unchanged refresh reads zero bytes"
+              : "FAIL: an unchanged refresh still read \(warmBytes) bytes")
+        finished = true
+    }
+    let deadline = Date().addingTimeInterval(300)
+    while !finished && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(finished ? 0 : 1)
+}
+
 if CommandLine.arguments.contains("--probe") {
     var total = 0
     let aggregator = UsageAggregator()

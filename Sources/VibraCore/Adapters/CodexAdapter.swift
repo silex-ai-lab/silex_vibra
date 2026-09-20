@@ -6,6 +6,10 @@ import Foundation
 /// `token_usage_record` records carry `thread_token_usage`, which is cumulative
 /// across the thread. The last `thread_token_usage` seen therefore holds the
 /// session total; summing `thread_token_usage` across records would multi-count.
+///
+/// Steady-state polling goes through `sources()` + `update(...)`. The cumulative
+/// rule and the full-parse rule are the same code path, so a folded result is
+/// byte-for-byte the same as a fresh parse.
 public struct CodexAdapter: AgentAdapter {
     public let kind: AgentKind = .codex
 
@@ -34,6 +38,53 @@ public struct CodexAdapter: AgentAdapter {
         return FileManager.default.fileExists(atPath: sessionsRoot.path, isDirectory: &isDir) && isDir.boolValue
     }
 
+    // MARK: - Incremental ingest
+
+    public func sources() throws -> [SourceDescriptor] {
+        let files: [URL]
+        if let file {
+            files = [file]
+        } else if let sessionsRoot {
+            files = try jsonlFiles(under: sessionsRoot)
+                .filter { $0.lastPathComponent.hasPrefix("rollout-") }
+        } else {
+            files = []
+        }
+        // Stat only - never open or read a file here.
+        return files.compactMap { SourceDescriptor.describing($0) }
+    }
+
+    public func update(
+        source: SourceDescriptor,
+        input: SourceInput,
+        previous: ParsedState?
+    ) throws -> ParsedState {
+        guard case .records(let lines, let reset) = input else {
+            return ParsedState(sessions: try discoverSessions(), checkpoint: nil)
+        }
+
+        var checkpoint: CodexCheckpoint
+        if reset {
+            checkpoint = CodexCheckpoint()
+        } else if let previous, let carried = previous.checkpoint as? CodexCheckpoint {
+            checkpoint = carried
+        } else {
+            checkpoint = CodexCheckpoint()
+        }
+
+        for line in lines {
+            checkpoint.fold(line)
+        }
+
+        let session = checkpoint.buildSession(
+            agent: kind,
+            fallbackDate: source.modified
+        )
+        return ParsedState(sessions: session.map { [$0] } ?? [], checkpoint: checkpoint)
+    }
+
+    // MARK: - Full parse
+
     public func discoverSessions() throws -> [Session] {
         let files: [URL]
         if let file {
@@ -54,84 +105,89 @@ public struct CodexAdapter: AgentAdapter {
         return sessions.sorted { $0.lastActivity > $1.lastActivity }
     }
 
-    // MARK: - Parsing
-
     private func parseSession(at file: URL) -> Session? {
-        guard let lines = readLines(file) else { return nil }
-
-        var sessionID: String?
-        var cwd: String?
-        var model: String?
-        var startedAt: Date?
-        var lastActivity: Date?
-        var threadUsage: [String: Any]?
-        var lastRecordType: String?
-        var lastEventKind: String?
-
+        let lines = readLines(file) ?? []
+        var checkpoint = CodexCheckpoint()
         for line in lines {
-            guard let record = jsonObject(line) else { continue }
+            checkpoint.fold(line)
+        }
+        return checkpoint.buildSession(
+            agent: kind,
+            fallbackDate: fileModificationDate(file) ?? Date()
+        )
+    }
+}
 
-            let type = record["type"] as? String
-            if let type { lastRecordType = type }
+// MARK: - Codex checkpoint
 
-            // The end-of-turn signal lives in payload.type, not the outer
-            // type: every lifecycle event arrives as an "event_msg" whose
-            // payload carries task_started / item_completed / task_complete.
-            if type == "event_msg",
-               let payload = record["payload"] as? [String: Any],
-               let eventType = payload["type"] as? String {
-                lastEventKind = eventType
-            }
+/// Per-file running summary for a Codex rollout. `thread_token_usage` is
+/// cumulative, so folding REPLACES the stored usage rather than adding to it.
+struct CodexCheckpoint: AdapterCheckpoint {
+    var sessionID: String?
+    var cwd: String?
+    var model: String?
+    var usage = TokenUsage.zero
+    var earliest: Date?
+    var latest: Date?
+    var lastRecordType: String?
+    var lastEventKind: String?
 
-            if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
-                if startedAt == nil || ts < startedAt! { startedAt = ts }
-                if lastActivity == nil || ts > lastActivity! { lastActivity = ts }
-            }
+    mutating func fold(_ line: String) {
+        guard let record = jsonObject(line) else { return }
 
-            guard let payload = record["payload"] as? [String: Any] else { continue }
+        let type = record["type"] as? String
+        if let type { lastRecordType = type }
 
-            switch type {
-            case "session_meta":
-                if sessionID == nil { sessionID = payload["session_id"] as? String }
-                if cwd == nil { cwd = payload["cwd"] as? String }
-                if model == nil { model = findModel(in: payload) }
-                if startedAt == nil, let raw = payload["timestamp"] as? String {
-                    startedAt = parseISODate(raw)
-                }
-            case "turn_context":
-                if cwd == nil {
-                    cwd = (payload["cwd"] as? String) ?? (payload["workspace_roots"] as? [String])?.first
-                }
-            case "token_usage_record":
-                // thread_token_usage is cumulative; the last one wins.
-                if let cumulative = payload["thread_token_usage"] as? [String: Any] {
-                    threadUsage = cumulative
-                }
-            default:
-                break
-            }
+        // The end-of-turn signal lives in payload.type, not the outer type:
+        // every lifecycle event arrives as an "event_msg" whose payload carries
+        // task_started / item_completed / task_complete.
+        if type == "event_msg",
+           let payload = record["payload"] as? [String: Any],
+           let eventType = payload["type"] as? String {
+            lastEventKind = eventType
         }
 
+        if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
+            if earliest == nil || ts < earliest! { earliest = ts }
+            if latest == nil || ts > latest! { latest = ts }
+        }
+
+        guard let payload = record["payload"] as? [String: Any] else { return }
+
+        switch type {
+        case "session_meta":
+            if sessionID == nil { sessionID = payload["session_id"] as? String }
+            if cwd == nil { cwd = payload["cwd"] as? String }
+            if model == nil { model = Self.findModel(in: payload) }
+        case "turn_context":
+            if cwd == nil {
+                cwd = (payload["cwd"] as? String) ?? (payload["workspace_roots"] as? [String])?.first
+            }
+        case "token_usage_record":
+            if let cumulative = payload["thread_token_usage"] as? [String: Any] {
+                // Cumulative: the latest value IS the total. Replace, never add.
+                usage = TokenUsage(
+                    input: jsonInt(cumulative["input_tokens"]),
+                    output: jsonInt(cumulative["output_tokens"]),
+                    cacheCreation: jsonInt(cumulative["cache_write_input_tokens"]),
+                    cacheRead: jsonInt(cumulative["cached_input_tokens"])
+                )
+            }
+        default:
+            break
+        }
+    }
+
+    func buildSession(agent: AgentKind, fallbackDate: Date) -> Session? {
         guard let id = sessionID else { return nil }
 
-        // Codex field names differ from Claude's:
-        //   cached_input_tokens      -> cacheRead
-        //   cache_write_input_tokens -> cacheCreation
-        let usage = TokenUsage(
-            input: jsonInt(threadUsage?["input_tokens"]),
-            output: jsonInt(threadUsage?["output_tokens"]),
-            cacheCreation: jsonInt(threadUsage?["cache_write_input_tokens"]),
-            cacheRead: jsonInt(threadUsage?["cached_input_tokens"])
-        )
+        let started = earliest ?? fallbackDate
+        let last = latest ?? started
 
-        let started = startedAt ?? fileModificationDate(file) ?? Date()
-        let last = lastActivity ?? started
-
-        // Codex does mark end of turn, but in payload.type rather than the
-        // outer record type: a trailing `task_complete` means the turn is
-        // finished and the human has the ball. Reading only the outer type
-        // makes every finished Codex session look like it is still producing,
-        // so it ages into `stalled` and never reports "your turn".
+        // Codex marks end of turn in payload.type, not the outer record type.
+        // Reading only the outer type makes every finished session look like it
+        // is still producing, so it ages into `stalled` and never reports "your
+        // turn".
         let lastEvent: LastEventKind
         switch lastEventKind {
         case "task_complete":
@@ -147,7 +203,7 @@ public struct CodexAdapter: AgentAdapter {
 
         return Session(
             id: id,
-            agent: kind,
+            agent: agent,
             cwd: cwd ?? "",
             gitBranch: nil,
             model: model,
@@ -163,12 +219,12 @@ public struct CodexAdapter: AgentAdapter {
     /// `base_instructions.provenance.model`); otherwise falls back to
     /// `model_provider` (e.g. `"openai"`), which is the only model identifier
     /// Codex's `session_meta` always exposes.
-    private func findModel(in payload: [String: Any]) -> String? {
+    static func findModel(in payload: [String: Any]) -> String? {
         if let found = recursivelyFindModel(in: payload) { return found }
         return payload["model_provider"] as? String
     }
 
-    private func recursivelyFindModel(in value: Any) -> String? {
+    static func recursivelyFindModel(in value: Any) -> String? {
         if let dict = value as? [String: Any] {
             if let model = dict["model"] as? String { return model }
             for (_, child) in dict {

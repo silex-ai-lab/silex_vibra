@@ -10,7 +10,7 @@ APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
 BIN_SRC     := .build/$(CONFIG)/VibraApp
 
-.PHONY: all build app run test clean fmt install uninstall probe restart
+.PHONY: all build app run test clean fmt install uninstall probe bench restart
 
 all: app
 
@@ -70,6 +70,10 @@ run: app
 # project names and states - never message content.
 probe: build
 	@$(BIN_SRC) --probe
+
+# Phase 0 acceptance check: a refresh where nothing changed must read 0 bytes.
+bench: build
+	@$(BIN_SRC) --bench
 
 # Copy into /Applications so it survives `make clean` and behaves like a
 # normal installed app. Quits any running copy first, otherwise the old

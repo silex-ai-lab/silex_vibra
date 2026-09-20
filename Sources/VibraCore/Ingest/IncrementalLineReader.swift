@@ -23,9 +23,18 @@ public struct IncrementalLineReader: Sendable {
     }
 
     public let chunkSize: Int
+    /// Upper bound on lines returned from a single `read`.
+    ///
+    /// Bounding only the disk chunk is not enough: a cold pass over a 342 MB
+    /// corpus materialised every line into one array, and Swift String
+    /// overhead turned that into ~870 MB resident. The caller loops until
+    /// `nextOffset` stops advancing, folding each batch as it goes, so peak
+    /// memory is one batch rather than one file.
+    public let maxLinesPerRead: Int
 
-    public init(chunkSize: Int = 256 * 1024) {
+    public init(chunkSize: Int = 256 * 1024, maxLinesPerRead: Int = 2000) {
         self.chunkSize = chunkSize
+        self.maxLinesPerRead = maxLinesPerRead
     }
 
     /// Reads complete lines starting at `offset`.
@@ -51,14 +60,15 @@ public struct IncrementalLineReader: Sendable {
         var consumed: UInt64 = offset
         var bytesRead = 0
 
-        while true {
+        while lines.count < maxLinesPerRead {
             let chunk = try handle.read(upToCount: chunkSize) ?? Data()
             if chunk.isEmpty { break }
             bytesRead += chunk.count
             pending.append(chunk)
 
             // Split on newline, keeping any trailing fragment in `pending`.
-            while let nl = pending.firstIndex(of: UInt8(ascii: "\n")) {
+            while lines.count < maxLinesPerRead,
+                  let nl = pending.firstIndex(of: UInt8(ascii: "\n")) {
                 let lineData = pending[pending.startIndex..<nl]
                 let advance = pending.distance(from: pending.startIndex, to: nl) + 1
                 consumed += UInt64(advance)

@@ -123,4 +123,25 @@ struct OpenCodeAdapterTests {
         #expect(byID["ses_pending"]?.lastEvent == .permissionPrompt)
         #expect(byID["ses_quiet"]?.lastEvent == .unknown)
     }
+
+    @Test func touchingWALChangesDescriptor() throws {
+        let dir = testScratchDirectory().appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let dbURL = dir.appendingPathComponent("opencode.db")
+        try Data("main db bytes".utf8).write(to: dbURL)
+
+        let adapter = OpenCodeAdapter(dbURL: dbURL)
+        let before = try #require(adapter.sources().first)
+
+        // In WAL mode the main .db size/mtime can stay fixed while data flows
+        // through the -wal sidecar. Touching only the -wal must move the
+        // descriptor, or vibra goes permanently stale.
+        let walURL = dir.appendingPathComponent("opencode.db-wal")
+        try Data("wal data".utf8).write(to: walURL)
+
+        let after = try #require(adapter.sources().first)
+        #expect(after != before)
+        #expect(after.size > before.size)
+    }
 }
