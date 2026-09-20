@@ -1,8 +1,57 @@
 import AppKit
+import UserNotifications
 import VibraCore
 
 // `VibraApp --probe` runs every adapter once, prints a summary, and exits.
 // Diagnostics only: counts, project names and states - never message content.
+// `Vibra --test-notification` posts one notification and reports what macOS
+// said about it. Run it from the INSTALLED bundle, not a bare binary:
+//   /Applications/Vibra.app/Contents/MacOS/Vibra --test-notification
+// Notification delivery is not guaranteed for an ad-hoc signed bundle, so this
+// exists to answer "does it work on this machine?" without guessing.
+if CommandLine.arguments.contains("--test-notification") {
+    guard Bundle.main.bundleIdentifier != nil else {
+        print("FAIL: no bundle identifier - run this from inside Vibra.app, not the bare binary")
+        exit(1)
+    }
+    print("bundle: \(Bundle.main.bundleIdentifier ?? "?")")
+    let center = UNUserNotificationCenter.current()
+    var done = false
+    center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+        print("authorization granted: \(granted)")
+        if let error { print("authorization error: \(error.localizedDescription)") }
+        guard granted else {
+            print("RESULT: not authorized. Check System Settings > Notifications > Vibra.")
+            done = true
+            return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "vibra"
+        content.body = "Test notification - delivery works on this machine."
+        let request = UNNotificationRequest(
+            identifier: "vibra.test.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        center.add(request) { addError in
+            if let addError {
+                print("RESULT: delivery FAILED - \(addError.localizedDescription)")
+            } else {
+                print("RESULT: notification posted. Look for a banner now.")
+                print("If no banner appears, macOS accepted it but suppressed display")
+                print("(common for ad-hoc signed bundles, or Do Not Disturb).")
+            }
+            done = true
+        }
+    }
+    // Spin briefly so the async callbacks can run before the process exits.
+    let deadline = Date().addingTimeInterval(10)
+    while !done && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.1))
+    }
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--probe") {
     var total = 0
     let aggregator = UsageAggregator()

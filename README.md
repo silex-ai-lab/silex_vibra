@@ -135,6 +135,9 @@ Expect `Test run with 20 tests in 6 suites passed` followed by
 ```sh
 make restart    # rebuild and relaunch the running copy
 make probe      # check adapter output without the UI
+
+# check whether macOS will actually deliver notifications here
+/Applications/Vibra.app/Contents/MacOS/Vibra --test-notification
 ```
 
 ## Testing note
@@ -199,19 +202,40 @@ The window is `activityWindow` in `Sources/VibraApp/SessionStore.swift`.
 **`swift test` says everything passed but nothing ran.** Use `make test`. See
 the testing note above — this is expected on a machine without Xcode.
 
-**Notifications never arrive.** See below; this is a known limitation, not a
-misconfiguration on your side.
+**Notifications never arrive.** Test it directly:
+
+```sh
+/Applications/Vibra.app/Contents/MacOS/Vibra --test-notification
+```
+
+On a fresh ad-hoc signed install this reports:
+
+```
+authorization granted: false
+authorization error: Notifications are not allowed for this application
+```
+
+That is macOS refusing an unsigned bundle, not a bug in vibra. The app does
+register its bundle id, so you can enable it manually:
+
+**System Settings → Notifications → Vibra → Allow Notifications**
+
+Then re-run the command above; it should print `RESULT: notification posted`
+and show a banner. If Vibra is missing from that list, launch it once
+(`open /Applications/Vibra.app`) and look again.
+
+Everything else works without this — notifications are an optional convenience
+layered on the menu bar, which is the real interface.
 
 ## Known limitations
 
-- **Notification delivery is unverified.** The bundle is ad-hoc signed rather
-  than Developer ID signed, and macOS does not guarantee local notification
-  delivery for such a bundle. `Notifier` requests authorization once and
-  tolerates refusal silently, because the menu bar already shows everything the
-  notification would have said. If banners matter to you, the fix is a paid
-  Apple Developer account and a Developer ID signature, not a code change.
-  Check `System Settings → Notifications → Vibra` to see whether the app
-  registered at all.
+- **Notifications are refused by default.** Confirmed on macOS 26: an ad-hoc
+  signed bundle gets `authorization granted: false` with
+  `"Notifications are not allowed for this application"`. The app still
+  registers its bundle id with Notification Center, so you can enable it by
+  hand — see below. The durable fix is a Developer ID signature, not a code
+  change. The menu bar shows everything a notification would have said, so
+  `Notifier` treats refusal as normal and never fails.
 - **No terminal jump-back.** Clicking a session does not yet focus the terminal
   tab it came from.
 - **No weekly report card.**
