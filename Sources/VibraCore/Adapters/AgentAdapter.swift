@@ -15,10 +15,41 @@ public protocol AgentAdapter: Sendable {
     /// Current sessions, newest activity first. Implementations should tolerate
     /// partially-written records rather than throwing, since the observed agent
     /// may be mid-append.
+    ///
+    /// This is the full-parse path. It is correct but expensive, and is kept
+    /// for tests and for the initial load; steady-state polling goes through
+    /// `sources()` + `update(...)` instead.
     func discoverSessions() throws -> [Session]
+
+    /// Cheap enumeration of readable units — one per transcript file, or a
+    /// single entry for a database. Must only stat, never read contents.
+    ///
+    /// Returning an empty array opts the adapter out of incremental ingest,
+    /// and `SessionIngest` falls back to `discoverSessions()`.
+    func sources() throws -> [SourceDescriptor]
+
+    /// Folds one source's new input into its previous state.
+    func update(
+        source: SourceDescriptor,
+        input: SourceInput,
+        previous: ParsedState?
+    ) throws -> ParsedState
 }
 
 public extension AgentAdapter {
+    /// Default: no incremental support. The adapter is still correct, just
+    /// not cheap, and `SessionIngest` will full-parse it every refresh.
+    func sources() throws -> [SourceDescriptor] { [] }
+
+    /// Default: ignore the incremental input and full-parse.
+    func update(
+        source: SourceDescriptor,
+        input: SourceInput,
+        previous: ParsedState?
+    ) throws -> ParsedState {
+        ParsedState(sessions: try discoverSessions(), checkpoint: nil)
+    }
+
     /// Sessions, or an empty list if the source is unreadable. The menu bar
     /// should degrade to "no sessions" rather than disappear on a parse error.
     func discoverSessionsSafely() -> [Session] {
