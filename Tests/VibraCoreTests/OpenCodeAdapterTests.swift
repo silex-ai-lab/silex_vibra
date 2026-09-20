@@ -1,26 +1,26 @@
-import XCTest
+import Foundation
+import Testing
 @testable import VibraCore
 
-final class OpenCodeAdapterTests: XCTestCase {
+struct OpenCodeAdapterTests {
     private let sessionSchema = """
         CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT, model TEXT, \
-        tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER, \
+        tokens_input INTEGER, tokens_output INTEGER, \
         tokens_cache_read INTEGER, tokens_cache_write INTEGER, \
         time_created INTEGER, time_updated INTEGER);
         """
 
-    func testSQLNeverReferencesAccountOrCredential() {
+    @Test func sqlNeverReferencesAccountOrCredential() {
         for sql in OpenCodeAdapter.allSQL {
             let lower = sql.lowercased()
-            XCTAssertFalse(lower.contains("account"), "SQL references an account table: \(sql)")
-            XCTAssertFalse(lower.contains("credential"), "SQL references a credential table: \(sql)")
+            #expect(!lower.contains("account"))
+            #expect(!lower.contains("credential"))
         }
     }
 
-    func testCanaryTokenNeverLeaks() throws {
+    @Test func canaryTokenNeverLeaks() throws {
         let canary = "VIBRA_CANARY_MUST_NOT_LEAK"
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vibra-test-\(UUID().uuidString)")
+        let dir = testScratchDirectory().appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let dbURL = dir.appendingPathComponent("opencode.db")
@@ -28,8 +28,8 @@ final class OpenCodeAdapterTests: XCTestCase {
         let sql = [
             sessionSchema,
             """
-            INSERT INTO session VALUES ('ses_test_1','/tmp/vibra-test','benign title',\
-            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,300,400,500,1789877120102,1789877509576);
+            INSERT INTO session VALUES ('ses_test_1','/Users/demo/workplace/sample','benign title',\
+            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,400,500,1789877120102,1789877509576);
             """,
             "CREATE TABLE account (id TEXT PRIMARY KEY, access_token TEXT, refresh_token TEXT);",
             "INSERT INTO account VALUES ('acct_1','\(canary)','refresh_123');",
@@ -41,33 +41,36 @@ final class OpenCodeAdapterTests: XCTestCase {
         // Prove the canary is genuinely present in the raw file, so the check
         // that it does NOT surface in our output is meaningful.
         let rawBytes = try Data(contentsOf: dbURL)
-        XCTAssertNotNil(rawBytes.range(of: Data(canary.utf8)), "fixture DB should contain the canary")
+        #expect(rawBytes.range(of: Data(canary.utf8)) != nil)
 
         let adapter = OpenCodeAdapter(dbURL: dbURL)
         var sessions: [Session] = []
+        var thrown: (any Error)?
         do {
             sessions = try adapter.discoverSessions()
         } catch {
-            XCTAssertFalse(error.localizedDescription.contains(canary))
-            return XCTFail("adapter threw: \(error)")
+            thrown = error
         }
 
-        XCTAssertEqual(sessions.count, 1)
+        if let error = thrown {
+            #expect(!error.localizedDescription.contains(canary))
+        }
+        #expect(thrown == nil)
 
-        // Not in the returned sessions, nor in their Codable encoding.
+        #expect(sessions.count == 1)
+
         for session in sessions {
-            XCTAssertFalse(session.id.contains(canary))
-            XCTAssertFalse(session.cwd.contains(canary))
-            XCTAssertFalse((session.title ?? "").contains(canary))
-            XCTAssertFalse((session.model ?? "").contains(canary))
+            #expect(!session.id.contains(canary))
+            #expect(!session.cwd.contains(canary))
+            #expect(!(session.title ?? "").contains(canary))
+            #expect(!(session.model ?? "").contains(canary))
         }
         let encoded = try JSONEncoder().encode(sessions)
-        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains(canary))
+        #expect(!String(decoding: encoded, as: UTF8.self).contains(canary))
     }
 
-    func testReadOnlyDoesNotMutateFixtureDB() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vibra-test-\(UUID().uuidString)")
+    @Test func readOnlyDoesNotMutateFixtureDB() throws {
+        let dir = testScratchDirectory().appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let dbURL = dir.appendingPathComponent("ro.db")
@@ -75,8 +78,8 @@ final class OpenCodeAdapterTests: XCTestCase {
         let sql = [
             sessionSchema,
             """
-            INSERT INTO session VALUES ('ses_test_1','/tmp/vibra-test','title',\
-            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,300,400,500,1789877120102,1789877509576);
+            INSERT INTO session VALUES ('ses_test_1','/Users/demo/workplace/sample','title',\
+            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,400,500,1789877120102,1789877509576);
             """,
         ]
         try makeDB(at: dbURL, statements: sql)
@@ -91,20 +94,7 @@ final class OpenCodeAdapterTests: XCTestCase {
         let sessions = try OpenCodeAdapter(dbURL: dbURL).discoverSessions()
         let after = try fileSignature(dbURL)
 
-        XCTAssertEqual(sessions.count, 1, "read-only open should still return the row")
-        XCTAssertEqual(before, after, "the database file must be byte-identical after a read")
-    }
-
-    func testRealDBReadOnlyNoMutation() throws {
-        let dbURL = VibraPaths.openCodeDB
-        guard FileManager.default.fileExists(atPath: dbURL.path) else {
-            throw XCTSkip("no opencode.db on this machine")
-        }
-
-        let before = try fileSignature(dbURL)
-        _ = OpenCodeAdapter(dbURL: dbURL).discoverSessions()
-        let after = try fileSignature(dbURL)
-
-        XCTAssertEqual(before, after, "opening the live DB read-only must not mutate it")
+        #expect(sessions.count == 1)
+        #expect(before == after)
     }
 }

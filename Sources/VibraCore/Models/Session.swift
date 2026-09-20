@@ -22,6 +22,11 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
     /// Short human label, when the source provides one.
     public var title: String?
 
+    /// What the adapter last saw happen. Feeds `StateEngine`, which owns the
+    /// recency rules so all three adapters classify identically.
+    /// Defaults to `.unknown` so an adapter that cannot tell still compiles.
+    public var lastEvent: LastEventKind
+
     public init(
         id: String,
         agent: AgentKind,
@@ -32,7 +37,8 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         startedAt: Date,
         lastActivity: Date,
         usage: TokenUsage = .zero,
-        title: String? = nil
+        title: String? = nil,
+        lastEvent: LastEventKind = .unknown
     ) {
         self.id = id
         self.agent = agent
@@ -44,6 +50,7 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         self.lastActivity = lastActivity
         self.usage = usage
         self.title = title
+        self.lastEvent = lastEvent
     }
 
     /// Last path component of `cwd` - what the user actually recognizes.

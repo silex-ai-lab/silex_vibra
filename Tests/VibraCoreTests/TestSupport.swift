@@ -9,6 +9,16 @@ func fixtureURL(_ relativePath: String) -> URL {
     return resourceURL.appendingPathComponent(relativePath)
 }
 
+/// A scratch directory rooted in the repo's `.build` directory, so tests never
+/// touch the developer's real agent state or any system temp directory.
+func testScratchDirectory() -> URL {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent(".build", isDirectory: true)
+        .appendingPathComponent("vibra-test-tmp", isDirectory: true)
+    try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    return root
+}
+
 enum TestDBError: Error {
     case openFailed
     case execFailed(String)

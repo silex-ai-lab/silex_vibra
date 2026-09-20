@@ -33,7 +33,7 @@ public struct OpenCodeAdapter: AgentAdapter {
     /// The exact columns read from `session`.
     static let sessionColumns = [
         "id", "directory", "title", "model",
-        "tokens_input", "tokens_output", "tokens_reasoning",
+        "tokens_input", "tokens_output",
         "tokens_cache_read", "tokens_cache_write",
         "time_created", "time_updated",
     ]
@@ -41,7 +41,7 @@ public struct OpenCodeAdapter: AgentAdapter {
     /// The only SELECT this adapter emits.
     static let sessionSelectSQL =
         "SELECT id, directory, title, model, tokens_input, tokens_output, " +
-        "tokens_reasoning, tokens_cache_read, tokens_cache_write, " +
+        "tokens_cache_read, tokens_cache_write, " +
         "time_created, time_updated FROM session ORDER BY time_updated DESC"
 
     /// Every SQL string this adapter can emit, surfaced for the security test.
@@ -81,15 +81,14 @@ public struct OpenCodeAdapter: AgentAdapter {
 
             let input = columnInt(statement, 4)
             let output = columnInt(statement, 5)
-            let reasoning = columnInt(statement, 6)
-            let cacheRead = columnInt(statement, 7)
-            let cacheWrite = columnInt(statement, 8)
-            let createdMS = columnInt(statement, 9)
-            let updatedMS = columnInt(statement, 10)
+            let cacheRead = columnInt(statement, 6)
+            let cacheWrite = columnInt(statement, 7)
+            let createdMS = columnInt(statement, 8)
+            let updatedMS = columnInt(statement, 9)
 
             let usage = TokenUsage(
                 input: input,
-                output: output + reasoning,
+                output: output,
                 cacheCreation: cacheWrite,
                 cacheRead: cacheRead
             )

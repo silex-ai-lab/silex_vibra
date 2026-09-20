@@ -1,35 +1,36 @@
-import XCTest
+import Foundation
+import Testing
 @testable import VibraCore
 
-final class ClaudeCodeAdapterTests: XCTestCase {
-    func testDiscoversSessionWithUsageAndCwd() throws {
-        let adapter = ClaudeCodeAdapter(projectsRoot: fixtureURL("Fixtures/claude"))
-        XCTAssertTrue(adapter.isAvailable)
+struct ClaudeCodeAdapterTests {
+    @Test func discoversSessionWithUsageAndCwd() throws {
+        let adapter = ClaudeCodeAdapter(file: fixtureURL("Fixtures/claude_session.jsonl"))
+        #expect(adapter.isAvailable)
 
         let sessions = try adapter.discoverSessions()
-        XCTAssertEqual(sessions.count, 1)
+        #expect(sessions.count == 1)
 
-        let session = try XCTUnwrap(sessions.first)
-        XCTAssertEqual(session.agent, .claudeCode)
-        XCTAssertEqual(session.id, "3f3f3f3f-3f3f-3f3f-3f3f-3f3f3f3f3f3f")
-        XCTAssertEqual(session.cwd, "/Users/jianwang/workplace/vibra")
-        XCTAssertEqual(session.model, "claude-opus-5")
-        XCTAssertEqual(session.gitBranch, "main")
+        let session = try #require(sessions.first)
+        #expect(session.agent == .claudeCode)
+        #expect(session.id == "cef2869f-aaaa-bbbb-cccc-000000000001")
+        #expect(session.cwd == "/Users/demo/workplace/sample")
+        #expect(session.model == "claude-opus-5")
+        #expect(session.gitBranch == "main")
 
         // usage summed across both assistant records
-        XCTAssertEqual(session.usage.input, 130)
-        XCTAssertEqual(session.usage.output, 70)
-        XCTAssertEqual(session.usage.cacheCreation, 10)
-        XCTAssertEqual(session.usage.cacheRead, 240)
-        XCTAssertTrue(session.usage.total > 0)
+        #expect(session.usage.input == 15)
+        #expect(session.usage.output == 500)
+        #expect(session.usage.cacheCreation == 1000)
+        #expect(session.usage.cacheRead == 11000)
+        #expect(session.usage.total > 0)
 
         // oldest timestamp -> startedAt, newest -> lastActivity
-        XCTAssertLessThan(session.startedAt, session.lastActivity)
+        #expect(session.startedAt < session.lastActivity)
     }
 
-    func testMissingRootYieldsEmpty() throws {
-        let adapter = ClaudeCodeAdapter(projectsRoot: fixtureURL("Fixtures/does-not-exist"))
-        XCTAssertFalse(adapter.isAvailable)
-        XCTAssertEqual(adapter.discoverSessionsSafely(), [])
+    @Test func missingFileIsUnavailable() {
+        let adapter = ClaudeCodeAdapter(file: fixtureURL("Fixtures/does-not-exist.jsonl"))
+        #expect(!adapter.isAvailable)
+        #expect(adapter.discoverSessionsSafely().isEmpty)
     }
 }

@@ -5,25 +5,48 @@ import Foundation
 /// The `session_meta` record identifies the session (id, cwd, model) and the
 /// `token_usage_record` records carry `thread_token_usage`, which is cumulative
 /// across the thread. The last `thread_token_usage` seen therefore holds the
-/// session total.
+/// session total; summing `thread_token_usage` across records would multi-count.
 public struct CodexAdapter: AgentAdapter {
     public let kind: AgentKind = .codex
 
-    private let sessionsRoot: URL
+    private let sessionsRoot: URL?
+    private let file: URL?
 
+    /// Production entry point: read the whole sessions tree.
     public init(sessionsRoot: URL = VibraPaths.codexSessions) {
         self.sessionsRoot = sessionsRoot
+        self.file = nil
+    }
+
+    /// Test/fixture entry point: read exactly one `.jsonl` file.
+    public init(file: URL) {
+        self.sessionsRoot = nil
+        self.file = file
     }
 
     public var isAvailable: Bool {
+        if let file {
+            var isDir: ObjCBool = false
+            return FileManager.default.fileExists(atPath: file.path, isDirectory: &isDir) && !isDir.boolValue
+        }
+        guard let sessionsRoot else { return false }
         var isDir: ObjCBool = false
         return FileManager.default.fileExists(atPath: sessionsRoot.path, isDirectory: &isDir) && isDir.boolValue
     }
 
     public func discoverSessions() throws -> [Session] {
-        let files = try jsonlFiles(under: sessionsRoot)
+        let files: [URL]
+        if let file {
+            files = [file]
+        } else if let sessionsRoot {
+            files = try jsonlFiles(under: sessionsRoot)
+                .filter { $0.lastPathComponent.hasPrefix("rollout-") }
+        } else {
+            files = []
+        }
+
         var sessions: [Session] = []
-        for file in files where file.lastPathComponent.hasPrefix("rollout-") {
+        for file in files {
             if let session = parseSession(at: file) {
                 sessions.append(session)
             }
@@ -61,7 +84,12 @@ public struct CodexAdapter: AgentAdapter {
                 if startedAt == nil, let raw = payload["timestamp"] as? String {
                     startedAt = parseISODate(raw)
                 }
+            case "turn_context":
+                if cwd == nil {
+                    cwd = (payload["cwd"] as? String) ?? (payload["workspace_roots"] as? [String])?.first
+                }
             case "token_usage_record":
+                // thread_token_usage is cumulative; the last one wins.
                 if let cumulative = payload["thread_token_usage"] as? [String: Any] {
                     threadUsage = cumulative
                 }
@@ -72,9 +100,12 @@ public struct CodexAdapter: AgentAdapter {
 
         guard let id = sessionID else { return nil }
 
+        // Codex field names differ from Claude's:
+        //   cached_input_tokens      -> cacheRead
+        //   cache_write_input_tokens -> cacheCreation
         let usage = TokenUsage(
             input: jsonInt(threadUsage?["input_tokens"]),
-            output: jsonInt(threadUsage?["output_tokens"]) + jsonInt(threadUsage?["reasoning_output_tokens"]),
+            output: jsonInt(threadUsage?["output_tokens"]),
             cacheCreation: jsonInt(threadUsage?["cache_write_input_tokens"]),
             cacheRead: jsonInt(threadUsage?["cached_input_tokens"])
         )
@@ -95,15 +126,13 @@ public struct CodexAdapter: AgentAdapter {
         )
     }
 
-    /// The model string lives at `base_instructions.provenance.model`. Fall back
-    /// to a recursive search for the first `model` string key in the payload.
+    /// Prefers a specific model name when present (e.g.
+    /// `base_instructions.provenance.model`); otherwise falls back to
+    /// `model_provider` (e.g. `"openai"`), which is the only model identifier
+    /// Codex's `session_meta` always exposes.
     private func findModel(in payload: [String: Any]) -> String? {
-        if let base = payload["base_instructions"] as? [String: Any],
-           let provenance = base["provenance"] as? [String: Any],
-           let model = provenance["model"] as? String {
-            return model
-        }
-        return recursivelyFindModel(in: payload)
+        if let found = recursivelyFindModel(in: payload) { return found }
+        return payload["model_provider"] as? String
     }
 
     private func recursivelyFindModel(in value: Any) -> String? {

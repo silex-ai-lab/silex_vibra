@@ -10,19 +10,41 @@ import Foundation
 public struct ClaudeCodeAdapter: AgentAdapter {
     public let kind: AgentKind = .claudeCode
 
-    private let projectsRoot: URL
+    private let projectsRoot: URL?
+    private let file: URL?
 
+    /// Production entry point: read the whole projects tree.
     public init(projectsRoot: URL = VibraPaths.claudeProjects) {
         self.projectsRoot = projectsRoot
+        self.file = nil
+    }
+
+    /// Test/fixture entry point: read exactly one `.jsonl` file.
+    public init(file: URL) {
+        self.projectsRoot = nil
+        self.file = file
     }
 
     public var isAvailable: Bool {
+        if let file {
+            var isDir: ObjCBool = false
+            return FileManager.default.fileExists(atPath: file.path, isDirectory: &isDir) && !isDir.boolValue
+        }
+        guard let projectsRoot else { return false }
         var isDir: ObjCBool = false
         return FileManager.default.fileExists(atPath: projectsRoot.path, isDirectory: &isDir) && isDir.boolValue
     }
 
     public func discoverSessions() throws -> [Session] {
-        let files = try jsonlFiles(under: projectsRoot)
+        let files: [URL]
+        if let file {
+            files = [file]
+        } else if let projectsRoot {
+            files = try jsonlFiles(under: projectsRoot)
+        } else {
+            files = []
+        }
+
         var sessions: [Session] = []
         for file in files {
             if let session = parseSession(at: file) {

@@ -1,11 +1,20 @@
 import AppKit
 import VibraCore
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
+    private var store: SessionStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        menuBar = MenuBarController()
-        menuBar?.start()
+        let store = SessionStore(adapters: AdapterRegistry.all())
+        let menuBar = MenuBarController(store: store)
+        menuBar.start()
+        self.store = store
+        self.menuBar = menuBar
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        store?.stop()
     }
 }

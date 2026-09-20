@@ -1,24 +1,32 @@
-import XCTest
+import Foundation
+import Testing
 @testable import VibraCore
 
-final class CodexAdapterTests: XCTestCase {
-    func testDiscoversSessionWithModelAndCwd() throws {
-        let adapter = CodexAdapter(sessionsRoot: fixtureURL("Fixtures/codex"))
-        XCTAssertTrue(adapter.isAvailable)
+struct CodexAdapterTests {
+    @Test func discoversSessionWithModelAndCwd() throws {
+        let adapter = CodexAdapter(file: fixtureURL("Fixtures/codex_rollout.jsonl"))
+        #expect(adapter.isAvailable)
 
         let sessions = try adapter.discoverSessions()
-        XCTAssertEqual(sessions.count, 1)
+        #expect(sessions.count == 1)
 
-        let session = try XCTUnwrap(sessions.first)
-        XCTAssertEqual(session.agent, .codex)
-        XCTAssertEqual(session.id, "codex-fixture-0001")
-        XCTAssertEqual(session.cwd, "/Users/jianwang/workplace/vibra")
-        XCTAssertEqual(session.model, "gpt-5.6-sol")
+        let session = try #require(sessions.first)
+        #expect(session.agent == .codex)
+        #expect(session.id == "01a07f27-1111-2222-3333-000000000002")
+        #expect(session.cwd == "/Users/demo/workplace/sample")
+        #expect(session.model == "openai")
+    }
 
-        // last thread_token_usage wins (cumulative)
-        XCTAssertEqual(session.usage.input, 2400)
-        XCTAssertEqual(session.usage.output, 700) // 640 output + 60 reasoning
-        XCTAssertEqual(session.usage.cacheRead, 1500)
-        XCTAssertEqual(session.usage.cacheCreation, 25)
+    @Test func threadUsageIsCumulativeNotSummed() throws {
+        let adapter = CodexAdapter(file: fixtureURL("Fixtures/codex_rollout.jsonl"))
+        let session = try #require(adapter.discoverSessions().first)
+
+        // The fixture's two token_usage_records have thread_token_usage of
+        // input 1000 then 2500; summing them would wrongly give 3500. The
+        // adapter must report the LAST cumulative value, not the sum.
+        #expect(session.usage.input == 2500)
+        #expect(session.usage.output == 350)
+        #expect(session.usage.cacheRead == 1300)
+        #expect(session.usage.cacheCreation == 0)
     }
 }
