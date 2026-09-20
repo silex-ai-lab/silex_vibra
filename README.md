@@ -239,16 +239,22 @@ layered on the menu bar, which is the real interface.
 - **No terminal jump-back.** Clicking a session does not yet focus the terminal
   tab it came from.
 - **No weekly report card.**
-- **OpenCode blocked-state detection is weak.** The adapter does not yet read
-  the `permission` column, so OpenCode sessions rarely report `needs approval`.
+- **OpenCode blocked-state detection is unverified.** The adapter does read the
+  `permission` column and maps a non-empty value to `needs approval`, but that
+  transition has not yet been observed live against a real approval prompt.
 - **Not signed or notarized**, so this is build-from-source only. There is no
   release download and no Homebrew cask.
 
 ## Status
 
-Early. The menu bar, the three adapters, state classification, and usage/cost
-accounting work against real data. Not yet done: terminal jump-back, weekly
-report cards, and Developer ID signing.
+Early, and **currently expensive**: the running app sustains ~97% CPU and
+626 MB RSS because `SessionStore` re-parses every session file every 2 seconds.
+Fixing that is Phase 0 of [the roadmap](docs/ROADMAP.md) and blocks everything
+else.
+
+Working against real data: the menu bar, all three adapters, state
+classification, and usage/cost accounting. Not yet done: terminal jump-back,
+weekly report cards, and Developer ID signing.
 
 ## License
 
