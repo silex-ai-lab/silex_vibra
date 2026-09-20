@@ -26,9 +26,9 @@ build:
 # is an executable (see Sources/VibraTests/main.swift) and this target also
 # asserts that a non-zero number of tests actually ran.
 test:
-	@set -o pipefail; swift run VibraTests 2>&1 | tee $(BUILD_DIR)/test.log; \
+	@mkdir -p $(BUILD_DIR); \
+	  set -o pipefail; swift run VibraTests 2>&1 | tee $(BUILD_DIR)/test.log; \
 	  status=$$?; \
-	  mkdir -p $(BUILD_DIR); \
 	  if [ $$status -ne 0 ]; then echo "FAIL: test run exited $$status"; exit $$status; fi; \
 	  if ! grep -qE 'Test run with [1-9][0-9]* tests' $(BUILD_DIR)/test.log; then \
 	    echo "FAIL: no tests executed - refusing to report green"; exit 1; fi; \
