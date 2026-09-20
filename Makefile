@@ -10,7 +10,7 @@ APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
 BIN_SRC     := .build/$(CONFIG)/VibraApp
 
-.PHONY: all build app run test clean fmt
+.PHONY: all build app run test clean fmt install uninstall probe restart
 
 all: app
 
@@ -65,6 +65,33 @@ app: build
 
 run: app
 	open $(APP_BUNDLE)
+
+# Run every adapter once and print a summary, then exit. Prints counts,
+# project names and states - never message content.
+probe: build
+	@$(BIN_SRC) --probe
+
+# Copy into /Applications so it survives `make clean` and behaves like a
+# normal installed app. Quits any running copy first, otherwise the old
+# binary keeps running against the new bundle.
+install: app
+	@pkill -f "$(APP_NAME).app/Contents/MacOS/$(APP_NAME)" 2>/dev/null || true
+	@rm -rf "/Applications/$(APP_NAME).app"
+	@cp -R $(APP_BUNDLE) /Applications/
+	@echo "installed /Applications/$(APP_NAME).app"
+	@echo "launch it with: open -a $(APP_NAME)"
+
+uninstall:
+	@pkill -f "$(APP_NAME).app/Contents/MacOS/$(APP_NAME)" 2>/dev/null || true
+	@rm -rf "/Applications/$(APP_NAME).app"
+	@echo "removed /Applications/$(APP_NAME).app"
+
+# Rebuild and relaunch the running copy - the usual edit/see-it loop.
+restart: app
+	@pkill -f "$(APP_NAME).app/Contents/MacOS/$(APP_NAME)" 2>/dev/null || true
+	@sleep 1
+	@open $(APP_BUNDLE)
+	@echo "relaunched $(APP_NAME)"
 
 clean:
 	rm -rf .build $(BUILD_DIR)

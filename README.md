@@ -49,25 +49,92 @@ of files that already exist.
 `stalled` exists because an agent that died mid-turn looks identical to a busy
 one if you only ask "is it running?".
 
-## Build
+## Install
 
-Requires macOS 14+ and a Swift 6 toolchain. **Xcode is not required** — Command
-Line Tools is enough.
+Requires **macOS 14+** and a Swift 6 toolchain. **Xcode is not required** —
+Command Line Tools is enough:
 
 ```sh
-make app     # assembles build/Vibra.app
-make run     # build and launch
-make test    # run the test suite
+xcode-select --install     # skip if `swift --version` already works
 ```
 
-`make app` hand-assembles the bundle (`LSUIElement`, so no Dock icon) and
-ad-hoc signs it. Ad-hoc signing is *not* a substitute for Developer ID signing
-and notarization if you distribute builds.
-
-Diagnostics, printing session counts and states but never message content:
+Then:
 
 ```sh
-swift run VibraApp --probe
+git clone https://github.com/silex-lab-ai/vibra.git
+cd vibra
+make install               # builds, then copies to /Applications
+open /Applications/Vibra.app
+```
+
+`make install` quits any running copy first, so it is safe to re-run after
+pulling changes.
+
+There is no Dock icon and no window — `LSUIElement` is set, so **the menu bar
+item is the entire app**. Look at the right-hand side of your menu bar for
+`vibra`, or a count like `2▶ 1!` when sessions are live.
+
+To remove it completely:
+
+```sh
+make uninstall
+```
+
+### First launch
+
+macOS may warn that the app is from an unidentified developer: it is ad-hoc
+signed, not Developer ID signed. Right-click the app in Finder and choose
+**Open** once, or run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Vibra.app
+```
+
+## Test run
+
+The fastest way to confirm it works, without touching the menu bar at all:
+
+```sh
+make probe
+```
+
+That runs every adapter once against your real session files and prints what it
+found, then exits. Expect something like:
+
+```
+Claude Code: available=true sessions=2
+  - my-project [working] ev=producing 35067076 tok $83.8576 model=claude-opus-5
+  - other-repo [awaitingInput] ev=turnComplete 59601496 tok $125.9708 model=claude-opus-5
+Codex: available=true sessions=1
+  - my-project [stalled] ev=producing 567852 tok $0.4327 model=gpt-5.6-sol
+OpenCode: available=true sessions=1
+  - my-project [idle] ev=unknown 13365036 tok $0.4847 model=deepseek-v4-pro
+total sessions: 4
+```
+
+`probe` prints counts, project names and states. It never prints message
+content. It exits `2` if it found no sessions at all, which usually means you
+have not used any of the three agents in the last 12 hours.
+
+**To see it change live:** start a Claude Code or Codex session in another
+terminal, give it a task, and run `make probe` again — that session should
+appear as `working`. When it finishes and waits for you, it flips to
+`awaitingInput` and the menu bar count shows `1!`.
+
+### Run the tests
+
+```sh
+make test
+```
+
+Expect `Test run with 20 tests in 6 suites passed` followed by
+`OK: tests executed, canary present`.
+
+### Development loop
+
+```sh
+make restart    # rebuild and relaunch the running copy
+make probe      # check adapter output without the UI
 ```
 
 ## Testing note
@@ -104,6 +171,54 @@ vibra reads local files and sends nothing anywhere. Specifically:
   asserts that string appears nowhere in the returned sessions, their JSON
   encoding, or any error description. `make test` fails if that test did not run.
 - Adapters never log or print raw rows.
+
+## Troubleshooting
+
+**Nothing appears in the menu bar.** Confirm the process is alive:
+
+```sh
+pgrep -lf "Vibra.app/Contents/MacOS/Vibra"
+```
+
+If it is running but invisible, your menu bar may be full — macOS silently drops
+status items when there is no room, especially on a laptop with a notch. Quit
+another menu bar app, or test on a wider display, then `make restart`.
+
+**`open -a Vibra` launches the wrong copy.** If you built in the repo *and*
+installed to `/Applications`, LaunchServices may prefer the build copy. Always
+launch by full path:
+
+```sh
+pkill -f "Vibra.app/Contents/MacOS/Vibra"
+open /Applications/Vibra.app
+```
+
+**`make probe` says `total sessions: 0`.** Nothing has run in the last 12 hours.
+The window is `activityWindow` in `Sources/VibraApp/SessionStore.swift`.
+
+**`swift test` says everything passed but nothing ran.** Use `make test`. See
+the testing note above — this is expected on a machine without Xcode.
+
+**Notifications never arrive.** See below; this is a known limitation, not a
+misconfiguration on your side.
+
+## Known limitations
+
+- **Notification delivery is unverified.** The bundle is ad-hoc signed rather
+  than Developer ID signed, and macOS does not guarantee local notification
+  delivery for such a bundle. `Notifier` requests authorization once and
+  tolerates refusal silently, because the menu bar already shows everything the
+  notification would have said. If banners matter to you, the fix is a paid
+  Apple Developer account and a Developer ID signature, not a code change.
+  Check `System Settings → Notifications → Vibra` to see whether the app
+  registered at all.
+- **No terminal jump-back.** Clicking a session does not yet focus the terminal
+  tab it came from.
+- **No weekly report card.**
+- **OpenCode blocked-state detection is weak.** The adapter does not yet read
+  the `permission` column, so OpenCode sessions rarely report `needs approval`.
+- **Not signed or notarized**, so this is build-from-source only. There is no
+  release download and no Homebrew cask.
 
 ## Status
 
