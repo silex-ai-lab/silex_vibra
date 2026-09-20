@@ -81,6 +81,16 @@ no tests, so the suite is an ordinary executable that invokes swift-testing's
 entry point and returns a real exit code. `make test` additionally asserts that
 a non-zero number of tests ran and that the security canary was among them.
 
+## What the cost figures mean
+
+Costs are computed from token counts times published per-model rates. They are
+an **API-equivalent value**, not your actual bill. If you are on a subscription
+(Claude Max, ChatGPT Plus/Pro) you are not charged per token and the real spend
+is your flat fee — the figure tells you what that usage would have cost at API
+list price, which is useful for comparison and useless as an invoice.
+
+A model with no known published rate reports `n/a` rather than a guess.
+
 ## Privacy and safety
 
 vibra reads local files and sends nothing anywhere. Specifically:

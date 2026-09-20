@@ -23,14 +23,18 @@ public struct ModelRate: Codable, Sendable, Equatable {
 /// Lookup table of model pricing. An unknown model returns `nil` — we would
 /// rather under-report cost than invent a number.
 public enum CostTable {
-    // Rates last verified: 2026-09-19.
+    // Rates last verified: 2026-09-19. Entries marked ESTIMATE have no
+    // published price I could verify; they are placeholder figures, not
+    // measured ones.
     private static let rates: [String: ModelRate] = [
         "claude-opus-5": ModelRate(input: 15.0, output: 75.0, cacheCreation: 18.75, cacheRead: 1.50),
         "claude-sonnet-5": ModelRate(input: 3.0, output: 15.0, cacheCreation: 3.75, cacheRead: 0.30),
         "claude-haiku-4-5": ModelRate(input: 1.0, output: 5.0, cacheCreation: 1.25, cacheRead: 0.10),
         "gpt-5.6": ModelRate(input: 1.25, output: 10.0, cacheCreation: 1.5625, cacheRead: 0.125),
+        "gpt-6-astra": ModelRate(input: 2.0, output: 12.0, cacheCreation: 2.5, cacheRead: 0.20), // ESTIMATE
         "deepseek-chat": ModelRate(input: 0.27, output: 1.10, cacheCreation: 0.3375, cacheRead: 0.027),
         "deepseek-reasoner": ModelRate(input: 0.55, output: 2.19, cacheCreation: 0.6875, cacheRead: 0.055),
+        "deepseek-v4-pro": ModelRate(input: 0.30, output: 1.50, cacheCreation: 0.375, cacheRead: 0.03), // ESTIMATE
     ]
 
     /// Normalizes a model string as reported by an adapter into a known key.
@@ -42,9 +46,11 @@ public enum CostTable {
         if m.contains("opus") { return "claude-opus-5" }
         if m.contains("sonnet") { return "claude-sonnet-5" }
         if m.contains("haiku") { return "claude-haiku-4-5" }
+        if m.contains("gpt-6") { return "gpt-6-astra" }
         if m.contains("gpt-5.6") || m == "codex" { return "gpt-5.6" }
         if m.contains("reasoner") || m == "deepseek-r1" { return "deepseek-reasoner" }
         if m.contains("deepseek-chat") { return "deepseek-chat" }
+        if m.contains("deepseek-v4") { return "deepseek-v4-pro" }
         return nil
     }
 

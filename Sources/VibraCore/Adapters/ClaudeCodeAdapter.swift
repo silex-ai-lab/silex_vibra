@@ -66,9 +66,14 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         var usage = TokenUsage.zero
         var oldest: Date?
         var newest: Date?
+        var lastRecordType: String?
+        var lastAssistantStopReason: String?
 
         for line in lines {
             guard let record = jsonObject(line) else { continue }
+
+            let type = record["type"] as? String
+            if let type { lastRecordType = type }
 
             if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
                 if oldest == nil || ts < oldest! { oldest = ts }
@@ -79,10 +84,11 @@ public struct ClaudeCodeAdapter: AgentAdapter {
             if cwd == nil { cwd = record["cwd"] as? String }
             if gitBranch == nil { gitBranch = record["gitBranch"] as? String }
 
-            guard record["type"] as? String == "assistant" else { continue }
+            guard type == "assistant" else { continue }
             guard let message = record["message"] as? [String: Any] else { continue }
 
             if model == nil { model = message["model"] as? String }
+            if let stopReason = message["stop_reason"] as? String { lastAssistantStopReason = stopReason }
             if let u = message["usage"] as? [String: Any] {
                 usage += TokenUsage(
                     input: jsonInt(u["input_tokens"]),
@@ -97,6 +103,20 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         let started = oldest ?? fileModificationDate(file) ?? Date()
         let last = newest ?? started
 
+        // A trailing permission-mode record means the agent is parked on an
+        // approval prompt; otherwise the last assistant stop_reason decides
+        // whether it is still producing or has handed the turn back.
+        let lastEvent: LastEventKind
+        if lastRecordType == "permission-mode" {
+            lastEvent = .permissionPrompt
+        } else {
+            switch lastAssistantStopReason {
+            case "tool_use": lastEvent = .producing
+            case "end_turn": lastEvent = .turnComplete
+            default: lastEvent = .unknown
+            }
+        }
+
         return Session(
             id: sessionID,
             agent: kind,
@@ -106,7 +126,8 @@ public struct ClaudeCodeAdapter: AgentAdapter {
             state: .idle,
             startedAt: started,
             lastActivity: last,
-            usage: usage
+            usage: usage,
+            lastEvent: lastEvent
         )
     }
 }

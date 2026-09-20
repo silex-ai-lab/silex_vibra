@@ -14,8 +14,11 @@ BIN_SRC     := .build/$(CONFIG)/VibraApp
 
 all: app
 
+# --product VibraApp deliberately: a release build of the whole package would
+# also try to compile the test target, whose `@testable import` requires
+# -enable-testing and fails outside a debug build.
 build:
-	swift build -c $(CONFIG)
+	swift build -c $(CONFIG) --product VibraApp
 
 # NOT `swift test`. On a machine without Xcode, SwiftPM builds the suite as an
 # .xctest bundle it cannot execute: it prints "Build complete!", runs ZERO

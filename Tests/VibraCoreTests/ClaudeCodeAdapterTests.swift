@@ -33,4 +33,13 @@ struct ClaudeCodeAdapterTests {
         #expect(!adapter.isAvailable)
         #expect(adapter.discoverSessionsSafely().isEmpty)
     }
+
+    @Test func lastEventIsPermissionPrompt() throws {
+        // The fixture ends with a `permission-mode` record, which means the
+        // agent is parked on an approval prompt regardless of the earlier
+        // assistant `end_turn`.
+        let adapter = ClaudeCodeAdapter(file: fixtureURL("Fixtures/claude_session.jsonl"))
+        let session = try #require(adapter.discoverSessions().first)
+        #expect(session.lastEvent == .permissionPrompt)
+    }
 }

@@ -7,7 +7,7 @@ struct OpenCodeAdapterTests {
         CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT, model TEXT, \
         tokens_input INTEGER, tokens_output INTEGER, \
         tokens_cache_read INTEGER, tokens_cache_write INTEGER, \
-        time_created INTEGER, time_updated INTEGER);
+        time_created INTEGER, time_updated INTEGER, permission TEXT);
         """
 
     @Test func sqlNeverReferencesAccountOrCredential() {
@@ -29,7 +29,7 @@ struct OpenCodeAdapterTests {
             sessionSchema,
             """
             INSERT INTO session VALUES ('ses_test_1','/Users/demo/workplace/sample','benign title',\
-            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,400,500,1789877120102,1789877509576);
+            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,400,500,1789877120102,1789877509576,NULL);
             """,
             "CREATE TABLE account (id TEXT PRIMARY KEY, access_token TEXT, refresh_token TEXT);",
             "INSERT INTO account VALUES ('acct_1','\(canary)','refresh_123');",
@@ -79,7 +79,7 @@ struct OpenCodeAdapterTests {
             sessionSchema,
             """
             INSERT INTO session VALUES ('ses_test_1','/Users/demo/workplace/sample','title',\
-            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,400,500,1789877120102,1789877509576);
+            '{"id":"deepseek-chat","providerID":"deepseek"}',1000,200,400,500,1789877120102,1789877509576,NULL);
             """,
         ]
         try makeDB(at: dbURL, statements: sql)
@@ -96,5 +96,31 @@ struct OpenCodeAdapterTests {
 
         #expect(sessions.count == 1)
         #expect(before == after)
+    }
+
+    @Test func permissionColumnMapsToLastEvent() throws {
+        let dir = testScratchDirectory().appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let dbURL = dir.appendingPathComponent("perm.db")
+
+        let sql = [
+            sessionSchema,
+            """
+            INSERT INTO session VALUES ('ses_pending','/Users/demo/workplace/sample','t',\
+            '{"id":"deepseek-chat"}',0,0,0,0,1789877120102,1789877509576,'ask');
+            """,
+            """
+            INSERT INTO session VALUES ('ses_quiet','/Users/demo/workplace/sample','t',\
+            '{"id":"deepseek-chat"}',0,0,0,0,1789877120102,1789877509576,NULL);
+            """,
+        ]
+        try makeDB(at: dbURL, statements: sql)
+
+        let sessions = try OpenCodeAdapter(dbURL: dbURL).discoverSessions()
+        let byID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+
+        #expect(byID["ses_pending"]?.lastEvent == .permissionPrompt)
+        #expect(byID["ses_quiet"]?.lastEvent == .unknown)
     }
 }

@@ -65,9 +65,13 @@ public struct CodexAdapter: AgentAdapter {
         var startedAt: Date?
         var lastActivity: Date?
         var threadUsage: [String: Any]?
+        var lastRecordType: String?
 
         for line in lines {
             guard let record = jsonObject(line) else { continue }
+
+            let type = record["type"] as? String
+            if let type { lastRecordType = type }
 
             if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
                 if startedAt == nil || ts < startedAt! { startedAt = ts }
@@ -76,7 +80,7 @@ public struct CodexAdapter: AgentAdapter {
 
             guard let payload = record["payload"] as? [String: Any] else { continue }
 
-            switch record["type"] as? String {
+            switch type {
             case "session_meta":
                 if sessionID == nil { sessionID = payload["session_id"] as? String }
                 if cwd == nil { cwd = payload["cwd"] as? String }
@@ -113,6 +117,15 @@ public struct CodexAdapter: AgentAdapter {
         let started = startedAt ?? fileModificationDate(file) ?? Date()
         let last = lastActivity ?? started
 
+        // Codex has no explicit end-of-turn marker in the rollout record
+        // stream: a trailing event_msg / response_item means it is still
+        // emitting. Anything else is indistinguishable from "cannot tell".
+        let lastEvent: LastEventKind
+        switch lastRecordType {
+        case "event_msg", "response_item": lastEvent = .producing
+        default: lastEvent = .unknown
+        }
+
         return Session(
             id: id,
             agent: kind,
@@ -122,7 +135,8 @@ public struct CodexAdapter: AgentAdapter {
             state: .idle,
             startedAt: started,
             lastActivity: last,
-            usage: usage
+            usage: usage,
+            lastEvent: lastEvent
         )
     }
 

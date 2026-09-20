@@ -6,14 +6,24 @@ import VibraCore
 if CommandLine.arguments.contains("--probe") {
     var total = 0
     let aggregator = UsageAggregator()
+    let engine = StateEngine()
+    let now = Date()
+    let window: TimeInterval = 12 * 3600
     for adapter in AdapterRegistry.all() {
         let sessions = adapter.discoverSessionsSafely()
+            .filter { now.timeIntervalSince($0.lastActivity) <= window }
+            .map { s -> Session in
+                var s = s
+                s.state = engine.classify(lastEvent: s.lastEvent, lastActivity: s.lastActivity, now: now)
+                return s
+            }
+            .sorted { $0.lastActivity > $1.lastActivity }
         total += sessions.count
         print("\(adapter.kind.displayName): available=\(adapter.isAvailable) sessions=\(sessions.count)")
         for s in sessions.prefix(5) {
             let cost = aggregator.cost(for: s)
             let costText = cost.map { String(format: "$%.4f", $0) } ?? "n/a"
-            print("  - \(s.projectName) [\(s.state.rawValue)] \(s.usage.total) tok \(costText) model=\(s.model ?? "?")")
+            print("  - \(s.projectName) [\(s.state.rawValue)] ev=\(s.lastEvent.rawValue) \(s.usage.total) tok \(costText) model=\(s.model ?? "?")")
         }
     }
     print("total sessions: \(total)")

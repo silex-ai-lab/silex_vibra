@@ -35,14 +35,14 @@ public struct OpenCodeAdapter: AgentAdapter {
         "id", "directory", "title", "model",
         "tokens_input", "tokens_output",
         "tokens_cache_read", "tokens_cache_write",
-        "time_created", "time_updated",
+        "time_created", "time_updated", "permission",
     ]
 
     /// The only SELECT this adapter emits.
     static let sessionSelectSQL =
         "SELECT id, directory, title, model, tokens_input, tokens_output, " +
         "tokens_cache_read, tokens_cache_write, " +
-        "time_created, time_updated FROM session ORDER BY time_updated DESC"
+        "time_created, time_updated, permission FROM session ORDER BY time_updated DESC"
 
     /// Every SQL string this adapter can emit, surfaced for the security test.
     static var allSQL: [String] {
@@ -85,6 +85,7 @@ public struct OpenCodeAdapter: AgentAdapter {
             let cacheWrite = columnInt(statement, 7)
             let createdMS = columnInt(statement, 8)
             let updatedMS = columnInt(statement, 9)
+            let permission = columnText(statement, 10)
 
             let usage = TokenUsage(
                 input: input,
@@ -92,6 +93,13 @@ public struct OpenCodeAdapter: AgentAdapter {
                 cacheCreation: cacheWrite,
                 cacheRead: cacheRead
             )
+
+            // OpenCode's only sitting-on-approval signal is a non-empty
+            // `permission` column. There is no reliable "producing" vs
+            // "turn complete" marker in the session table, so anything else
+            // is `.unknown`.
+            let lastEvent: LastEventKind =
+                (permission?.isEmpty == false) ? .permissionPrompt : .unknown
 
             sessions.append(Session(
                 id: id,
@@ -102,7 +110,8 @@ public struct OpenCodeAdapter: AgentAdapter {
                 startedAt: Date(timeIntervalSince1970: Double(createdMS) / 1000.0),
                 lastActivity: Date(timeIntervalSince1970: Double(updatedMS) / 1000.0),
                 usage: usage,
-                title: title
+                title: title,
+                lastEvent: lastEvent
             ))
         }
         return sessions

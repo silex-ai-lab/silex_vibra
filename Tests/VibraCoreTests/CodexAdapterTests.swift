@@ -29,4 +29,12 @@ struct CodexAdapterTests {
         #expect(session.usage.cacheRead == 1300)
         #expect(session.usage.cacheCreation == 0)
     }
+
+    @Test func lastEventIsProducing() throws {
+        // The fixture ends with an `event_msg`, which means Codex is still
+        // emitting output.
+        let adapter = CodexAdapter(file: fixtureURL("Fixtures/codex_rollout.jsonl"))
+        let session = try #require(adapter.discoverSessions().first)
+        #expect(session.lastEvent == .producing)
+    }
 }
