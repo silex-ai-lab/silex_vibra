@@ -64,7 +64,7 @@ xcode-select --install     # skip if `swift --version` already works
 Then:
 
 ```sh
-git clone https://github.com/silex-lab-ai/vibra.git
+git clone https://github.com/silex-ai-lab/vibra.git
 cd vibra
 make install               # builds, then copies to /Applications
 open /Applications/Vibra.app
