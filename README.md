@@ -196,12 +196,55 @@ codesign -d -r- /Applications/Vibra.app
 # designated => identifier "ai.silexlab.vibra" and certificate root = H"f067ca2a..."
 ```
 
-and permissions survive rebuilds. `make install` without `SIGN_IDENTITY` is
-unchanged, so a fresh clone and CI behave exactly as before; the build prints
-which of the two it used.
+and permissions survive rebuilds.
+
+#### What this costs you
+
+**The certificate is local to one machine, and deliberately not in this repo.**
+It is a private key; committing one would hand anyone who clones the repo the
+ability to sign as you. So:
+
+- `SIGN_IDENTITY` is **opt-in and per machine**. A fresh clone, a second Mac and
+  CI all get ad-hoc signing and behave exactly as before — nothing in the repo
+  changes because you created a certificate.
+- On a second machine, either **create another certificate** with the same steps
+  (its own hash, its own one-time permission approvals over there), or export
+  the first as a `.p12` and import it — which moves a private key between
+  machines, so only do that if you are comfortable with that trade.
+- Deleting it is the whole uninstall: remove `vibra local signing` from Keychain
+  Access and build without `SIGN_IDENTITY`. You are back to ad-hoc, and back to
+  re-approving after rebuilds. Nothing else to undo.
+
+**Watch the expiry.** Certificate Assistant defaults to **365 days**. When it
+lapses, signing fails and — because failure is fatal — your build stops, which
+is at least loud. Set a longer validity when you create it; the `openssl` route
+takes `-days 3650`.
+
+**Signing failure fails the build.** It used to be a warning, which meant a
+denied keychain prompt produced a quietly ad-hoc bundle that ran fine and then
+mysteriously could not hold a permission. If the identity is missing or
+unusable you now get:
+
+```
+error: codesign failed. The bundle would run but could not hold any
+       permission: no notifications, no terminal jump-back.
+       Check that SIGN_IDENTITY=... names a code-signing
+       identity: security find-identity -p codesigning
+make: *** [app] Error 1
+```
+
+The build also checks what it *produced*, not just codesign's exit code: asking
+for an identity and silently getting ad-hoc back is the failure that hides best,
+so that fails too.
+
+**Permissions still need approving once**, on each machine, per target app
+(iTerm2 and Terminal are separate grants). The certificate does not grant
+anything — it makes the approval you give outlive rebuilds. To re-arm from
+scratch: `tccutil reset AppleEvents ai.silexlab.vibra`.
 
 This is **not** a substitute for Developer ID signing and notarization, which is
-what distributing a download would need.
+what distributing a download would need — a fresh clone is still ad-hoc, so its
+notifications are refused by default and its jump-back needs a manual grant.
 
 ## Testing note
 
