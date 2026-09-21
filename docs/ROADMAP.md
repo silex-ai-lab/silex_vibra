@@ -1,212 +1,286 @@
 # vibra roadmap
 
-Closing the gap to the paid competitor, in the order that actually matters.
+Every step carries a **Goal**, the **Critical decisions** settled for it, and
+an **Acceptance** check. Decisions are recorded with their reasoning because
+the reasoning is what stays useful after the code changes.
 
 Built independently from public feature descriptions and from the agents' own
 on-disk formats. No decompilation, no copied code or assets.
 
-Reviewed 2026-09-20 by a DeepSeek seat and a Codex seat. Both rejected the
-first draft; what follows is the revision. Their objections are recorded inline
-because the reasoning matters more than the conclusion.
+Reviewed by a DeepSeek seat and a Codex seat. Where they rejected a draft, the
+objection is recorded rather than quietly fixed.
 
-## Measured baseline, 2026-09-20
+Current state: see [STATUS.md](STATUS.md).
 
-Numbers from the running app on a Mac mini (M4), not estimates:
-
-| Metric | vibra today | Competitor claim |
+| Phase | Step | State |
 |---|---|---|
-| Idle CPU | **~97% sustained** | "minimal" |
-| RSS | **626 MB** after 10h | "< 50 MB" |
-| Agents supported | 3 | 25 |
-| Bundle size | 516 KB | — |
-| Signing | ad-hoc | Developer ID |
-
-The CPU and memory figures are the story. Everything else waits.
-
----
-
-## Phase 0 — Correctness and cost
-
-**Blocks Phase 1.** An app pinning a core is broken, and features built on it
-are sand.
-
-### P0.1 — Stop re-parsing the world every 2 seconds
-
-`SessionStore` polls on a 2.0s timer and each refresh fully re-parses **488
-JSONL files totalling 339 MB** — roughly 170 GB/min of redundant work.
-
-The first draft claimed "the fix largely exists already, `FileWatcher` just
-needs wiring." **Both reviewers rejected that as false**, and they were right.
-Verified in-tree:
-
-- `FileWatcher` is referenced nowhere outside its own file.
-- `JSONLIncrementalReader` is orphaned — no adapter consumes it.
-- All three adapters full-parse; `ClaudeCodeAdapter.swift:177` reads whole
-  files with `String(contentsOf:)`.
-- `SessionStore` has no dirty/changed-file set.
-
-`FileWatcher` solves change *triggering* only. The parsing half does not exist.
-
-Scope, explicitly:
-
-1. A dirty-file set in `SessionStore`, fed by `FileWatcher`.
-2. Streaming parse in all three adapters (shared with P0.2).
-3. Per-session summary cache keyed by file, so unchanged files cost nothing.
-4. A decision on per-file byte-offset accumulation. `AgentAdapter.discoverSessions()`
-   is a *full-parse contract*; true incremental reads need that contract
-   changed. Decide before implementing, don't discover it midway.
-5. Recovery paths: startup, truncation, file replacement, and dropped FSEvents
-   all rebuild cache state. FSEvents coalesces and is advisory.
-
-Keep a slow safety-net rescan (~60s) for missed events.
-
-**AC:** idle CPU < 2% and RSS < 60 MB over 10 minutes against the same 488-file
-corpus; a regression test asserting a second refresh with no file changes reads
-zero bytes.
-
-### P0.2 — Bounded-memory parsing
-
-626 MB RSS traces to `String(contentsOf:)` loading entire files.
-
-The first draft proposed "read tail-first and stop once the session summary is
-known." **DeepSeek rejected the mechanism as a correctness regression, and
-verified it against the code:** `ClaudeCodeAdapter` accumulates `usage +=`
-across *every* `assistant` record. Stopping early produces wrong token totals,
-and therefore wrong costs — which P1.3 then reports as fact. Tail-first is not
-a faster version of the right answer; it is the wrong answer.
-
-Correct mechanism: stream each file top-to-bottom, line by line, with bounded
-memory, accumulating usage as it goes. Replace `String(contentsOf:)` in
-`readLines` with a line iterator.
-
-**AC:** RSS flat across 1000 refreshes; token totals byte-identical to today's
-full-parse output on the real corpus.
-
-### P0.3 — ~~Read the OpenCode permission column~~ (already done)
-
-Cut. **Both reviewers independently flagged this as already implemented**, and
-they were right — `OpenCodeAdapter` selects `permission` and maps non-empty to
-`.permissionPrompt`, with a passing test. The README claiming otherwise was
-wrong; the code was fine. Fixed.
-
-What remains is a *verification* task, not implementation: confirm OpenCode
-actually writes that column when it parks on an approval prompt. One real
-session on this machine carries a 172-character permission value, which is
-evidence it does, but the transition has not been observed live.
+| 0 | P0.1 Stop re-parsing the world | **Done** 2026-09-20 |
+| 0 | P0.2 Bounded-memory parsing | **Done** 2026-09-20 |
+| 0 | P0.3 OpenCode permission column | **Cut** — already implemented |
+| 0b | P0b.1 Make the notifier testable | **Done** 2026-09-20 |
+| 1 | P1.1 Terminal jump-back | **In progress** |
+| 1 | P1.2 Usage figures stay local | **Decided** — no network, ever |
+| 1 | P1.3 Weekly report card | Not started |
+| 2 | P2.1 Auto-detect installed agents | Not started |
+| 2 | P2.2 More adapters | Not started |
+| 3 | P3.1 Developer ID signing | Blocked on a user decision |
+| 3 | P3.2 Sparkle auto-update | Not started |
+| 3 | P3.3 Homebrew cask | Not started |
 
 ---
 
-## Phase 0b — Runs in parallel, blocks nothing
+# Phase 0 — Correctness and cost — **DONE**
 
-### P0b.1 — Make `Notifier` testable — **DONE 2026-09-20**
+## P0.1 — Stop re-parsing the world every 2 seconds
 
-Split in two. `AttentionNotifier` in `VibraCore` owns every decision —
-transition detection and debounce — and takes its clock as a parameter, so the
-rules are exercised without a signed bundle, user authorization, or waiting a
-real minute. `UserNotificationSink` in `VibraApp` only delivers, and contains
-no decisions, because it is the part a test genuinely cannot drive: macOS
-silently drops whatever it will not show.
+**Goal.** Make steady-state polling cost approximately nothing, so vibra can
+run all day instead of being quit after an hour.
 
-10 tests cover it. Both rules were mutation-tested — removing the debounce and
-removing the transition check each make the suite fail — because a test that
-cannot fail is worse than no test.
+The app sustained ~97% CPU and 626 MB RSS. `SessionStore` polled every 2.0s and
+each refresh fully re-parsed 488 JSONL files totalling 339 MB.
 
----
+### Critical decisions
 
-## Phase 1 — The features users notice
+**Incremental parse contract, not just incremental triggering.** The first
+draft claimed `FileWatcher` merely needed wiring. Both reviewers rejected that
+and were right: `FileWatcher` solves change *triggering* only. Verified
+in-tree — `JSONLIncrementalReader` was orphaned, every adapter full-parsed via
+`String(contentsOf:)`, and `SessionStore` had no dirty set. Adapters gained
+`sources()` and `update()`, folding new records into an opaque checkpoint.
 
-### P1.1 — Terminal jump-back
+**File identity is (device, inode), not path plus (size, mtime).** *Codex.* A
+transcript replaced by a different file of the same length within the same
+second would otherwise look unchanged and the stale session would persist.
 
-Click a session row, focus the terminal tab it runs in.
+**OpenCode is fingerprinted across its WAL files.** *Codex.* SQLite in WAL mode
+can change through `opencode.db-wal` while the main `.db` size and mtime sit
+still; fingerprinting only the `.db` would make vibra permanently stale.
 
-**cwd is not identity.** Both reviewers rejected a cwd-based match, with a
-live counterexample on this machine: a Codex session and an OpenCode session
-were both in `~/workplace/vibra` simultaneously.
+**Ingest runs on its own actor, off the main actor.** A full pass took 13.4s
+while the timer fired every 2s, so refreshes queued faster than they drained —
+that re-entrancy is what pinned a core. Concurrent requests now coalesce into
+at most one extra pass rather than stacking.
 
-Correlate on **controlling TTY**. Two agents sharing a directory have different
-ptys. Enumerate agent processes (pid, cwd, tty, start time) and match against
-terminal-reported ttys — iTerm2 and Terminal.app both expose tty via
-AppleScript.
+**A freshness horizon, decided during implementation.** The remaining cost was
+parsing all 488 transcripts to display four live sessions. Sources untouched
+beyond the display window are now skipped on their mtime without being opened:
+342 MB read becomes 6.9 MB. *Consequence to remember:* history older than the
+horizon is never read, so P1.3 needs its own non-horizon path.
 
-The gap to solve: no JSONL record carries a pid or tty, so a session-to-process
-link is still needed. Use cwd plus start-time ≈ `startedAt`, and the session id
-if a CLI exposes it in argv or env. **When ambiguous, show all candidate tabs
-rather than guessing** — a jump to the wrong tab is worse than no jump.
+### Acceptance — met
 
-VS Code's integrated terminal exposes no queryable tty. Handle separately or
-skip in v1.
+Idle CPU < 2% (measured 0.0%) and a refresh with no changes reads zero bytes.
+`make bench` asserts the zero-byte property and prints `PASS`/`FAIL`.
 
-**AC:** correct tab focused for iTerm2 *and* Terminal.app, including the
-two-agents-in-one-directory case; ambiguity surfaces a chooser, never a guess.
+## P0.2 — Bounded-memory parsing
 
-### P1.2 — Usage figures: local only, no network
+**Goal.** Stop holding whole transcripts in RAM. 626 MB traced to
+`String(contentsOf:)`.
 
-The competitor calls official usage APIs with locally-stored tokens to show
-real subscription quota. vibra will not.
+### Critical decisions
 
-Both reviewers rejected the draft's opt-in-network option. Codex: an opt-in API
-call still makes an absolute "zero egress" claim false, so the promise must
-change *before* the feature, not alongside it. DeepSeek: zero-egress is vibra's
-entire trust story and its only real differentiator, and a token-bearing egress
-path — even off by default — is a permanently different security posture.
+**Stream top-to-bottom; never tail-first.** *DeepSeek, rejecting the draft.*
+The draft proposed reading tail-first and stopping once the summary was known.
+That is a correctness regression, not an optimization: `ClaudeCodeAdapter`
+accumulates `usage +=` across *every* assistant record, so stopping early
+yields wrong token totals and therefore wrong costs — which P1.3 would then
+report as fact.
 
-Decision: keep computing value locally from token counts, labelled **"estimated
-API-equivalent value"**, never presented as a subscription quota. `UsageAggregator`
-already does this. If a real subscription read is ever wanted, it ships as a
-separate clearly-labelled tool, not in vibra core.
+**Drain autoreleased objects per batch.** `JSONSerialization` returns
+autoreleased objects and nothing drained them, so a cold pass accumulated the
+entire corpus: 880 MB resident. One `autoreleasepool` cut it to 416 MB.
 
-### P1.3 — Weekly report card
+**Batch size does not matter; smaller is worse.** Measured, not assumed.
+2000 → 250 lines left peak RSS unchanged (416 → 419 MB) and read *more*
+(342 → 365 MB), because a discarded partial chunk gets re-read. Left at 2000.
 
-Tokens, API-equivalent value, per-agent split, day and week rollups.
-`UsageAggregator` already computes the rollups; this is presentation.
+### Acceptance — met
 
-**Depends on P0.2** — a report built on wrong token totals is worse than none.
+RSS flat across refreshes; token totals identical to full-parse output, pinned
+by folding-equivalence tests on both fixtures.
 
-**AC:** report reachable from the menu, numbers matching `make probe`.
+## P0.3 — OpenCode permission column — **CUT**
 
----
+Both reviewers independently flagged this as already implemented, and they were
+right: the adapter selects `permission` and maps a non-empty value to
+`.permissionPrompt`, with a passing test. **The README claiming otherwise was
+the defect.** Corrected.
 
-## Phase 2 — Breadth
-
-### P2.1 — Auto-detect installed agents
-
-`AdapterRegistry` hardcodes three. Detect what has state on disk and show only
-that.
-
-### P2.2 — More adapters
-
-Each is one file implementing the existing `AgentAdapter` protocol; the
-architecture already supports this. Order by evidence of local use — on this
-machine `hermes` and `~/.cursor` are present, so those precede agents nobody
-here runs.
-
-Candidates: Gemini CLI, Cursor, Amp, Hermes, Droid, Qwen, Kimi.
-
-**AC per adapter:** fixture-based test, built without reading the user's real
-session data.
+What remains is verification, not implementation: confirm OpenCode actually
+writes that column when it parks on an approval prompt. One real session
+carries a 172-character permission value, which is evidence it does, but the
+live transition has not been observed.
 
 ---
 
-## Phase 3 — Distribution
+# Phase 0b — Testability — **DONE**
 
-### P3.1 — Developer ID signing and notarization
+## P0b.1 — Make the notifier testable
 
-Currently ad-hoc signed, so macOS refuses notification authorization until the
-user enables it by hand in System Settings. Requires a paid Apple Developer
-account — **a user decision, not a code change.**
+**Goal.** The app's headline feature sat behind the least-verified code in the
+project.
 
-### P3.2 — Sparkle auto-update with EdDSA signature verification
+### Critical decisions
 
-### P3.3 — Homebrew cask
+**Split decisions from delivery.** The problem was not missing tests but that
+tests were *impossible*: the logic was welded to `UNUserNotificationCenter`,
+which needs a signed bundle plus user authorization and silently drops whatever
+it will not show. `AttentionNotifier` (VibraCore) owns every decision;
+`UserNotificationSink` (VibraApp) only delivers.
+
+**Inject the clock.** `notifyIfNeeded` takes `now`, so debounce is
+deterministic instead of requiring a real minute to elapse.
+
+**Mutation-test the rules.** After the `swift test` false-green episode, "39
+passed" is not evidence on its own. Deleting the debounce check and deleting
+the transition check each make the suite fail.
+
+### Acceptance — met
+
+No second notification for the same (session, state) within 60s. Debounce is
+per-session and per-state: two sessions each alert, and `blocked` versus
+`awaitingInput` are different events.
 
 ---
 
-## Explicitly not doing
+# Phase 1 — The features users notice
 
-- **Approving agent permission prompts from the menu bar.** The competitor
-  offers it. It converts a passive read-only monitor into something that can
-  approve tool calls — a materially different security posture that
-  contradicts the read-only contract every adapter is built on. The value of a
-  monitor you can trust to be *only* a monitor is worth more than the
-  convenience.
-- **A Windows port.**
+## P1.1 — Terminal jump-back — **IN PROGRESS**
+
+**Goal.** Click a session row and land in the terminal tab that session is
+running in, so the alert leads somewhere instead of just informing you.
+
+### Critical decisions
+
+**cwd is not identity — correlate on controlling TTY.** *Both reviewers,
+independently.* A live counterexample exists on the development machine: a
+Codex session and an OpenCode session occupied `~/workplace/vibra`
+simultaneously. Two agents sharing a directory have different ptys, so the tty
+is exactly the disambiguator.
+
+**When ambiguous, offer a chooser — never guess.** *Codex.* Jumping to the
+wrong tab is worse than not jumping, because it silently moves the user's focus
+away from what they were doing.
+
+**The session→process link is the hard part, and is not solved by tty alone.**
+*DeepSeek.* No JSONL record carries a pid or tty. The link must come from
+matching process cwd plus start-time against the session's `startedAt`, plus a
+session id from argv or env where a CLI exposes one.
+
+**VS Code is handled separately or not at all in v1.** *DeepSeek.* Its
+integrated terminal exposes no queryable tty, so it cannot join the same
+mechanism.
+
+### Acceptance
+
+The correct tab focused in iTerm2 **and** Terminal.app, including the
+two-agents-in-one-directory case; ambiguity surfaces a chooser rather than a
+guess.
+
+## P1.2 — Usage figures stay local — **DECIDED**
+
+**Goal.** Show what usage costs without breaking the promise that makes vibra
+worth trusting.
+
+### Critical decisions
+
+**No network egress, not even opt-in.** Both reviewers rejected the draft's
+opt-in option. *Codex:* an opt-in API call still makes an absolute "zero
+egress" claim false, so the promise would have to change *before* the feature,
+not alongside it. *DeepSeek:* zero-egress is vibra's entire trust story and its
+only real differentiator against the paid competitor; a token-bearing egress
+path, even off by default, is a permanently different security posture.
+
+**Label it honestly.** Figures are "estimated API-equivalent value", never
+presented as a subscription quota. A real subscription read, if ever wanted,
+ships as a separate clearly-labelled tool.
+
+## P1.3 — Weekly report card
+
+**Goal.** Tokens, API-equivalent value, per-agent split, day and week rollups.
+
+### Critical decisions
+
+**Needs its own non-horizon read path.** P0.1's freshness horizon means
+transcripts untouched beyond the display window are never opened. A weekly
+report built on that would silently under-report. Decide the mechanism before
+building the view.
+
+**Depends on P0.2.** A report built on wrong token totals is worse than none.
+
+### Acceptance
+
+Reachable from the menu; numbers match `make probe`.
+
+---
+
+# Phase 2 — Breadth
+
+## P2.1 — Auto-detect installed agents
+
+**Goal.** Stop hardcoding three adapters in `AdapterRegistry`; show only agents
+that have state on disk.
+
+### Critical decisions
+
+**Detect by state on disk, not by binary on `PATH`.** An installed CLI that has
+never run has nothing to show, and a removed CLI may still have transcripts
+worth reading.
+
+## P2.2 — More adapters
+
+**Goal.** Cover the agents a user actually runs.
+
+### Critical decisions
+
+**Order by evidence of local use, not by the competitor's list length.**
+`hermes` and `~/.cursor` are present on this machine; agents nobody here runs
+come later.
+
+**Every adapter is built against fixtures.** No adapter is developed by reading
+the user's real session data — sanitized fixtures are extracted first. This is
+a privacy rule and a correctness one: the exact observed schema beats a guess.
+
+### Acceptance
+
+Per adapter: a fixture-based test, built without reading real user data.
+
+---
+
+# Phase 3 — Distribution
+
+## P3.1 — Developer ID signing and notarization
+
+**Goal.** Make notifications work without a manual System Settings step, and
+make the app distributable.
+
+### Critical decisions
+
+**Requires a paid Apple Developer account — a user decision, not a code
+change.** Confirmed empirically: an ad-hoc signed bundle gets
+`authorization granted: false` with "Notifications are not allowed for this
+application". No code change substitutes for a signature.
+
+## P3.2 — Sparkle auto-update
+
+### Critical decisions
+
+**Verify an EdDSA signature before installing anything.** An auto-updater is
+the highest-value target in the app; an unverified one is a remote code
+execution channel.
+
+## P3.3 — Homebrew cask
+
+Depends on P3.1: a cask distributing an unsigned bundle is hostile to users.
+
+---
+
+# Explicitly not doing
+
+**Approving agent permission prompts from the menu bar.** The competitor offers
+this. It converts a passive read-only monitor into something that can approve
+tool calls — a materially different security posture that contradicts the
+read-only contract every adapter is built on. A monitor you can trust to be
+*only* a monitor is worth more than the convenience.
+
+**A Windows port.**

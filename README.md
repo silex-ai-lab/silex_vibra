@@ -260,6 +260,9 @@ done: idle CPU went from ~97% to 0.0% and resident memory from 626 MB to
 
 Run `make bench` to reproduce those numbers on your own corpus.
 
+Current state is tracked in [docs/STATUS.md](docs/STATUS.md); planned work,
+with the reasoning behind each decision, in [docs/ROADMAP.md](docs/ROADMAP.md).
+
 Working against real data: the menu bar, all three adapters, state
 classification, and usage/cost accounting. Not yet done: terminal jump-back,
 weekly report cards, and Developer ID signing.
