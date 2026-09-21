@@ -239,8 +239,17 @@ so that fails too.
 
 **Permissions still need approving once**, on each machine, per target app
 (iTerm2 and Terminal are separate grants). The certificate does not grant
-anything — it makes the approval you give outlive rebuilds. To re-arm from
-scratch: `tccutil reset AppleEvents ai.silexlab.vibra`.
+anything — it makes the approval you give outlive rebuilds.
+
+To clear the grant and be prompted again from scratch:
+
+```sh
+tccutil reset AppleEvents ai.silexlab.vibra
+```
+
+Only useful when you want to re-test the prompt, or when a grant is stuck
+against a bundle you no longer have. It removes a working permission, so it
+costs you one re-approval.
 
 This is **not** a substitute for Developer ID signing and notarization, which is
 what distributing a download would need — a fresh clone is still ad-hoc, so its
