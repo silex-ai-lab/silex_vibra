@@ -66,6 +66,16 @@ public struct OpenCodeAdapter: AgentAdapter {
         )
     }
 
+    // MARK: - Reporting
+
+    /// OpenCode stores per-session totals with no per-record timestamps, so its
+    /// usage is real but undatable. A fabricated day would be worse than an
+    /// honest "day unknown", so this returns no samples and `ReportBuilder`
+    /// reports the totals on its undated line.
+    public func usageSamples(from records: [String]) -> [UsageSample] {
+        []
+    }
+
     // MARK: - Allowlist
 
     /// The single table this adapter may read.

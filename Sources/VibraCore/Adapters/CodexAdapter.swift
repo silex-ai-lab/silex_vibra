@@ -83,6 +83,41 @@ public struct CodexAdapter: AgentAdapter {
         return ParsedState(sessions: session.map { [$0] } ?? [], checkpoint: checkpoint)
     }
 
+    // MARK: - Reporting
+
+    /// One timestamped sample per `token_usage_record`, using the PER-TURN
+    /// `payload.usage` field. `thread_token_usage` is cumulative over the
+    /// session, so emitting it as a sample would count a multi-day session's
+    /// tokens once per day. Per-turn usage is a delta, and its sum equals the
+    /// final `thread_token_usage`.
+    public func usageSamples(from records: [String]) -> [UsageSample] {
+        var model: String?
+        var samples: [UsageSample] = []
+
+        for line in records {
+            guard let record = jsonObject(line) else { continue }
+            let type = record["type"] as? String
+
+            if type == "session_meta", let payload = record["payload"] as? [String: Any], model == nil {
+                model = CodexCheckpoint.findModel(in: payload)
+            }
+
+            guard type == "token_usage_record" else { continue }
+            guard let payload = record["payload"] as? [String: Any] else { continue }
+            guard let perTurn = payload["usage"] as? [String: Any] else { continue }
+
+            let usage = TokenUsage(
+                input: jsonInt(perTurn["input_tokens"]),
+                output: jsonInt(perTurn["output_tokens"]),
+                cacheCreation: jsonInt(perTurn["cache_write_input_tokens"]),
+                cacheRead: jsonInt(perTurn["cached_input_tokens"])
+            )
+            let timestamp = (record["timestamp"] as? String).flatMap(parseISODate)
+            samples.append(UsageSample(timestamp: timestamp, model: model, usage: usage))
+        }
+        return samples
+    }
+
     // MARK: - Full parse
 
     public func discoverSessions() throws -> [Session] {

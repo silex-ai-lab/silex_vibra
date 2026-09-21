@@ -11,6 +11,7 @@ final class MenuBarController {
     private var statusItem: NSStatusItem?
     private let store: SessionStore
     private let notchOverlay: NotchOverlay?
+    private lazy var reportWindow = ReportWindowController(adapters: AdapterRegistry.all())
     private let notificationSink = UserNotificationSink()
     private lazy var notifier = AttentionNotifier(sink: notificationSink)
 
@@ -84,6 +85,9 @@ final class MenuBarController {
         }
 
         menu.addItem(.separator())
+        let report = NSMenuItem(title: "Usage Report…", action: #selector(showReport), keyEquivalent: "u")
+        report.target = self
+        menu.addItem(report)
         menu.addItem(NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r"))
         menu.items.last?.target = self
         menu.addItem(NSMenuItem(title: "Quit vibra", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -178,4 +182,6 @@ final class MenuBarController {
     }
 
     @objc private func refreshNow() { Task { await store.requestRefresh() } }
+
+    @objc private func showReport() { reportWindow.show() }
 }

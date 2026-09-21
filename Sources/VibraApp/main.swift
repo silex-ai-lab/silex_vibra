@@ -127,6 +127,64 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
     exit(0)
 }
 
+// `Vibra --report` prints the rolling-window usage report.
+if CommandLine.arguments.contains("--report") {
+    let ingest = ReportIngest(adapters: AdapterRegistry.all())
+    nonisolated(unsafe) var done = false
+    Task.detached {
+        let t0 = Date()
+        let samples = await ingest.collectSamples()
+        let bytes = await ingest.lastBytesRead
+        let report = ReportBuilder().build(samplesByAgent: samples)
+
+        let df = DateFormatter()
+        df.dateFormat = "EEE MMM d"
+        func fmtTok(_ n: Int) -> String {
+            n >= 1_000_000 ? String(format: "%.1fM", Double(n) / 1e6)
+                           : (n >= 1000 ? "\(n / 1000)k" : "\(n)")
+        }
+
+        print("Usage — last \(report.windowDays) days (rolling), to \(df.string(from: report.generatedAt))")
+        print("Estimated API-equivalent value. Not a bill. Computed locally; nothing left this machine.")
+        print("")
+        print("  BY DAY")
+        if report.days.isEmpty { print("    (no dated usage in window)") }
+        for d in report.days {
+            let unp = d.unpricedTokens > 0 ? "  +\(fmtTok(d.unpricedTokens)) unpriced" : ""
+            print(String(format: "    %-12s %8s tok   ~$%.2f%@",
+                         (df.string(from: d.day) as NSString).utf8String!,
+                         (fmtTok(d.usage.total) as NSString).utf8String!,
+                         d.estimatedValue, unp))
+        }
+        print("")
+        print("  BY AGENT")
+        for a in report.agents {
+            let unp = a.unpricedTokens > 0 ? "  +\(fmtTok(a.unpricedTokens)) unpriced" : ""
+            print(String(format: "    %-14s %8s tok   ~$%.2f%@",
+                         (a.agent.displayName as NSString).utf8String!,
+                         (fmtTok(a.usage.total) as NSString).utf8String!,
+                         a.estimatedValue, unp))
+        }
+        print("")
+        print(String(format: "  TOTAL          %8s tok   ~$%.2f",
+                     (fmtTok(report.total.total) as NSString).utf8String!, report.estimatedValue))
+        if report.unpricedTokens > 0 {
+            print("    \(fmtTok(report.unpricedTokens)) tokens had no published rate and are excluded from the estimate.")
+        }
+        if report.undated.total > 0 {
+            print("    \(fmtTok(report.undated.total)) tokens could not be dated (source has no per-record timestamps).")
+        }
+        print("")
+        print(String(format: "  read %.1f MB in %.2fs", Double(bytes) / 1_048_576, Date().timeIntervalSince(t0)))
+        done = true
+    }
+    let deadline = Date().addingTimeInterval(120)
+    while !done && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(done ? 0 : 1)
+}
+
 if CommandLine.arguments.contains("--locate") {
     let locator = ProcessLocator()
     let engine = StateEngine()

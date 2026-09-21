@@ -17,7 +17,7 @@ jump-back (P1.1).
 | RSS (running app) | 68.1 MB | < 60 MB | ⚠️ missed |
 | Cold start | 0.36s, 7.3 MB read | — | ✅ |
 | Unchanged refresh | 0.02s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 47 in 10 suites | — | ✅ |
+| Tests | 60 in 12 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
 
 Reproduce with `make bench` and `make test`.

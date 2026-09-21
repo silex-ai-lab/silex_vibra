@@ -86,6 +86,31 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         return ParsedState(sessions: session.map { [$0] } ?? [], checkpoint: checkpoint)
     }
 
+    // MARK: - Reporting
+
+    /// One timestamped sample per `assistant` record. Each record's
+    /// `message.usage` is a per-response delta, so the samples are additive and
+    /// their sum equals the aggregate usage from `discoverSessions`. Timestamps
+    /// are emitted as UTC `Date`s; `ReportBuilder` does local-day bucketing.
+    public func usageSamples(from records: [String]) -> [UsageSample] {
+        records.compactMap { line in
+            guard let record = jsonObject(line) else { return nil }
+            guard record["type"] as? String == "assistant" else { return nil }
+            guard let message = record["message"] as? [String: Any] else { return nil }
+            guard let u = message["usage"] as? [String: Any] else { return nil }
+
+            let usage = TokenUsage(
+                input: jsonInt(u["input_tokens"]),
+                output: jsonInt(u["output_tokens"]),
+                cacheCreation: jsonInt(u["cache_creation_input_tokens"]),
+                cacheRead: jsonInt(u["cache_read_input_tokens"])
+            )
+            let timestamp = (record["timestamp"] as? String).flatMap(parseISODate)
+            let model = message["model"] as? String
+            return UsageSample(timestamp: timestamp, model: model, usage: usage)
+        }
+    }
+
     // MARK: - Full parse
 
     public func discoverSessions() throws -> [Session] {

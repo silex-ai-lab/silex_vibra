@@ -20,7 +20,7 @@ Current state: see [STATUS.md](STATUS.md).
 | 0b | P0b.1 Make the notifier testable | **Done** 2026-09-20 |
 | 1 | P1.1 Terminal jump-back | **Done (v1)** 2026-09-20 |
 | 1 | P1.2 Usage figures stay local | **Decided** — no network, ever |
-| 1 | P1.3 Weekly report card | Not started |
+| 1 | P1.3 Weekly report card | **Done** 2026-09-20 |
 | 2 | P2.1 Auto-detect installed agents | Not started |
 | 2 | P2.2 More adapters | Not started |
 | 3 | P3.1 Developer ID signing | Blocked on a user decision |
@@ -224,22 +224,64 @@ path, even off by default, is a permanently different security posture.
 presented as a subscription quota. A real subscription read, if ever wanted,
 ships as a separate clearly-labelled tool.
 
-## P1.3 — Weekly report card
+## P1.3 — Weekly report card — **DONE** 2026-09-20
 
-**Goal.** Tokens, API-equivalent value, per-agent split, day and week rollups.
+**Goal.** Tokens, API-equivalent value, per-agent split, per-day rollups,
+reachable from the menu bar.
 
 ### Critical decisions
 
-**Needs its own non-horizon read path.** P0.1's freshness horizon means
-transcripts untouched beyond the display window are never opened. A weekly
-report built on that would silently under-report. Decide the mechanism before
-building the view.
+**Attribute usage per record, not per session.** `byDay` grouped on
+`session.lastActivity` and assigned a session's *entire* total to one day.
+Sessions do span days — one here spans 2026-09-18 to 09-21 carrying 145M
+tokens — so its whole dollar value would land on the last day and show zero
+for the three days the work happened. Adapters now emit timestamped
+`UsageSample`s and the report buckets them. *Both seats chose this.*
 
-**Depends on P0.2.** A report built on wrong token totals is worse than none.
+**Buckets are keyed by (local day, model).** Local because transcript
+timestamps are UTC and bucketing by UTC silently moves evening sessions into
+tomorrow. Per-model because a session can switch models mid-flight, and
+pricing its whole total at whichever model happened to be last is wrong —
+*a trap Codex raised that the draft had missed.*
 
-### Acceptance
+**`Session` stays lean.** *DeepSeek.* It is the poll-path hot row, compared
+and encoded every refresh; a growing per-day map on it would threaten the
+idle-cost property Phase 0 recovered. Reports accumulate separately.
 
-Reachable from the menu; numbers match `make probe`.
+**On-demand read with isolated state.** A seven-day window measured 62 MB
+across 35 files (~2s) — fine for an explicit action, ruinous every two
+seconds. `ReportIngest` shares **no** offsets or checkpoints with
+`SessionIngest`: sharing them would let opening the report consume the live
+monitor's unread bytes, or let the monitor's 12-hour horizon truncate the
+report. A persistent rollup cache was rejected as premature — it would
+duplicate the rotation/truncation/inode machinery the checkpoints already
+solve.
+
+**Rolling last-7-days, not calendar week.** *The seats split here.* Codex
+argued for local calendar weeks as stable non-overlapping buckets; DeepSeek
+for rolling, since it matches the read window exactly, avoids the
+Sunday-vs-Monday ambiguity, and avoids a near-empty card on Monday morning.
+Rolling was chosen for v1; Codex had already allowed it as an acceptable
+separate metric. A calendar week can be added later.
+
+**Undated usage is shown, never dated.** *Codex.* OpenCode stores per-session
+totals with no per-record timestamps, so its usage is real but unattributable.
+It gets its own line rather than a fabricated day.
+
+**Unknown models produce unpriced tokens, never $0.** Free and unknown must
+not look alike.
+
+**Labelling is load-bearing.** Both seats required it: "estimated
+API-equivalent value", never cost, spent, bill or quota; and an explicit note
+that figures are computed locally and nothing leaves the machine.
+
+### Acceptance — met
+
+Reachable from the menu (`Usage Report…`), and per-day figures verified
+against an **independent** recomputation straight from the raw transcripts:
+Sep 14–20 matched to the displayed precision on every day. Phase 0's
+zero-byte warm refresh still passes, confirming the report does not disturb
+the poll path.
 
 ---
 
