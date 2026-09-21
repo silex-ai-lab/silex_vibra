@@ -79,11 +79,33 @@ app: build
 	#
 	# This is NOT a substitute for Developer ID signing + notarization when
 	# distributing downloads.
-	codesign --force --deep --sign $(if $(SIGN_IDENTITY),"$(SIGN_IDENTITY)",-) $(APP_BUNDLE) 2>/dev/null || \
-	  echo "warning: codesign failed; notifications and terminal jump-back may not work"
-	@codesign -dvvv $(APP_BUNDLE) 2>&1 | grep -q "Signature=adhoc" \
-	  && echo "signed ad-hoc (TCC grants will not survive a rebuild; see SIGN_IDENTITY in the Makefile)" \
-	  || echo "signed with $(SIGN_IDENTITY)"
+	#
+	# Signing failure is fatal, and its stderr is not hidden. An unsigned or
+	# wrongly-signed bundle still launches, so a swallowed error here does not
+	# look like a build problem at all -- it looks like notifications and
+	# terminal jump-back being mysteriously broken, days later. That is not
+	# hypothetical: on 2026-09-21 a `make install SIGN_IDENTITY=...` was denied
+	# keychain access, the `2>/dev/null ||` ate it, the build reported success,
+	# and the bundle was quietly ad-hoc.
+	@codesign --force --deep --sign $(if $(SIGN_IDENTITY),"$(SIGN_IDENTITY)",-) $(APP_BUNDLE) || { \
+	  echo "error: codesign failed. The bundle would run but could not hold any"; \
+	  echo "       permission: no notifications, no terminal jump-back."; \
+	  $(if $(SIGN_IDENTITY),echo "       Check that SIGN_IDENTITY=$(SIGN_IDENTITY) names a code-signing"; \
+	  echo "       identity: security find-identity -p codesigning";,:;) \
+	  exit 1; }
+	# Verify what was actually produced, not just that codesign exited 0. Asking
+	# for an identity and silently getting ad-hoc is the failure that hides best.
+	@if codesign -dvvv $(APP_BUNDLE) 2>&1 | grep -q "Signature=adhoc"; then \
+	  if [ -n "$(SIGN_IDENTITY)" ]; then \
+	    echo "error: asked to sign with $(SIGN_IDENTITY) but the bundle is ad-hoc."; \
+	    echo "       codesign fell back instead of failing. TCC grants would be"; \
+	    echo "       pinned to the code hash and lost on the next rebuild."; \
+	    exit 1; \
+	  fi; \
+	  echo "signed ad-hoc (TCC grants will not survive a rebuild; see SIGN_IDENTITY above)"; \
+	else \
+	  echo "signed with $(SIGN_IDENTITY)"; \
+	fi
 	@echo "built $(APP_BUNDLE)"
 
 run: app
