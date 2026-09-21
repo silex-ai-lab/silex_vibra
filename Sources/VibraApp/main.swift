@@ -60,8 +60,13 @@ if CommandLine.arguments.contains("--test-notification") {
         let content = UNMutableNotificationContent()
         content.title = "vibra"
         content.body = "Test notification - delivery works on this machine."
+        // A fixed identifier, for the same reason the real path uses the session
+        // id: macOS replaces a delivered notification that reuses one. With a
+        // UUID per run every `--test-notification` left another permanent entry
+        // in Notification Center, and nothing ever removed them — running the
+        // diagnostic a few times while debugging built its own little pile.
         let request = UNNotificationRequest(
-            identifier: "vibra.test.\(UUID().uuidString)",
+            identifier: "vibra.test",
             content: content,
             trigger: nil
         )
