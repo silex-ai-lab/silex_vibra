@@ -156,6 +156,53 @@ make probe      # check adapter output without the UI
 /Applications/Vibra.app/Contents/MacOS/Vibra --test-notification
 ```
 
+### Stable signing for development
+
+`make install` ad-hoc signs by default, which is fine for running vibra and not
+fine for *granting it permissions*. macOS pins a TCC grant to whatever identity
+the bundle has, and an ad-hoc bundle has none — so the grant is pinned to the
+exact code hash instead. Measured on 2026-09-21, the Automation grant's stored
+requirement was literally `fade0c00...` followed by the cdhash:
+
+```sh
+codesign -d -r- /Applications/Vibra.app
+# designated => cdhash H"83ed91aa1d4e9f84a698e8731fe64c37f5410d63"
+```
+
+Any rebuild that changes a byte of the binary invalidates that, and you get
+"Vibra wants to control iTerm" again. Reverting the source does **not** undo it:
+a release build is not byte-reproducible once the build cache has been
+disturbed, so the old hash does not come back.
+
+Signing with a stable certificate fixes it, and does not need an Apple account
+or a network connection — a self-signed code-signing certificate in your login
+keychain is enough:
+
+1. **Keychain Access → Certificate Assistant → Create a Certificate…**
+   Name it `vibra local signing`, Identity Type **Self Signed Root**, Certificate
+   Type **Code Signing**. (Or generate one with `openssl` and
+   `security import ... -T /usr/bin/codesign`.)
+2. Build with it:
+   ```sh
+   make install SIGN_IDENTITY="vibra local signing"
+   ```
+   The first build prompts for keychain access. Choose **Always Allow**, or every
+   later build stops and waits for the same dialog.
+
+The designated requirement then names the certificate rather than the binary:
+
+```sh
+codesign -d -r- /Applications/Vibra.app
+# designated => identifier "ai.silexlab.vibra" and certificate root = H"f067ca2a..."
+```
+
+and permissions survive rebuilds. `make install` without `SIGN_IDENTITY` is
+unchanged, so a fresh clone and CI behave exactly as before; the build prints
+which of the two it used.
+
+This is **not** a substitute for Developer ID signing and notarization, which is
+what distributing a download would need.
+
 ## Testing note
 
 Run tests with `make test` or `swift run VibraTests` — **not** `swift test`.

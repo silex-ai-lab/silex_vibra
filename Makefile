@@ -59,10 +59,31 @@ app: build
 	  '  <key>NSAppleEventsUsageDescription</key>' \
 	  '  <string>vibra asks your terminal which tab owns a session'"'"'s tty, so clicking a session can focus it.</string>' \
 	  '</dict></plist>' > $(CONTENTS)/Info.plist
-	# Ad-hoc sign so the bundle has a stable identity. This is NOT a substitute
-	# for Developer ID signing + notarization when distributing downloads.
-	codesign --force --deep --sign - $(APP_BUNDLE) 2>/dev/null || \
-	  echo "warning: ad-hoc codesign failed; notifications may not be delivered"
+	# Signing identity. SIGN_IDENTITY unset means ad-hoc, which is what a fresh
+	# clone gets and what CI should use.
+	#
+	# Ad-hoc has no stable identity, so macOS pins every TCC grant to the exact
+	# code hash: measured on 2026-09-21, the Automation grant's csreq was
+	# literally `fade0c00...` followed by the cdhash. Any rebuild that changes a
+	# byte of the binary invalidates it, and reverting the source does NOT
+	# restore the old hash -- a release build is not byte-reproducible once the
+	# build cache has been disturbed. In practice that means re-approving
+	# "Vibra wants to control iTerm" after most rebuilds.
+	#
+	# Signing with a stable certificate instead makes the designated requirement
+	# name that certificate, so the grant survives rebuilds. It does not need an
+	# Apple account -- a self-signed code-signing certificate in your login
+	# keychain is enough. See "Stable signing for development" in the README.
+	#
+	#   make install SIGN_IDENTITY="vibra local signing"
+	#
+	# This is NOT a substitute for Developer ID signing + notarization when
+	# distributing downloads.
+	codesign --force --deep --sign $(if $(SIGN_IDENTITY),"$(SIGN_IDENTITY)",-) $(APP_BUNDLE) 2>/dev/null || \
+	  echo "warning: codesign failed; notifications and terminal jump-back may not work"
+	@codesign -dvvv $(APP_BUNDLE) 2>&1 | grep -q "Signature=adhoc" \
+	  && echo "signed ad-hoc (TCC grants will not survive a rebuild; see SIGN_IDENTITY in the Makefile)" \
+	  || echo "signed with $(SIGN_IDENTITY)"
 	@echo "built $(APP_BUNDLE)"
 
 run: app
