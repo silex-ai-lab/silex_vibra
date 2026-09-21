@@ -8,12 +8,23 @@ public struct SessionProcess: Equatable, Sendable {
     /// controlling tty, which cannot be jumped to.
     public let tty: String?
     public let cwd: String?
+    /// The Claude desktop app's own id for this session (`local_...`), when
+    /// the desktop app started it - a scheduled task or a Code tab. Such a
+    /// session has no terminal at all; the desktop app is where it lives.
+    public let desktopSessionID: String?
 
-    public init(sessionID: String, pid: Int32, tty: String?, cwd: String? = nil) {
+    public init(
+        sessionID: String,
+        pid: Int32,
+        tty: String?,
+        cwd: String? = nil,
+        desktopSessionID: String? = nil
+    ) {
         self.sessionID = sessionID
         self.pid = pid
         self.tty = tty
         self.cwd = cwd
+        self.desktopSessionID = desktopSessionID
     }
 }
 
@@ -81,10 +92,22 @@ public struct ProcessLocator: Sendable {
                 sessionID: sessionID,
                 pid: pid,
                 tty: ProcessInspector.tty(of: pid),
-                cwd: obj["cwd"] as? String
+                cwd: obj["cwd"] as? String,
+                desktopSessionID: desktopSessionID(in: obj)
             )
         }
         return nil
+    }
+
+    /// `hostSessionId` of a session the desktop app started. Held to the same
+    /// shape the desktop app's own deep-link handler accepts, so nothing else
+    /// from the file can end up in a URL vibra opens.
+    func desktopSessionID(in record: [String: Any]) -> String? {
+        guard record["entrypoint"] as? String == "claude-desktop",
+              let id = record["hostSessionId"] as? String,
+              id.range(of: #"^local_[A-Za-z0-9-]{1,64}$"#, options: .regularExpression) != nil
+        else { return nil }
+        return id
     }
 
     // MARK: - Codex

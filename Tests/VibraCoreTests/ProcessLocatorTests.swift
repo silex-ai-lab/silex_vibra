@@ -147,4 +147,38 @@ struct ProcessLocatorTests {
             #expect(owner == owner)
         }
     }
+
+    // MARK: - Claude desktop sessions
+
+    @Test func desktopStartedSessionCarriesItsDesktopID() throws {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let tree = try makeTree(claude: [
+            "\(pid).json": """
+            {"pid":\(pid),"sessionId":"sess-desk","cwd":"/tmp","entrypoint":"claude-desktop",\
+            "hostSessionId":"local_ecb0e2e2-5133-4fda-b314-a4271ac050f4"}
+            """,
+        ])
+        defer { try? FileManager.default.removeItem(at: tree.root) }
+        let locator = ProcessLocator(claudeSessionsDir: tree.claudeDir, codexLocksDir: tree.codexDir)
+        let found = locator.locate(sessionID: "sess-desk", agent: .claudeCode)
+        #expect(found?.desktopSessionID == "local_ecb0e2e2-5133-4fda-b314-a4271ac050f4")
+    }
+
+    @Test func desktopIDIsOnlyTakenFromDesktopSessionsInTheExpectedShape() {
+        let locator = ProcessLocator()
+        // A CLI session is found through its terminal, never the desktop app.
+        #expect(locator.desktopSessionID(in: [
+            "entrypoint": "cli", "hostSessionId": "local_abc",
+        ]) == nil)
+        // Anything that could smuggle more into the URL is refused.
+        #expect(locator.desktopSessionID(in: [
+            "entrypoint": "claude-desktop", "hostSessionId": "local_abc&q=hi",
+        ]) == nil)
+        #expect(locator.desktopSessionID(in: [
+            "entrypoint": "claude-desktop", "hostSessionId": "session_abc",
+        ]) == nil)
+        #expect(locator.desktopSessionID(in: [
+            "entrypoint": "claude-desktop", "hostSessionId": "local_abc-123",
+        ]) == "local_abc-123")
+    }
 }

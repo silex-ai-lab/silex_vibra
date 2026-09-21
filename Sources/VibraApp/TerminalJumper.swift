@@ -39,6 +39,12 @@ enum TerminalJumper {
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
         }
+        // Started by the Claude desktop app (a scheduled task or a Code tab):
+        // there is no terminal to find, but the app can open the session
+        // itself. Before the tty check, which such a session always fails.
+        if let desktopID = found.desktopSessionID, openInClaudeApp(desktopID) {
+            return .jumped(app: "Claude")
+        }
         guard let tty = found.tty else { return .noControllingTerminal }
 
         switch focusITerm(tty: tty) {
@@ -64,6 +70,23 @@ enum TerminalJumper {
         case notFound
         case refused
         case notRunning
+    }
+
+    // MARK: - Claude desktop app
+
+    /// Opens the session through the desktop app's own deep link, the one it
+    /// registers for "Continue Last Claude Code Session". Needs no Automation
+    /// permission: it is a URL open, not an Apple Event.
+    private static func openInClaudeApp(_ desktopSessionID: String) -> Bool {
+        var components = URLComponents()
+        components.scheme = "claude"
+        components.host = "code"
+        components.path = "/continue"
+        components.queryItems = [URLQueryItem(name: "session", value: desktopSessionID)]
+        guard let url = components.url,
+              NSWorkspace.shared.urlForApplication(toOpen: url) != nil
+        else { return false }
+        return NSWorkspace.shared.open(url)
     }
 
     // MARK: - Emulators
