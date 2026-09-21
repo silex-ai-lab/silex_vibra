@@ -326,6 +326,40 @@ layered on the menu bar, which is the real interface.
 - **Not signed or notarized**, so this is build-from-source only. There is no
   release download and no Homebrew cask.
 
+## Changelog
+
+### 0.2.0 — 2026-09-21
+
+Four bugs, all in the parts of vibra that talk to macOS rather than to your
+agents, all found on macOS 15.7.3 and fixed. Full diagnosis and measurements in
+[docs/STATUS.md](docs/STATUS.md).
+
+- **`--test-notification` crashed** (SIGTRAP, no output) instead of reporting.
+  Top-level code in `main.swift` is `@MainActor` under Swift 6 and the
+  UserNotifications callbacks inherited that isolation while being invoked on a
+  background queue.
+- **Notifications are withdrawn when they stop being true.** They used to
+  accumulate in Notification Center for the whole login, including alerts for
+  prompts you had already answered. They are keyed by session id now, so one
+  session replaces its own entry instead of stacking, and the alert is pulled
+  when the session stops needing you, disappears, or vibra quits.
+- **Terminal jump-back works.** It never had Automation permission, because the
+  bundle did not declare `NSAppleEventsUsageDescription` and so macOS never
+  prompted for it. Every failure was also reported as "probably a multiplexer",
+  which on a plain iTerm2 tab is wrong; the diagnosis now comes from walking the
+  process ancestry, and `--locate` prints it.
+- **`SIGN_IDENTITY` keeps permissions across rebuilds.** See
+  [Stable signing for development](#stable-signing-for-development). Signing
+  failure is now fatal rather than a warning that leaves a quietly unsigned
+  bundle behind.
+- `make install` removes the build copy, so `open -a Vibra` can no longer
+  launch a different bundle than the one you installed.
+
+### 0.1.0
+
+Initial: menu bar, three adapters, state classification, usage and cost
+accounting, terminal jump-back (v1), usage report.
+
 ## Status
 
 Early, but no longer expensive. Phase 0 of [the roadmap](docs/ROADMAP.md) is

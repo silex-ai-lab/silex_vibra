@@ -1,8 +1,12 @@
 # vibra — current status
 
-Last verified **2026-09-20** on a Mac mini (M4, macOS 26.6.2) against a
-488-file, 339 MB session corpus, from a full clean rebuild — `.build`,
+**0.2.0.** Last verified **2026-09-21** on macOS 15.7.3 / Swift 6.1.2 from a
+clean clone and a full clean rebuild; before that, **2026-09-20** on a Mac mini
+(M4, macOS 26.6.2) against a 488-file, 339 MB session corpus, with `.build`,
 `build/` and `/Applications/Vibra.app` all deleted first.
+
+Changes in 0.2.0 are in the next section; older measurements below it still
+refer to the 2026-09-20 run.
 
 ## Verdict
 
@@ -49,27 +53,125 @@ the precision, and the <60 MB target is met on some runs and missed on others.
 Brief **CPU spikes of 5–12%** are correct behaviour: FSEvents firing a refresh
 when an agent writes to disk. Idle returns to 0.0% immediately.
 
-## Also verified on macOS 15.7.3 / Swift 6.1.2 (2026-09-21)
+## 0.2.0 — 2026-09-21, macOS 15.7.3 / Swift 6.1.2
 
 A clean clone, `make build`, `make test`, `make probe`, `make install`. Build is
-warning-free; 73 tests pass; adapters read live sessions; the app idles at
-0.0–0.1% CPU and 42–46 MB RSS.
+warning-free, **76 tests** pass (66 before), adapters read live sessions, the
+app idles at 0.0–0.1% CPU and 42–46 MB RSS. Four bugs, all found on macOS 15
+where the macOS 26 pass could not have shown them, and all fixed.
 
-Two bugs found there that the macOS 26 pass could not have shown, both now
-fixed — see `docs/FIX-PLAN-notifications.md` for the full diagnosis:
+### 1. `--test-notification` trapped instead of reporting
 
-- **`--test-notification` trapped** (`dispatch_assert_queue_fail`, SIGTRAP, exit
-  133, no output). Top-level code in `main.swift` is `@MainActor` under Swift 6
-  and the UserNotifications callbacks inherited that isolation while being
-  invoked on a background queue. The handlers are `@Sendable` now.
-- **Delivered notifications were never withdrawn**, and `deliver` used a random
-  UUID per post, so there was no stable handle to withdraw by. Notifications are
-  keyed by session id and pulled when the session stops needing attention,
-  disappears, or vibra quits.
+`dispatch_assert_queue_fail`, SIGTRAP, exit 133, and **no output at all** —
+it died before the first `print` could flush. Top-level code in `main.swift`
+is `@MainActor` under Swift 6, so the UserNotifications callbacks inherited
+that isolation while being invoked on a background dispatch queue. Both
+handlers are `@Sendable` now. This mattered beyond itself: the README points
+at this command as *the* way to find out whether notifications work, so while
+it crashed there was no way to answer that question. (`c788703`)
 
-Notification *authorization* on this machine is still `false` — ad-hoc signing,
-the known limitation. The withdrawal path is covered by tests rather than by a
-live banner until someone enables Vibra in System Settings → Notifications.
+### 2. Delivered notifications were never withdrawn
+
+`NotificationSink` had only `deliver`; `removeDeliveredNotifications` was
+called nowhere. A "your turn" banner for a session you had already answered
+stayed in Notification Center for the whole login. It could not have been
+fixed by adding the call alone — `deliver` used `UUID().uuidString` per post,
+so there was no stable handle to withdraw by, and repeat alerts for one
+session stacked as separate entries.
+
+Notifications are keyed by session id now, and pulled when the session leaves
+the attention state, disappears, or vibra quits. The debounce is deliberately
+**not** cleared on withdrawal: it exists for state flicker, and clearing it
+would let a flickering session re-alert. Seven new tests, including the two
+that would silently undo the feature (still-waiting must not withdraw, flicker
+must not re-alert). (`801b6d8`, `cb12a97`)
+
+Verified live against the Notification Center database, not by eye: a real
+alert carried a Claude Code session id as its identifier; re-posting replaced
+the entry instead of stacking; a session still in `awaitingInput` kept its
+notification; quitting removed it; three `--test-notification` runs left one
+notification instead of three.
+
+### 3. Terminal jump-back never worked, and blamed tmux for it
+
+Clicking a session reported *"No terminal owns ttysNNN — the session is
+probably inside a multiplexer such as tmux, screen or herdr"*. On a plain
+iTerm2 tab that is false, and it sent the user looking for a problem they did
+not have.
+
+The real chain: `Info.plist` had no `NSAppleEventsUsageDescription`, so macOS
+refused the Apple Event outright and **never prompted**, which meant vibra
+could never be granted Automation permission at all. `NSAppleScript` returned
+-1743, `runAppleScript` collapsed every error into `false`, and the caller read
+that as "no terminal owns this tty".
+
+Three fixes: the Info.plist declares why it sends Apple Events, so the first
+click prompts; `errAEEventNotPermitted` is distinguished from an ordinary miss
+and surfaces with the settings path; and when no tab really does own the tty,
+the explanation comes from **walking the process ancestry** rather than being
+assumed. `--locate` prints the verdict too, so the question a failed jump turns
+on can be answered without clicking anything:
+
+```
+   pid=5957 tty=ttys000 cwd=/Users/…/workplace
+   tty owner: emulator iTerm2 - jumpable
+```
+
+(`b45f0ad`)
+
+### 4. TCC grants did not survive a rebuild, and a failed signature was silent
+
+An ad-hoc bundle has no identity, so macOS pins its TCC grants to the exact
+code hash. Measured: the Automation grant's `csreq` was 40 bytes — `fade0c00…`
+followed directly by the cdhash. Every rebuild that changes a byte of the
+binary revokes it. Reverting the source does not undo that either: change a
+string literal, rebuild, cdhash changes; revert it, rebuild, and **the cdhash
+does not come back**. A release build stops being byte-reproducible once the
+build cache has been disturbed.
+
+`SIGN_IDENTITY` signs with a named certificate instead — a self-signed
+code-signing certificate in the login keychain is enough, no Apple account and
+no network. The designated requirement then names the certificate, and the
+re-issued grant's `csreq` is 76 bytes containing `ai.silexlab.vibra` plus the
+certificate hash, **with no cdhash in it**. Unset, the build is ad-hoc exactly
+as before, so a fresh clone and CI are unaffected.
+
+Signing failure is also fatal now, and its stderr is no longer hidden. An
+unsigned bundle still launches, so a swallowed error there does not look like a
+build problem — it looks like notifications and jump-back being mysteriously
+broken, days later. That is not hypothetical: it happened during this work and
+cost a full round of debugging the wrong layer. The recipe additionally checks
+what it *produced*, because asking for an identity and silently getting ad-hoc
+is the failure that hides best. (`6bd5131`, `6e7adee`)
+
+### Measured on the rebuild test
+
+| | before rebuild | after rebuild |
+|---|---|---|
+| cdhash | `050f3998…` | `cba7f543…` (changed, as ad-hoc would need) |
+| TCC grant row | `fade0c00…f067ca2a…` | **byte-identical, not re-issued** |
+| `codesign --verify` | satisfies its DR | satisfies its DR |
+
+### Two traps worth carrying forward
+
+- **Notification Center's `record` table retains rows after a notification is
+  removed.** `delivered` is the live list (one row per app, a blob of raw
+  16-byte UUIDs). Reading `record` said a withdrawal had failed when it had
+  succeeded, and that misreading produced a whole `.terminateLater` barrier for
+  a race that does not exist — reverted before it was committed. Full account
+  in `docs/FIX-PLAN-notifications.md`.
+- **Two bundles with the same id means LaunchServices picks one, and not
+  necessarily the installed one.** A permission check was run against the
+  `build/` copy without anyone noticing and read as "the permission does not
+  work"; the two copies have different code hashes and do not share TCC grants.
+  `make install` now deletes the build copy.
+
+### Still not verified
+
+Notification *authorization* had to be enabled by hand (System Settings →
+Notifications → Vibra) — ad-hoc signing refuses it by default, and that
+remains true for a fresh clone. Automation permission likewise needs one
+approval; the certificate is what makes that approval outlive rebuilds.
 
 ## Verified on the current install
 

@@ -3,7 +3,7 @@
 
 APP_NAME    := Vibra
 BUNDLE_ID   := ai.silexlab.vibra
-VERSION     := 0.1.0
+VERSION := 0.2.0
 CONFIG      := release
 BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
@@ -123,12 +123,20 @@ bench: build
 # Copy into /Applications so it survives `make clean` and behaves like a
 # normal installed app. Quits any running copy first, otherwise the old
 # binary keeps running against the new bundle.
+# Removes the build copy once it is installed. Two bundles with the same id
+# means LaunchServices picks one, and it does not have to pick the installed
+# one -- on 2026-09-21 a permission check was run against the build copy
+# without anyone noticing, and read as "the permission does not work". The two
+# copies also have different code hashes, so they do not even share TCC grants.
+# `make probe` rebuilds in seconds; the ambiguity is not worth it.
 install: app
 	@pkill -f "$(APP_NAME).app/Contents/MacOS/$(APP_NAME)" 2>/dev/null || true
 	@rm -rf "/Applications/$(APP_NAME).app"
 	@cp -R $(APP_BUNDLE) /Applications/
+	@rm -rf $(APP_BUNDLE)
 	@echo "installed /Applications/$(APP_NAME).app"
-	@echo "launch it with: open -a $(APP_NAME)"
+	@echo "launch it by full path, not by name:"
+	@echo "  open /Applications/$(APP_NAME).app"
 
 uninstall:
 	@pkill -f "$(APP_NAME).app/Contents/MacOS/$(APP_NAME)" 2>/dev/null || true
