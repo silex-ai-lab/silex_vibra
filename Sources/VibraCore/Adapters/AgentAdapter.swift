@@ -28,6 +28,17 @@ public protocol AgentAdapter: Sendable {
     /// and `SessionIngest` falls back to `discoverSessions()`.
     func sources() throws -> [SourceDescriptor]
 
+    /// Timestamped usage slices for reporting, extracted from raw records.
+    ///
+    /// Separate from `update` on purpose. `Session` is the poll-path hot row —
+    /// compared and encoded on every refresh — so a growing per-day map on it
+    /// would threaten the idle-cost property Phase 0 recovered. Reports
+    /// re-read their own window and accumulate these instead.
+    ///
+    /// Returning an empty array means the adapter cannot attribute usage in
+    /// time, and its totals are reported as undated rather than guessed at.
+    func usageSamples(from records: [String]) -> [UsageSample]
+
     /// Folds one source's new input into its previous state.
     func update(
         source: SourceDescriptor,
@@ -40,6 +51,9 @@ public extension AgentAdapter {
     /// Default: no incremental support. The adapter is still correct, just
     /// not cheap, and `SessionIngest` will full-parse it every refresh.
     func sources() throws -> [SourceDescriptor] { [] }
+
+    /// Default: no per-record attribution available.
+    func usageSamples(from records: [String]) -> [UsageSample] { [] }
 
     /// Default: ignore the incremental input and full-parse.
     func update(
