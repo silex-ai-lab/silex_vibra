@@ -1,7 +1,8 @@
 # vibra — current status
 
-Last verified 2026-09-20 against a clean clone of `main`, installed and run on
-a Mac mini (M4, macOS 26) with a 488-file, 339 MB session corpus.
+Last verified 2026-09-20 on a Mac mini (M4, macOS 26.6.2) with a 488-file,
+339 MB session corpus, from a clean rebuild (`.build`, `build/` and
+`/Applications/Vibra.app` all deleted first).
 
 ## Verdict
 
@@ -14,8 +15,8 @@ jump-back (P1.1).
 | Metric | Value | Target | |
 |---|---|---|---|
 | Idle CPU | 0.0% | < 2% | ✅ |
-| RSS (running app) | 68.1 MB | < 60 MB | ⚠️ missed |
-| Cold start | 0.36s, 7.3 MB read | — | ✅ |
+| RSS (running app) | 43–76 MB (varies by run) | < 60 MB | ⚠️ borderline |
+| Cold start | 0.64s, 13 MB read | — | ✅ |
 | Unchanged refresh | 0.02s, **0 bytes** | 0 bytes | ✅ |
 | Tests | 66 in 13 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
@@ -25,9 +26,19 @@ Reproduce with `make bench` and `make test`.
 Brief CPU spikes (5–12%) are correct: FSEvents firing a refresh when an agent
 writes to disk. Idle returns to 0.0% immediately.
 
+## Verified on this install
+
+- `--agents` — all three agents detected with source counts and last write.
+- `--probe` — 5 live sessions, states correct.
+- `--bench` — unchanged refresh reads **0 bytes**.
+- `--test-notification` — authorization granted, notification posted.
+- Menu bar item and `Usage Report…` window — **confirmed by the user**.
+
 ## What works, verified against real data
 
 - **Three adapters** — Claude Code and Codex JSONL transcripts, OpenCode SQLite.
+- **Agents are detected, not assumed** — an agent with no state on disk is
+  never polled.
 - **Live state classification.** Verified by driving a real Codex session:
   `working` at t+2s → `awaitingInput` at t+4s.
 - **Notifications.** Delivered after the user enables them in System Settings
