@@ -36,6 +36,9 @@ agents already write and surfaces the one that needs you.
 vibra never asks these tools to change what they write. It is a passive reader
 of files that already exist.
 
+**It installs nothing into your agents** — no hooks, no plugins, no statusline,
+no wrapper binaries. Uninstalling vibra is deleting one `.app`.
+
 ## Session states
 
 | State | Meaning |
