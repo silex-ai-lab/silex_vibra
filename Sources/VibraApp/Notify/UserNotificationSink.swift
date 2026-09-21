@@ -33,11 +33,25 @@ final class UserNotificationSink: NotificationSink {
         content.title = notification.title
         content.body = notification.body
 
+        // Keyed by session, not by UUID. Two reasons, and the first is the one
+        // that was broken: a random id per delivery leaves nothing to withdraw
+        // by, so a resolved alert could never be pulled. The second is that
+        // macOS replaces a delivered notification that reuses an identifier, so
+        // one session repeatedly wanting you coalesces into one entry instead
+        // of stacking.
         let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
+            identifier: notification.sessionID,
             content: content,
             trigger: nil
         )
         center.add(request) { _ in }
+    }
+
+    func withdraw(sessionIDs: [String]) {
+        guard !sessionIDs.isEmpty else { return }
+        // Delivered only: a pending request would be one scheduled for later,
+        // and vibra never schedules — every notification is posted immediately
+        // with a nil trigger.
+        center.removeDeliveredNotifications(withIdentifiers: sessionIDs)
     }
 }

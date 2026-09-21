@@ -52,6 +52,19 @@ no wrapper binaries. Uninstalling vibra is deleting one `.app`.
 `stalled` exists because an agent that died mid-turn looks identical to a busy
 one if you only ask "is it running?".
 
+### Notification lifecycle
+
+A "your turn" notification is only posted on the *transition* into 🟠 or 🔴,
+debounced per session so state flicker cannot produce a burst — and it is
+**withdrawn as soon as it stops being true**: when you answer the session and it
+goes back to work, when the session disappears, and when vibra quits. Each
+session's notification is keyed by its session id, so one session that keeps
+wanting you replaces its own entry rather than stacking new ones.
+
+That matters because the alternative is what vibra used to do: banners
+accumulated in Notification Center for the whole login session, all of them
+about prompts that had long since been answered.
+
 ## Install
 
 Requires **macOS 14+** and a Swift 6 toolchain. **Xcode is not required** —
@@ -232,8 +245,8 @@ layered on the menu bar, which is the real interface.
 
 ## Known limitations
 
-- **Notifications are refused by default.** Confirmed on macOS 26: an ad-hoc
-  signed bundle gets `authorization granted: false` with
+- **Notifications are refused by default.** Confirmed on macOS 26 and macOS
+  15.7.3: an ad-hoc signed bundle gets `authorization granted: false` with
   `"Notifications are not allowed for this application"`. The app still
   registers its bundle id with Notification Center, so you can enable it by
   hand — see below. The durable fix is a Developer ID signature, not a code

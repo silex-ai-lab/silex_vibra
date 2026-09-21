@@ -49,6 +49,28 @@ the precision, and the <60 MB target is met on some runs and missed on others.
 Brief **CPU spikes of 5–12%** are correct behaviour: FSEvents firing a refresh
 when an agent writes to disk. Idle returns to 0.0% immediately.
 
+## Also verified on macOS 15.7.3 / Swift 6.1.2 (2026-09-21)
+
+A clean clone, `make build`, `make test`, `make probe`, `make install`. Build is
+warning-free; 73 tests pass; adapters read live sessions; the app idles at
+0.0–0.1% CPU and 42–46 MB RSS.
+
+Two bugs found there that the macOS 26 pass could not have shown, both now
+fixed — see `docs/FIX-PLAN-notifications.md` for the full diagnosis:
+
+- **`--test-notification` trapped** (`dispatch_assert_queue_fail`, SIGTRAP, exit
+  133, no output). Top-level code in `main.swift` is `@MainActor` under Swift 6
+  and the UserNotifications callbacks inherited that isolation while being
+  invoked on a background queue. The handlers are `@Sendable` now.
+- **Delivered notifications were never withdrawn**, and `deliver` used a random
+  UUID per post, so there was no stable handle to withdraw by. Notifications are
+  keyed by session id and pulled when the session stops needing attention,
+  disappears, or vibra quits.
+
+Notification *authorization* on this machine is still `false` — ad-hoc signing,
+the known limitation. The withdrawal path is covered by tests rather than by a
+live banner until someone enables Vibra in System Settings → Notifications.
+
 ## Verified on the current install
 
 - `--agents` — three agents detected, with source counts and last write.

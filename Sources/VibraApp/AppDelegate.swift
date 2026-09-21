@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        menuBar?.shutdown()
         store?.stop()
     }
 }

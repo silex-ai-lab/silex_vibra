@@ -42,6 +42,15 @@ final class MenuBarController {
         store.start()
     }
 
+    /// Clears vibra's own delivered notifications on the way out.
+    ///
+    /// A "waiting for you" banner that outlives the process is unactionable —
+    /// the menu bar it points at is gone — so leaving it behind is noise the
+    /// user has to dismiss by hand.
+    func shutdown() {
+        notifier.withdrawAll()
+    }
+
     private func render(_ sessions: [Session]) {
         guard let item = statusItem else { return }
         item.button?.title = summaryTitle(sessions)

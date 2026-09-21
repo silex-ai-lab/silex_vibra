@@ -158,4 +158,142 @@ struct AttentionNotifierTests {
         notifier.notifyIfNeeded(previous: [session("a", .awaitingInput)], current: [], now: t0)
         #expect(sink.delivered.isEmpty)
     }
+
+    // MARK: - Withdrawal
+    //
+    // A delivered alert is a claim that is only true while the session is still
+    // waiting. These cover the moment it stops being true, which previously had
+    // no code path at all: nothing ever called removeDeliveredNotifications, so
+    // every banner stayed in Notification Center for the life of the login.
+
+    @Test func leavingAttentionWithdrawsTheNotification() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working)],
+            current: [session("a", .awaitingInput)],
+            now: t0
+        )
+        #expect(sink.delivered.count == 1)
+        #expect(sink.withdrawnIDs.isEmpty)
+
+        // You answered it; the agent went back to work.
+        notifier.notifyIfNeeded(
+            previous: [session("a", .awaitingInput)],
+            current: [session("a", .working)],
+            now: t0.addingTimeInterval(5)
+        )
+        #expect(sink.withdrawnIDs == ["a"])
+    }
+
+    @Test func disappearingSessionWithdrawsTheNotification() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working)],
+            current: [session("a", .awaitingInput)],
+            now: t0
+        )
+        // The agent exited, or the session aged out of the activity window.
+        notifier.notifyIfNeeded(
+            previous: [session("a", .awaitingInput)],
+            current: [],
+            now: t0.addingTimeInterval(5)
+        )
+        #expect(sink.withdrawnIDs == ["a"])
+    }
+
+    @Test func stillWaitingDoesNotWithdraw() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working)],
+            current: [session("a", .awaitingInput)],
+            now: t0
+        )
+        // Same unanswered prompt, one refresh later. Rule 1 keeps it quiet, and
+        // withdrawal must not undo the alert that is still true.
+        notifier.notifyIfNeeded(
+            previous: [session("a", .awaitingInput)],
+            current: [session("a", .awaitingInput)],
+            now: t0.addingTimeInterval(5)
+        )
+        #expect(sink.delivered.count == 1)
+        #expect(sink.withdrawnIDs.isEmpty)
+    }
+
+    @Test func onlyResolvedSessionsAreWithdrawn() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working), session("b", .working)],
+            current: [session("a", .awaitingInput), session("b", .awaitingInput)],
+            now: t0
+        )
+        #expect(sink.delivered.count == 2)
+
+        notifier.notifyIfNeeded(
+            previous: [session("a", .awaitingInput), session("b", .awaitingInput)],
+            current: [session("a", .working), session("b", .awaitingInput)],
+            now: t0.addingTimeInterval(5)
+        )
+        #expect(sink.withdrawnIDs == ["a"])
+    }
+
+    @Test func withdrawalIsNotRepeatedOnEveryRefresh() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working)],
+            current: [session("a", .awaitingInput)],
+            now: t0
+        )
+        for step in 1...3 {
+            notifier.notifyIfNeeded(
+                previous: [session("a", .working)],
+                current: [session("a", .working)],
+                now: t0.addingTimeInterval(Double(step) * 5)
+            )
+        }
+        // One withdrawal call, not one per refresh: removeDeliveredNotifications
+        // on an id that is already gone is wasted work every single tick.
+        #expect(sink.withdrawn.count == 1)
+        #expect(sink.withdrawnIDs == ["a"])
+    }
+
+    @Test func withdrawalDoesNotResetTheDebounce() {
+        let (notifier, sink) = make(debounce: 60)
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working)],
+            current: [session("a", .awaitingInput)],
+            now: t0
+        )
+        // Flicker: attention, gone, attention again inside the debounce window.
+        notifier.notifyIfNeeded(
+            previous: [session("a", .awaitingInput)],
+            current: [session("a", .working)],
+            now: t0.addingTimeInterval(1)
+        )
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working)],
+            current: [session("a", .awaitingInput)],
+            now: t0.addingTimeInterval(2)
+        )
+        // Still one alert. Clearing the debounce on withdrawal would have let
+        // the flicker re-alert, which is what rule 2 exists to prevent.
+        #expect(sink.delivered.count == 1)
+    }
+
+    @Test func withdrawAllPullsEverythingOutstanding() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working), session("b", .working)],
+            current: [session("a", .awaitingInput), session("b", .blocked)],
+            now: t0
+        )
+        #expect(sink.delivered.count == 2)
+
+        // Quitting: banners that outlive the process cannot be acted on.
+        notifier.withdrawAll()
+        #expect(sink.withdrawnIDs == ["a", "b"])
+
+        // Idempotent - a second quit path must not re-issue the call.
+        notifier.withdrawAll()
+        #expect(sink.withdrawn.count == 1)
+    }
 }
