@@ -296,4 +296,38 @@ struct AttentionNotifierTests {
         notifier.withdrawAll()
         #expect(sink.withdrawn.count == 1)
     }
+
+    // MARK: - Dismissal on click
+
+    @Test func dismissPullsOnlyThatSessionWhileStillWaiting() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [session("a", .working), session("b", .working)],
+            current: [session("a", .awaitingInput), session("b", .blocked)],
+            now: t0
+        )
+
+        // Clicked "a" and landed in its terminal. It is still waiting - you
+        // have only just arrived at the prompt - but the banner has done its job.
+        notifier.dismiss(sessionID: "a")
+        #expect(sink.withdrawn == [["a"]])
+
+        // Resolving "a" later must not withdraw it a second time.
+        notifier.notifyIfNeeded(
+            previous: [session("a", .awaitingInput), session("b", .blocked)],
+            current: [session("a", .working), session("b", .blocked)],
+            now: t0.addingTimeInterval(5)
+        )
+        #expect(sink.withdrawn == [["a"]])
+
+        // "b" is untouched and still withdrawn on quit.
+        notifier.withdrawAll()
+        #expect(sink.withdrawn == [["a"], ["b"]])
+    }
+
+    @Test func dismissOfUnknownSessionIsANoOp() {
+        let (notifier, sink) = make()
+        notifier.dismiss(sessionID: "never-notified")
+        #expect(sink.withdrawn.isEmpty)
+    }
 }

@@ -11,9 +11,20 @@ import VibraCore
 /// drops anything it is not allowed to show.
 final class UserNotificationSink: NotificationSink {
     private let center: UNUserNotificationCenter
+    /// Held strongly: `UNUserNotificationCenter.delegate` is weak.
+    private var clickHandler: ClickHandler?
 
     init(center: UNUserNotificationCenter = .current()) {
         self.center = center
+    }
+
+    /// Calls `handler` with the session id when the user clicks one of vibra's
+    /// notifications. Without a delegate a click only activates vibra, which has
+    /// no window, so it looked like nothing happened.
+    func onClick(_ handler: @escaping @MainActor @Sendable (String) -> Void) {
+        let clickHandler = ClickHandler(onClick: handler)
+        self.clickHandler = clickHandler
+        center.delegate = clickHandler
     }
 
     /// Requests authorization once, tolerating every failure.
@@ -53,5 +64,31 @@ final class UserNotificationSink: NotificationSink {
         // and vibra never schedules — every notification is posted immediately
         // with a nil trigger.
         center.removeDeliveredNotifications(withIdentifiers: sessionIDs)
+    }
+}
+
+/// Separate from the sink so it can be `Sendable`: the notification center
+/// calls its delegate off the main thread, and this holds nothing mutable.
+private final class ClickHandler: NSObject, UNUserNotificationCenterDelegate, Sendable {
+    private let onClick: @MainActor @Sendable (String) -> Void
+
+    init(onClick: @escaping @MainActor @Sendable (String) -> Void) {
+        self.onClick = onClick
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        // Only a click on the body. Dismissing it from Notification Center is
+        // not a request to be taken anywhere.
+        if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+            // The request identifier is the session id - see `deliver`.
+            let sessionID = response.notification.request.identifier
+            let onClick = self.onClick
+            Task { @MainActor in onClick(sessionID) }
+        }
+        completionHandler()
     }
 }

@@ -111,6 +111,18 @@ public final class AttentionNotifier {
         return String(key[key.startIndex..<sep])
     }
 
+    /// Withdraws one session's notification because the user acted on it —
+    /// clicked it and was taken to the session's terminal.
+    ///
+    /// The session may well still need attention (you have only just arrived at
+    /// the prompt), so waiting for `withdrawResolved` would leave the banner
+    /// sitting there after it has done its job. The debounce entry is kept, for
+    /// the same reason as on ordinary withdrawal.
+    public func dismiss(sessionID: String) {
+        guard outstanding.remove(sessionID) != nil else { return }
+        sink.withdraw(sessionIDs: [sessionID])
+    }
+
     /// Withdraws everything still outstanding. Used when the app is going away:
     /// a "waiting for you" banner that outlives the process it came from can no
     /// longer be acted on from the menu bar, so it is pure noise.

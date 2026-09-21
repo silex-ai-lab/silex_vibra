@@ -31,6 +31,9 @@ final class MenuBarController {
         // bundle, so a refusal here must not be fatal - the menu bar still
         // shows everything the notification would have said.
         notificationSink.requestAuthorizationIfNeeded()
+        notificationSink.onClick { [weak self] sessionID in
+            self?.jumpFromNotification(sessionID: sessionID)
+        }
 
         store.onChange = { [weak self] previous, sessions in
             guard let self else { return }
@@ -134,9 +137,30 @@ final class MenuBarController {
     /// (tmux, screen, herdr), whose pty the terminal emulator never sees.
     @objc private func jumpToSession(_ sender: NSMenuItem) {
         guard let session = sender.representedObject as? Session else { return }
+        jump(to: session)
+    }
+
+    /// A clicked notification jumps like a clicked menu row, and on success the
+    /// notification is cleared: it has taken you where it pointed. A failed jump
+    /// leaves it in place, since the session still needs you and you have not
+    /// reached it.
+    ///
+    /// A session no longer in the snapshot is not jumped to - its notification
+    /// was already withdrawn when it left, so this is a click that raced that.
+    private func jumpFromNotification(sessionID: String) {
+        guard let session = store.sessions.first(where: { $0.id == sessionID }) else { return }
+        if jump(to: session) {
+            notifier.dismiss(sessionID: sessionID)
+        }
+    }
+
+    /// Returns whether the terminal was focused. Every failure is explained
+    /// to the user before returning.
+    @discardableResult
+    private func jump(to session: Session) -> Bool {
         switch TerminalJumper.jump(to: session) {
         case .jumped:
-            break
+            return true
         case .notLocatable:
             explain(
                 "Can't find that session's process",
@@ -187,6 +211,7 @@ final class MenuBarController {
                 )
             }
         }
+        return false
     }
 
     private func explain(_ title: String, _ detail: String) {
