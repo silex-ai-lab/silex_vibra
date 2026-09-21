@@ -18,6 +18,29 @@ final class ReportWindowController {
         self.adapters = adapters
     }
 
+    /// Called once the report has finished loading and rendering.
+    var onRendered: (() -> Void)?
+
+    /// Writes the window's own rendered content to a PNG.
+    ///
+    /// Draws the view into a bitmap rather than capturing the screen, so it
+    /// needs no Screen Recording grant — the app is only rendering itself.
+    @discardableResult
+    func snapshot(to url: URL) -> Bool {
+        guard let view = window?.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        else { return false }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return false }
+        return (try? png.write(to: url)) != nil
+    }
+
+    /// Rendered text, for verifying content without an image.
+    var renderedText: String { textView?.string ?? "" }
+
+    var windowIsVisible: Bool { window?.isVisible ?? false }
+    var windowFrame: NSRect { window?.frame ?? .zero }
+
     func show() {
         ensureWindow()
         window?.makeKeyAndOrderFront(nil)
@@ -35,6 +58,9 @@ final class ReportWindowController {
             await MainActor.run {
                 self?.isLoading = false
                 self?.render(Self.format(report, bytes: bytes, seconds: Date().timeIntervalSince(started)))
+                // Let the text view lay out before anyone snapshots it.
+                self?.textView?.layoutManager?.ensureLayout(for: self!.textView!.textContainer!)
+                self?.onRendered?()
             }
         }
     }
@@ -42,7 +68,7 @@ final class ReportWindowController {
     private func ensureWindow() {
         guard window == nil else { return }
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 470),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -85,46 +111,55 @@ final class ReportWindowController {
             n >= 1_000_000 ? String(format: "%.1fM", Double(n) / 1e6)
                            : (n >= 1_000 ? "\(n / 1_000)k" : "\(n)")
         }
+        // String(format:) ignores width specifiers for %@, so columns are
+        // padded by hand. Without this the figures come out ragged and the
+        // table is much harder to scan than a table should be.
+        func padRight(_ s: String, _ width: Int) -> String {
+            s.count >= width ? s : s + String(repeating: " ", count: width - s.count)
+        }
+        func padLeft(_ s: String, _ width: Int) -> String {
+            s.count >= width ? s : String(repeating: " ", count: width - s.count) + s
+        }
+        func row(_ label: String, _ usage: TokenUsage, _ value: Double, _ unpriced: Int) -> String {
+            var line = "  " + padRight(label, 16)
+                + padLeft(tok(usage.total), 8) + " tok"
+                + padLeft(String(format: "~$%.2f", value), 12)
+            if unpriced > 0 { line += "   +\(tok(unpriced)) unpriced" }
+            return line + "\n"
+        }
 
         var out = "USAGE — last \(r.windowDays) days (rolling)\n"
         out += "\(df.string(from: r.windowStart)) – \(df.string(from: r.generatedAt))\n\n"
 
         out += "BY DAY\n"
-        if r.days.isEmpty {
-            out += "  (no dated usage in this window)\n"
-        }
+        if r.days.isEmpty { out += "  (no dated usage in this window)\n" }
         for d in r.days {
-            out += String(format: "  %-12@ %9@ tok   ~$%.2f%@\n",
-                          df.string(from: d.day) as NSString,
-                          tok(d.usage.total) as NSString,
-                          d.estimatedValue,
-                          (d.unpricedTokens > 0 ? "  +\(tok(d.unpricedTokens)) unpriced" : "") as NSString)
+            out += row(df.string(from: d.day), d.usage, d.estimatedValue, d.unpricedTokens)
         }
 
         out += "\nBY AGENT\n"
         for a in r.agents {
-            out += String(format: "  %-14@ %9@ tok   ~$%.2f%@\n",
-                          a.agent.displayName as NSString,
-                          tok(a.usage.total) as NSString,
-                          a.estimatedValue,
-                          (a.unpricedTokens > 0 ? "  +\(tok(a.unpricedTokens)) unpriced" : "") as NSString)
+            out += row(a.agent.displayName, a.usage, a.estimatedValue, a.unpricedTokens)
         }
 
-        out += String(format: "\nTOTAL           %9@ tok   ~$%.2f\n",
-                      tok(r.total.total) as NSString, r.estimatedValue)
+        out += "\n" + "  " + padRight("TOTAL", 16)
+            + padLeft(tok(r.total.total), 8) + " tok"
+            + padLeft(String(format: "~$%.2f", r.estimatedValue), 12) + "\n"
 
         if r.unpricedTokens > 0 {
-            out += "  \(tok(r.unpricedTokens)) tokens have no published rate and are excluded above.\n"
+            out += "  \(tok(r.unpricedTokens)) tokens have no published rate and\n"
+            out += "  are excluded from the estimate above.\n"
         }
         if r.undated.total > 0 {
-            out += "  \(tok(r.undated.total)) tokens could not be dated — that source records\n"
-            out += "  per-session totals with no per-record timestamps.\n"
+            out += "  \(tok(r.undated.total)) tokens could not be dated: that source\n"
+            out += "  records per-session totals with no timestamps.\n"
         }
 
-        out += "\n—\n"
-        out += "Estimated API-equivalent value, not a bill. On a subscription you pay a\n"
-        out += "flat fee; this is what the same usage would cost at published API rates.\n"
-        out += "Computed locally from token counts. Nothing left this machine.\n"
+        out += "\n———\n"
+        out += "Estimated API-equivalent value, not a bill. On a\n"
+        out += "subscription you pay a flat fee; this is what the same\n"
+        out += "usage would cost at published API rates.\n"
+        out += "Computed locally. Nothing left this machine.\n"
         out += String(format: "\nRead %.1f MB in %.1fs.\n", Double(bytes) / 1_048_576, seconds)
         return out
     }

@@ -233,6 +233,21 @@ if CommandLine.arguments.contains("--probe") {
     exit(total > 0 ? 0 : 2)
 }
 
+// `Vibra --show-report [--snapshot <path>]` launches the GUI, opens the usage
+// report, optionally writes the window's own rendered pixels to a PNG, and
+// reports what it rendered. Used to confirm the window actually draws.
+if CommandLine.arguments.contains("--show-report") {
+    let snapshotPath = CommandLine.arguments.firstIndex(of: "--snapshot").flatMap { i -> String? in
+        i + 1 < CommandLine.arguments.count ? CommandLine.arguments[i + 1] : nil
+    }
+    let app = NSApplication.shared
+    let controller = ReportWindowController(adapters: AdapterRegistry.all())
+    let delegate = ReportOnlyDelegate(controller: controller, snapshotPath: snapshotPath)
+    app.delegate = delegate
+    app.setActivationPolicy(.regular)
+    app.run()
+}
+
 // LSUIElement in the bundle Info.plist keeps this out of the Dock and the app
 // switcher; the status item is the app's entire presence.
 let app = NSApplication.shared
