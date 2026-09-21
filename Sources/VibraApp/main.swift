@@ -9,6 +9,29 @@ import VibraCore
 //   /Applications/Vibra.app/Contents/MacOS/Vibra --test-notification
 // Notification delivery is not guaranteed for an ad-hoc signed bundle, so this
 // exists to answer "does it work on this machine?" without guessing.
+/// A boolean two threads can share.
+///
+/// `--test-notification` waits for callbacks that arrive on a background
+/// dispatch queue. The closures that set this are `@Sendable` (see below), and
+/// a `@Sendable` closure cannot capture a mutable local `var`, so the flag is a
+/// reference type with its own lock instead.
+final class CompletionFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func signal() {
+        lock.lock()
+        value = true
+        lock.unlock()
+    }
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
 if CommandLine.arguments.contains("--test-notification") {
     guard Bundle.main.bundleIdentifier != nil else {
         print("FAIL: no bundle identifier - run this from inside Vibra.app, not the bare binary")
@@ -16,13 +39,22 @@ if CommandLine.arguments.contains("--test-notification") {
     }
     print("bundle: \(Bundle.main.bundleIdentifier ?? "?")")
     let center = UNUserNotificationCenter.current()
-    var done = false
-    center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+    let done = CompletionFlag()
+
+    // Both handlers are explicitly `@Sendable`, and that is load-bearing.
+    // `Package.swift` is swift-tools-version 6.0, so top-level code in main.swift
+    // is `@MainActor`-isolated and a closure written here inherits that isolation.
+    // UserNotifications invokes these on a background dispatch queue, so the Swift 6
+    // runtime's executor check fired on closure entry and trapped
+    // (`dispatch_assert_queue_fail`, SIGTRAP, exit 133) before the first print could
+    // even flush. `@Sendable` opts them out of the inherited isolation. Verified on
+    // macOS 15.7.3 / Swift 6.1.2; the previous form crashed 100% of the time there.
+    center.requestAuthorization(options: [.alert, .sound]) { @Sendable granted, error in
         print("authorization granted: \(granted)")
         if let error { print("authorization error: \(error.localizedDescription)") }
         guard granted else {
             print("RESULT: not authorized. Check System Settings > Notifications > Vibra.")
-            done = true
+            done.signal()
             return
         }
         let content = UNMutableNotificationContent()
@@ -33,7 +65,10 @@ if CommandLine.arguments.contains("--test-notification") {
             content: content,
             trigger: nil
         )
-        center.add(request) { addError in
+        // `.current()` again rather than capturing the outer `center`:
+        // UNUserNotificationCenter is not Sendable, and capturing it in a
+        // `@Sendable` closure is a warning. It is the same shared instance.
+        UNUserNotificationCenter.current().add(request) { @Sendable addError in
             if let addError {
                 print("RESULT: delivery FAILED - \(addError.localizedDescription)")
             } else {
@@ -41,12 +76,15 @@ if CommandLine.arguments.contains("--test-notification") {
                 print("If no banner appears, macOS accepted it but suppressed display")
                 print("(common for ad-hoc signed bundles, or Do Not Disturb).")
             }
-            done = true
+            done.signal()
         }
     }
     // Spin briefly so the async callbacks can run before the process exits.
+    // A RunLoop spin rather than a semaphore wait: the callback queue is not
+    // documented, and blocking the main thread would deadlock if it ever arrived
+    // there. The 10s deadline bounds the wait either way.
     let deadline = Date().addingTimeInterval(10)
-    while !done && Date() < deadline {
+    while !done.isSet && Date() < deadline {
         RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.1))
     }
     exit(0)
