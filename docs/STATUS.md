@@ -17,7 +17,7 @@ jump-back (P1.1).
 | RSS (running app) | 68.1 MB | < 60 MB | ⚠️ missed |
 | Cold start | 0.36s, 7.3 MB read | — | ✅ |
 | Unchanged refresh | 0.02s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 60 in 12 suites | — | ✅ |
+| Tests | 66 in 13 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
 
 Reproduce with `make bench` and `make test`.
@@ -48,7 +48,7 @@ writes to disk. Idle returns to 0.0% immediately.
 |---|---|---|
 | RSS 68 MB vs 60 MB target | Minor. Flat, not leaking. | AppKit + cold-parse high water |
 | **Notch overlay never executed** | Unknown. `makeIfSupported()` returns nil on this hardware, so the code path has never run. | Needs a notched Mac |
-| **Menu bar rendering never seen** | Unknown. No Screen Recording permission on the dev machine. | User confirmation |
+| ~~Menu bar rendering never seen~~ | **Confirmed by the user 2026-09-20**: the status item renders, and `Usage Report…` opens and renders correctly. | — |
 | OpenCode `ev=unknown` | DeepSeek sessions rarely report `needs approval`. Column is read and tested; the live transition has never been observed. | Observe a real approval prompt |
 | Ad-hoc signed | macOS refuses notification authorization until enabled by hand. | P3.1, needs a paid Apple account |
 | Terminal jump-back only outside multiplexers | tmux/screen/herdr panes cannot be focused; the emulator never sees their ptys. | Inherent; documented |

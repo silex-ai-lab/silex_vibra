@@ -185,6 +185,23 @@ if CommandLine.arguments.contains("--report") {
     exit(done ? 0 : 1)
 }
 
+// `Vibra --agents` shows which agents were detected on this machine and why.
+if CommandLine.arguments.contains("--agents") {
+    let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd HH:mm"
+    print("Detected agents (by state on disk, not by binary on PATH):")
+    for d in AdapterRegistry.detections() {
+        let mark = d.isPresent ? "yes" : "no "
+        let last = d.lastActivity.map { df.string(from: $0) } ?? "never"
+        let active = d.isActive(within: 12 * 3600) ? "  [active]" : ""
+        print(String(format: "  %-14@ present=%@  sources=%-4d  last=%@%@",
+                     d.kind.displayName as NSString, mark as NSString,
+                     d.sourceCount, last as NSString, active as NSString))
+    }
+    let polled = AdapterRegistry.detected().map(\.kind.displayName).joined(separator: ", ")
+    print("\nPolled: \(polled.isEmpty ? "(none)" : polled)")
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--locate") {
     let locator = ProcessLocator()
     let engine = StateEngine()

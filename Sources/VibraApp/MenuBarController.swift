@@ -11,7 +11,7 @@ final class MenuBarController {
     private var statusItem: NSStatusItem?
     private let store: SessionStore
     private let notchOverlay: NotchOverlay?
-    private lazy var reportWindow = ReportWindowController(adapters: AdapterRegistry.all())
+    private lazy var reportWindow = ReportWindowController(adapters: AdapterRegistry.detected())
     private let notificationSink = UserNotificationSink()
     private lazy var notifier = AttentionNotifier(sink: notificationSink)
 

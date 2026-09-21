@@ -21,8 +21,8 @@ Current state: see [STATUS.md](STATUS.md).
 | 1 | P1.1 Terminal jump-back | **Done (v1)** 2026-09-20 |
 | 1 | P1.2 Usage figures stay local | **Decided** — no network, ever |
 | 1 | P1.3 Weekly report card | **Done** 2026-09-20 |
-| 2 | P2.1 Auto-detect installed agents | Not started |
-| 2 | P2.2 More adapters | Not started |
+| 2 | P2.1 Auto-detect installed agents | **Done** 2026-09-20 |
+| 2 | P2.2 More adapters | **Blocked** — no viable target found |
 | 3 | P3.1 Developer ID signing | Blocked on a user decision |
 | 3 | P3.2 Sparkle auto-update | Not started |
 | 3 | P3.3 Homebrew cask | Not started |
@@ -287,20 +287,49 @@ the poll path.
 
 # Phase 2 — Breadth
 
-## P2.1 — Auto-detect installed agents
+## P2.1 — Auto-detect installed agents — **DONE** 2026-09-20
 
-**Goal.** Stop hardcoding three adapters in `AdapterRegistry`; show only agents
+**Goal.** Stop hardcoding three adapters in `AdapterRegistry`; poll only agents
 that have state on disk.
 
 ### Critical decisions
 
-**Detect by state on disk, not by binary on `PATH`.** An installed CLI that has
-never run has nothing to show, and a removed CLI may still have transcripts
-worth reading.
+**Detect by state on disk, not by binary on `PATH`.** The two answer different
+questions. An installed CLI that has never run has nothing to show and would
+sit there as a permanently empty row; a CLI that has been *uninstalled* may
+still have transcripts worth reading. What matters is whether there is
+something to read.
 
-## P2.2 — More adapters
+**Detection stats, never parses**, so it can run at launch without
+reintroducing the cost Phase 0 removed. Verified: the zero-byte warm refresh
+still passes with detection wired in.
+
+### Acceptance — met
+
+`--agents` reports presence, source count and last write per agent. An adapter
+with no state on disk is dropped from the poll set entirely, and a mutation
+that polls everything regardless of presence fails the suite.
+
+## P2.2 — More adapters — **BLOCKED: no viable target on this machine**
 
 **Goal.** Cover the agents a user actually runs.
+
+### Investigation, 2026-09-20
+
+The roadmap said to order by evidence of local use. Following that rule
+honestly, there is currently **nothing to add**:
+
+| Candidate | Found | Verdict |
+|---|---|---|
+| Hermes | `~/.hermes/sessions/sessions.json` | **Not a coding agent here.** Keys are `agent:main:feishu:dm:…` — Feishu/Lark chat threads. No transcripts, no token usage. |
+| Cursor | `…/Cursor/User/globalStorage/state.vscdb` | **No token usage.** `composerHeaders` (14 rows) has ids, timestamps and modes but no counts; the rest is 631 opaque `agentKv:blob:` records. Database untouched since 2026-09-01, so nothing could be verified live. Also holds `cursorAuth/accessToken` and `refreshToken`. |
+| Copilot | `~/.copilot/` | Config and logs only. No transcripts. |
+
+Building a Cursor adapter now would mean shipping code that displays zero
+tokens, no cost, and cannot be exercised against a live session — an
+unverifiable checkbox rather than a feature. **Deferred until an agent with
+real transcripts is installed**, or until the user asks for presence-only
+Cursor support with its limits stated up front.
 
 ### Critical decisions
 
