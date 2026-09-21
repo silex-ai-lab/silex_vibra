@@ -2,11 +2,16 @@ import Foundation
 
 /// One notification vibra wants delivered.
 public struct AttentionNotification: Equatable, Sendable {
+    /// Identifies the notification in Notification Center. Delivering again
+    /// under the same key replaces the old one. See `Session.notificationKey`.
+    public let key: String
+    /// The session this particular delivery is about - what a click jumps to.
     public let sessionID: String
     public let title: String
     public let body: String
 
-    public init(sessionID: String, title: String, body: String) {
+    public init(key: String, sessionID: String, title: String, body: String) {
+        self.key = key
         self.sessionID = sessionID
         self.title = title
         self.body = body
@@ -22,13 +27,13 @@ public struct AttentionNotification: Equatable, Sendable {
 public protocol NotificationSink: AnyObject {
     func deliver(_ notification: AttentionNotification)
 
-    /// Removes notifications already delivered for these sessions.
+    /// Removes notifications already delivered under these keys.
     ///
     /// A "your turn" alert is only true while it is true. Once the session has
     /// moved on — you answered it, or it went away — the banner in Notification
     /// Center is stale, and without this it stayed there forever: a day of agent
     /// work left a pile of alerts that had all already been dealt with.
-    func withdraw(sessionIDs: [String])
+    func withdraw(keys: [String])
 }
 
 /// Records what it was asked to deliver and withdraw. Used by tests.
@@ -45,11 +50,11 @@ public final class RecordingNotificationSink: NotificationSink {
         delivered.append(notification)
     }
 
-    public func withdraw(sessionIDs: [String]) {
-        withdrawn.append(sessionIDs)
+    public func withdraw(keys: [String]) {
+        withdrawn.append(keys)
     }
 
-    /// Flattened view of every session id ever withdrawn, for the common assertion.
+    /// Flattened view of every key ever withdrawn, for the common assertion.
     public var withdrawnIDs: [String] { withdrawn.flatMap { $0 } }
 
     public func reset() {

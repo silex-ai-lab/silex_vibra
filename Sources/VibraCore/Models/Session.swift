@@ -27,6 +27,11 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
     /// Defaults to `.unknown` so an adapter that cannot tell still compiles.
     public var lastEvent: LastEventKind
 
+    /// Name of the scheduled task that started this session, when it was one.
+    /// A scheduled task starts a brand-new session on every run, so this is
+    /// the only thing linking an hourly job's runs to each other.
+    public var scheduledTask: String?
+
     public init(
         id: String,
         agent: AgentKind,
@@ -38,7 +43,8 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         lastActivity: Date,
         usage: TokenUsage = .zero,
         title: String? = nil,
-        lastEvent: LastEventKind = .unknown
+        lastEvent: LastEventKind = .unknown,
+        scheduledTask: String? = nil
     ) {
         self.id = id
         self.agent = agent
@@ -51,10 +57,20 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         self.usage = usage
         self.title = title
         self.lastEvent = lastEvent
+        self.scheduledTask = scheduledTask
     }
 
     /// Last path component of `cwd` - what the user actually recognizes.
     public var projectName: String {
         URL(fileURLWithPath: cwd).lastPathComponent
+    }
+
+    /// What a notification for this session is keyed by. Every run of one
+    /// scheduled task shares a key, so a new run replaces the previous run's
+    /// notification instead of stacking beside it; anything else is keyed by
+    /// its own session.
+    public var notificationKey: String {
+        if let scheduledTask { return "scheduled-task:\(scheduledTask)" }
+        return id
     }
 }

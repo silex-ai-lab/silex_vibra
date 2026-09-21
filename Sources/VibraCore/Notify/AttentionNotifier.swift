@@ -17,6 +17,11 @@ import Foundation
 /// banner outlived the condition it described — you answered the agent, it went
 /// back to work, and the alert stayed in Notification Center regardless.
 ///
+/// Notifications are keyed by `Session.notificationKey`, not session id. A
+/// scheduled task starts a new session every run, and keying by session made an
+/// hourly job pile up one notification per run. Keyed by task, each run
+/// replaces the last and only the latest is ever shown.
+///
 /// Holds no system dependency and takes its clock as a parameter, so the rules
 /// can be tested without a signed bundle, user authorization, or waiting a
 /// real minute for the debounce to expire.
@@ -24,8 +29,11 @@ public final class AttentionNotifier {
     private let sink: any NotificationSink
     private let debounceInterval: TimeInterval
     private var lastNotified: [String: Date] = [:]
-    /// Sessions with a notification currently sitting in Notification Center.
-    private var outstanding: Set<String> = []
+    /// Notifications currently sitting in Notification Center: key -> the
+    /// session the latest delivery under that key was about. Only that session
+    /// resolving withdraws it - an older run of the same task resolving must
+    /// not pull the notification a newer run replaced it with.
+    private var outstanding: [String: String] = [:]
 
     public init(sink: any NotificationSink, debounceInterval: TimeInterval = 60) {
         self.sink = sink
@@ -59,13 +67,16 @@ public final class AttentionNotifier {
                 continue
             }
             lastNotified[key] = now
-            outstanding.insert(session.id)
+            outstanding[session.notificationKey] = session.id
 
+            let label = session.scheduledTask.map { "\($0) (\(session.projectName))" }
+                ?? session.projectName
             sink.deliver(
                 AttentionNotification(
+                    key: session.notificationKey,
                     sessionID: session.id,
                     title: "vibra",
-                    body: "\(session.projectName) is waiting for you"
+                    body: "\(label) is waiting for you"
                 )
             )
         }
@@ -84,14 +95,16 @@ public final class AttentionNotifier {
         let stillNeedsAttention = Set(
             current.filter { $0.state.needsAttention }.map(\.id)
         )
-        let resolved = outstanding.subtracting(stillNeedsAttention)
+        let resolved = outstanding
+            .filter { !stillNeedsAttention.contains($0.value) }
+            .map(\.key)
         guard !resolved.isEmpty else { return }
 
-        outstanding.subtract(resolved)
+        for key in resolved { outstanding.removeValue(forKey: key) }
 
-        // Sorted so the call is deterministic — it is otherwise Set order, which
-        // makes a test that asserts on it flaky rather than wrong.
-        sink.withdraw(sessionIDs: resolved.sorted())
+        // Sorted so the call is deterministic — it is otherwise dictionary
+        // order, which makes a test that asserts on it flaky rather than wrong.
+        sink.withdraw(keys: resolved.sorted())
 
         // Prune debounce entries for sessions that vanished, so the dictionary
         // stays bounded over a long-running day. Entries for sessions that are
@@ -118,9 +131,15 @@ public final class AttentionNotifier {
     /// the prompt), so waiting for `withdrawResolved` would leave the banner
     /// sitting there after it has done its job. The debounce entry is kept, for
     /// the same reason as on ordinary withdrawal.
+    ///
+    /// Matches on the session, not the key: clicking an older run's
+    /// notification that has since been replaced is not a reason to pull the
+    /// newer one.
     public func dismiss(sessionID: String) {
-        guard outstanding.remove(sessionID) != nil else { return }
-        sink.withdraw(sessionIDs: [sessionID])
+        guard let key = outstanding.first(where: { $0.value == sessionID })?.key
+        else { return }
+        outstanding.removeValue(forKey: key)
+        sink.withdraw(keys: [key])
     }
 
     /// Withdraws everything still outstanding. Used when the app is going away:
@@ -128,7 +147,7 @@ public final class AttentionNotifier {
     /// longer be acted on from the menu bar, so it is pure noise.
     public func withdrawAll() {
         guard !outstanding.isEmpty else { return }
-        sink.withdraw(sessionIDs: outstanding.sorted())
+        sink.withdraw(keys: outstanding.keys.sorted())
         outstanding.removeAll()
     }
 }

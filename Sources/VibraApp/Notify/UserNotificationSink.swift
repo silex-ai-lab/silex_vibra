@@ -43,27 +43,31 @@ final class UserNotificationSink: NotificationSink {
         let content = UNMutableNotificationContent()
         content.title = notification.title
         content.body = notification.body
+        // The key may be shared by several runs of one task; a click must go
+        // to the run this delivery was about.
+        content.userInfo = ["sessionID": notification.sessionID]
 
-        // Keyed by session, not by UUID. Two reasons, and the first is the one
+        // Keyed by session (or by scheduled task - see Session.notificationKey),
+        // not by UUID. Two reasons, and the first is the one
         // that was broken: a random id per delivery leaves nothing to withdraw
         // by, so a resolved alert could never be pulled. The second is that
         // macOS replaces a delivered notification that reuses an identifier, so
         // one session repeatedly wanting you coalesces into one entry instead
         // of stacking.
         let request = UNNotificationRequest(
-            identifier: notification.sessionID,
+            identifier: notification.key,
             content: content,
             trigger: nil
         )
         center.add(request) { _ in }
     }
 
-    func withdraw(sessionIDs: [String]) {
-        guard !sessionIDs.isEmpty else { return }
+    func withdraw(keys: [String]) {
+        guard !keys.isEmpty else { return }
         // Delivered only: a pending request would be one scheduled for later,
         // and vibra never schedules — every notification is posted immediately
         // with a nil trigger.
-        center.removeDeliveredNotifications(withIdentifiers: sessionIDs)
+        center.removeDeliveredNotifications(withIdentifiers: keys)
     }
 }
 
@@ -84,8 +88,9 @@ private final class ClickHandler: NSObject, UNUserNotificationCenterDelegate, Se
         // Only a click on the body. Dismissing it from Notification Center is
         // not a request to be taken anywhere.
         if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
-            // The request identifier is the session id - see `deliver`.
-            let sessionID = response.notification.request.identifier
+            let request = response.notification.request
+            let sessionID = request.content.userInfo["sessionID"] as? String
+                ?? request.identifier
             let onClick = self.onClick
             Task { @MainActor in onClick(sessionID) }
         }

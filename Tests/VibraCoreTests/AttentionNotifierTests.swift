@@ -11,7 +11,8 @@ struct AttentionNotifierTests {
         _ id: String,
         _ state: SessionState,
         cwd: String = "/fake/my-project",
-        at: Date = Date(timeIntervalSince1970: 1_000_000)
+        at: Date = Date(timeIntervalSince1970: 1_000_000),
+        task: String? = nil
     ) -> Session {
         Session(
             id: id,
@@ -19,7 +20,8 @@ struct AttentionNotifierTests {
             cwd: cwd,
             state: state,
             startedAt: at,
-            lastActivity: at
+            lastActivity: at,
+            scheduledTask: task
         )
     }
 
@@ -329,5 +331,84 @@ struct AttentionNotifierTests {
         let (notifier, sink) = make()
         notifier.dismiss(sessionID: "never-notified")
         #expect(sink.withdrawn.isEmpty)
+    }
+
+    // MARK: - Scheduled tasks
+
+    @Test func runsOfOneScheduledTaskShareOneNotification() {
+        let (notifier, sink) = make()
+        // Hourly job: every run is a new session.
+        notifier.notifyIfNeeded(
+            previous: [],
+            current: [session("run1", .awaitingInput, task: "hourly-sync")],
+            now: t0
+        )
+        notifier.notifyIfNeeded(
+            previous: [session("run1", .awaitingInput, task: "hourly-sync")],
+            current: [
+                session("run1", .awaitingInput, task: "hourly-sync"),
+                session("run2", .awaitingInput, task: "hourly-sync"),
+            ],
+            now: t0.addingTimeInterval(3600)
+        )
+        // Two deliveries under one key: the second replaces the first in
+        // Notification Center, so only the latest run is shown.
+        #expect(sink.delivered.map(\.key) == ["scheduled-task:hourly-sync", "scheduled-task:hourly-sync"])
+        #expect(sink.delivered.map(\.sessionID) == ["run1", "run2"])
+        #expect(sink.delivered.last?.body.contains("hourly-sync") == true)
+    }
+
+    @Test func olderRunResolvingDoesNotPullTheNewerRunsNotification() {
+        let (notifier, sink) = make()
+        let both = [
+            session("run1", .awaitingInput, task: "hourly-sync"),
+            session("run2", .awaitingInput, task: "hourly-sync"),
+        ]
+        notifier.notifyIfNeeded(previous: [], current: both, now: t0)
+
+        // run1 ages out; run2 still waits. The shared notification is run2's.
+        notifier.notifyIfNeeded(
+            previous: both,
+            current: [session("run2", .awaitingInput, task: "hourly-sync")],
+            now: t0.addingTimeInterval(60)
+        )
+        #expect(sink.withdrawn.isEmpty)
+
+        // Clicking the stale run1 does not pull it either.
+        notifier.dismiss(sessionID: "run1")
+        #expect(sink.withdrawn.isEmpty)
+
+        // run2 resolving does.
+        notifier.notifyIfNeeded(
+            previous: [session("run2", .awaitingInput, task: "hourly-sync")],
+            current: [session("run2", .working, task: "hourly-sync")],
+            now: t0.addingTimeInterval(120)
+        )
+        #expect(sink.withdrawn == [["scheduled-task:hourly-sync"]])
+    }
+
+    @Test func differentTasksAndPlainSessionsStaySeparate() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [],
+            current: [
+                session("a", .awaitingInput, task: "hourly-sync"),
+                session("b", .awaitingInput, task: "nightly-report"),
+                session("c", .awaitingInput),
+            ],
+            now: t0
+        )
+        #expect(Set(sink.delivered.map(\.key))
+            == ["scheduled-task:hourly-sync", "scheduled-task:nightly-report", "c"])
+    }
+
+    @Test func scheduledTaskNameIsOnlyReadFromALeadingTag() {
+        #expect(scheduledTaskName(in: #"<scheduled-task name="suoya-hourly-sync" file="/x/SKILL.md">"#)
+            == "suoya-hourly-sync")
+        // A prompt that merely mentions the tag is not a scheduled run.
+        #expect(scheduledTaskName(in: #"what does <scheduled-task name="x"> mean?"#) == nil)
+        // Anything but a short slug is refused rather than trusted as a label.
+        #expect(scheduledTaskName(in: #"<scheduled-task name="a b">"#) == nil)
+        #expect(scheduledTaskName(in: "plain prompt") == nil)
     }
 }

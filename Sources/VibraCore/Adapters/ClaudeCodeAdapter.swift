@@ -160,6 +160,8 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
     var latest: Date?
     var lastRecordType: String?
     var lastAssistantStopReason: String?
+    var scheduledTask: String?
+    var sawFirstPrompt = false
     var parsedRecords = 0
 
     mutating func fold(_ line: String) {
@@ -177,6 +179,16 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
         if sessionID == nil { sessionID = (record["sessionId"] as? String) ?? (record["session_id"] as? String) }
         if cwd == nil { cwd = record["cwd"] as? String }
         if gitBranch == nil { gitBranch = record["gitBranch"] as? String }
+
+        // Only the first typed prompt, and only the task's name from it: a
+        // scheduled run opens with `<scheduled-task name="..." ...>`. The rest
+        // of the prompt is conversation content and is never kept.
+        if type == "user", !sawFirstPrompt,
+           let message = record["message"] as? [String: Any],
+           let content = message["content"] as? String {
+            sawFirstPrompt = true
+            scheduledTask = scheduledTaskName(in: content)
+        }
 
         guard type == "assistant" else { return }
         guard let message = record["message"] as? [String: Any] else { return }
@@ -226,9 +238,23 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
             startedAt: started,
             lastActivity: last,
             usage: usage,
-            lastEvent: lastEvent
+            lastEvent: lastEvent,
+            scheduledTask: scheduledTask
         )
     }
+}
+
+/// The name from a leading `<scheduled-task name="...">` tag, or nil. Anchored
+/// at the start and restricted to a short slug, so arbitrary prompt text that
+/// merely mentions the tag can never become a notification key or label.
+func scheduledTaskName(in prompt: String) -> String? {
+    let pattern = #"^\s*<scheduled-task name="([A-Za-z0-9._-]{1,64})""#
+    guard let regex = try? NSRegularExpression(pattern: pattern),
+          let match = regex.firstMatch(
+              in: prompt, range: NSRange(prompt.startIndex..., in: prompt)),
+          let range = Range(match.range(at: 1), in: prompt)
+    else { return nil }
+    return String(prompt[range])
 }
 
 // MARK: - Shared JSONL helpers
