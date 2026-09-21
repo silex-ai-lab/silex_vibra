@@ -212,6 +212,20 @@ pkill -f "Vibra.app/Contents/MacOS/Vibra"
 open /Applications/Vibra.app
 ```
 
+**Clicking a session says vibra isn't allowed to control iTerm2/Terminal.**
+That is macOS refusing the Apple Event. Grant it under System Settings →
+Privacy & Security → Automation → Vibra. To see what vibra thinks it is dealing
+with before clicking anything:
+
+```sh
+/Applications/Vibra.app/Contents/MacOS/Vibra --locate
+```
+
+The `tty owner:` line reads `emulator iTerm2 - jumpable` for a normal tab and
+`multiplexer tmux - not jumpable` for a pane the emulator cannot see. It comes
+from walking the process ancestry, so it is a fact about your machine rather
+than a guess.
+
 **`make probe` says `total sessions: 0`.** Nothing has run in the last 12 hours.
 The window is `activityWindow` in `Sources/VibraApp/SessionStore.swift`.
 
@@ -252,8 +266,12 @@ layered on the menu bar, which is the real interface.
   hand — see below. The durable fix is a Developer ID signature, not a code
   change. The menu bar shows everything a notification would have said, so
   `Notifier` treats refusal as normal and never fails.
-- **No terminal jump-back.** Clicking a session does not yet focus the terminal
-  tab it came from.
+- **Terminal jump-back needs Automation permission.** Clicking a session focuses
+  the iTerm2 or Terminal tab it runs in, which means asking that app which tab
+  owns the session's tty — an Apple Event, so macOS gates it behind
+  **System Settings → Privacy & Security → Automation → Vibra**. The first
+  click prompts for it. vibra is ad-hoc signed, so rebuilding changes its
+  identity and macOS may ask again.
 - **No weekly report card.**
 - **OpenCode blocked-state detection is unverified.** The adapter does read the
   `permission` column and maps a non-empty value to `needs approval`, but that
@@ -280,7 +298,7 @@ Current state is tracked in [docs/STATUS.md](docs/STATUS.md); planned work,
 with the reasoning behind each decision, in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Working against real data: the menu bar, all three adapters, state
-classification, and usage/cost accounting. Not yet done: terminal jump-back,
+classification, usage/cost accounting, and terminal jump-back. Not yet done:
 weekly report cards, and Developer ID signing.
 
 ## License

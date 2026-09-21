@@ -11,7 +11,13 @@ import VibraCore
 ///
 /// A tty that no terminal claims is **not** jumpable, and that is reported
 /// rather than guessed at. The common cause is a multiplexer: tmux, screen or
-/// herdr own their panes' ptys, so the emulator never sees them.
+/// herdr own their panes' ptys, so the emulator never sees them — but that is
+/// now established from the process ancestry instead of assumed. It was
+/// assumed, and on a plain iTerm2 tab the assumption was simply wrong.
+///
+/// The other way a jump fails is macOS refusing the Apple Event. That is a
+/// different problem with a different remedy, and it used to be reported as the
+/// multiplexer case because every AppleScript error collapsed into one boolean.
 enum TerminalJumper {
 
     enum Outcome: Equatable {
@@ -21,8 +27,12 @@ enum TerminalJumper {
         case notLocatable
         /// The process exists but has no controlling terminal.
         case noControllingTerminal
-        /// No terminal claims this tty — usually a multiplexer pane.
-        case noTerminalOwnsTTY(String)
+        /// No terminal claims this tty. `owner` says what the process ancestry
+        /// actually shows, so the explanation can be true rather than likely.
+        case noTerminalOwnsTTY(tty: String, owner: ProcessInspector.TTYOwner)
+        /// macOS refused the Apple Event. vibra has not been granted permission
+        /// to control this terminal, which is a settings problem, not a tty one.
+        case notPermitted(app: String)
     }
 
     static func jump(to session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome {
@@ -31,15 +41,35 @@ enum TerminalJumper {
         }
         guard let tty = found.tty else { return .noControllingTerminal }
 
-        if focusITerm(tty: tty) { return .jumped(app: "iTerm2") }
-        if focusTerminalApp(tty: tty) { return .jumped(app: "Terminal") }
-        return .noTerminalOwnsTTY(tty)
+        switch focusITerm(tty: tty) {
+        case .focused: return .jumped(app: "iTerm2")
+        case .refused: return .notPermitted(app: "iTerm2")
+        case .notFound, .notRunning: break
+        }
+        switch focusTerminalApp(tty: tty) {
+        case .focused: return .jumped(app: "Terminal")
+        case .refused: return .notPermitted(app: "Terminal")
+        case .notFound, .notRunning: break
+        }
+        return .noTerminalOwnsTTY(tty: tty, owner: ProcessInspector.ttyOwner(of: found.pid))
+    }
+
+    /// Why an emulator did not end up focused.
+    ///
+    /// `refused` is the one that matters: it is macOS denying the Apple Event
+    /// (`errAEEventNotPermitted`), not the tab being absent. Folding it into
+    /// "not found" is what made a permissions problem look like a tmux problem.
+    private enum FocusResult {
+        case focused
+        case notFound
+        case refused
+        case notRunning
     }
 
     // MARK: - Emulators
 
-    private static func focusITerm(tty: String) -> Bool {
-        guard isRunning(bundleID: "com.googlecode.iterm2") else { return false }
+    private static func focusITerm(tty: String) -> FocusResult {
+        guard isRunning(bundleID: "com.googlecode.iterm2") else { return .notRunning }
         return runAppleScript("""
         tell application "iTerm2"
           repeat with w in windows
@@ -64,8 +94,8 @@ enum TerminalJumper {
         """)
     }
 
-    private static func focusTerminalApp(tty: String) -> Bool {
-        guard isRunning(bundleID: "com.apple.Terminal") else { return false }
+    private static func focusTerminalApp(tty: String) -> FocusResult {
+        guard isRunning(bundleID: "com.apple.Terminal") else { return .notRunning }
         return runAppleScript("""
         tell application "Terminal"
           repeat with w in windows
@@ -93,11 +123,25 @@ enum TerminalJumper {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
     }
 
-    private static func runAppleScript(_ source: String) -> Bool {
+    /// Runs the script and distinguishes "it said no" from "it was not allowed
+    /// to ask".
+    ///
+    /// `errAEEventNotPermitted` (-1743) is what macOS returns when the app has
+    /// no Automation permission for the target. An ad-hoc signed bundle without
+    /// `NSAppleEventsUsageDescription` in its Info.plist is never even prompted,
+    /// so this was the permanent state of every GUI-launched jump: denied, and
+    /// then reported as a missing tty.
+    ///
+    /// -600 (`procNotFound`) and -1728 (`errAENoSuchObject`) are ordinary
+    /// misses, not permission problems.
+    private static func runAppleScript(_ source: String) -> FocusResult {
         var error: NSDictionary?
-        guard let script = NSAppleScript(source: source) else { return false }
+        guard let script = NSAppleScript(source: source) else { return .notFound }
         let result = script.executeAndReturnError(&error)
-        if error != nil { return false }
-        return result.stringValue == "ok"
+        if let error {
+            let code = (error[NSAppleScript.errorNumber] as? Int) ?? 0
+            return code == -1743 ? .refused : .notFound
+        }
+        return result.stringValue == "ok" ? .focused : .notFound
     }
 }

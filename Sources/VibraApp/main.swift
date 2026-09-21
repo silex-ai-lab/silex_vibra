@@ -165,7 +165,18 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
     case .jumped(let app):            print("OK: focused in \(app)")
     case .notLocatable:               print("FAIL: no published session->process link, or process exited")
     case .noControllingTerminal:      print("FAIL: process has no controlling terminal")
-    case .noTerminalOwnsTTY(let tty): print("FAIL: no terminal owns \(tty) (multiplexer pane?)")
+    case .notPermitted(let app):
+        print("FAIL: macOS refused the Apple Event - vibra has no Automation permission for \(app)")
+        print("      System Settings > Privacy & Security > Automation > Vibra > enable \(app)")
+    case .noTerminalOwnsTTY(let tty, let owner):
+        switch owner {
+        case .multiplexer(let name):
+            print("FAIL: \(tty) belongs to \(name); its panes are invisible to the emulator")
+        case .emulator(let name):
+            print("FAIL: \(tty) traces back to \(name), but it reported no tab owning that tty")
+        case .unknown:
+            print("FAIL: no terminal owns \(tty), and its ancestry names none vibra can drive")
+        }
     }
     exit(0)
 }
@@ -257,6 +268,16 @@ if CommandLine.arguments.contains("--locate") {
             if let found {
                 print("\(s.agent.displayName) \(s.projectName) [\(state.rawValue)]")
                 print("   pid=\(found.pid) tty=\(found.tty ?? "none") cwd=\(found.cwd ?? "?")")
+                // Who holds the tty, from the process ancestry. This is the
+                // question a failed jump turns on, so printing it here means it
+                // can be answered without clicking anything.
+                let owner: String
+                switch ProcessInspector.ttyOwner(of: found.pid) {
+                case .emulator(let name):    owner = "emulator \(name) - jumpable"
+                case .multiplexer(let name): owner = "multiplexer \(name) - not jumpable"
+                case .unknown:               owner = "unknown"
+                }
+                print("   tty owner: \(owner)")
             } else {
                 print("\(s.agent.displayName) \(s.projectName) [\(state.rawValue)]")
                 print("   not locatable (no published pid link, or process exited)")

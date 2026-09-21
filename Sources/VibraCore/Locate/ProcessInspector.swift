@@ -27,6 +27,57 @@ public enum ProcessInspector {
         return normalizeTTY(value)
     }
 
+    /// What is sitting between a session's process and the window server.
+    ///
+    /// Answers "is this tty really inside a multiplexer?" instead of assuming
+    /// it. vibra used to report every failed jump as a multiplexer pane, which
+    /// on a plain iTerm2 tab is simply false and sends people looking in the
+    /// wrong place.
+    public enum TTYOwner: Equatable, Sendable {
+        /// A terminal emulator holds it; a failed jump is vibra's problem.
+        case emulator(String)
+        /// tmux, screen or herdr holds it; its panes are invisible to the emulator.
+        case multiplexer(String)
+        /// Nothing recognisable in the ancestry.
+        case unknown
+    }
+
+    /// Walks a process's ancestors and reports the first thing that explains
+    /// who owns its terminal.
+    ///
+    /// Bounded: a corrupt or cyclic parent chain must not spin. Sixteen levels
+    /// is far past any real shell nesting.
+    public static func ttyOwner(of pid: Int32) -> TTYOwner {
+        var current = pid
+        for _ in 0..<16 {
+            guard let out = run("/bin/ps", ["-o", "ppid=,comm=", "-p", "\(current)"]) else {
+                return .unknown
+            }
+            let parts = out.trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard parts.count == 2, let ppid = Int32(parts[0]) else { return .unknown }
+
+            // Match on the executable's basename: `ps -o comm=` prints a full
+            // path for a bundled app ("/Applications/iTerm.app/.../iTerm2").
+            let name = (String(parts[1]) as NSString).lastPathComponent.lowercased()
+
+            if let mux = ["tmux", "tmux: server", "screen", "herdr"]
+                .first(where: { name.contains($0) }) {
+                return .multiplexer(mux)
+            }
+            if name.contains("iterm") { return .emulator("iTerm2") }
+            if name.contains("terminal") { return .emulator("Terminal") }
+            if name.contains("ghostty") { return .emulator("Ghostty") }
+            if name.contains("alacritty") { return .emulator("Alacritty") }
+            if name.contains("wezterm") { return .emulator("WezTerm") }
+            if name.contains("kitty") { return .emulator("kitty") }
+
+            guard ppid > 1 else { return .unknown }
+            current = ppid
+        }
+        return .unknown
+    }
+
     /// Pid holding `url` open. Used for Codex, which keeps an open lock named
     /// after its session id.
     public static func holderOfOpenFile(_ url: URL) -> Int32? {

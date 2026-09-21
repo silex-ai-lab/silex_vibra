@@ -56,6 +56,8 @@ app: build
 	  '  <key>LSMinimumSystemVersion</key><string>14.0</string>' \
 	  '  <key>LSUIElement</key><true/>' \
 	  '  <key>NSHumanReadableCopyright</key><string>MIT</string>' \
+	  '  <key>NSAppleEventsUsageDescription</key>' \
+	  '  <string>vibra asks your terminal which tab owns a session'"'"'s tty, so clicking a session can focus it.</string>' \
 	  '</dict></plist>' > $(CONTENTS)/Info.plist
 	# Ad-hoc sign so the bundle has a stable identity. This is NOT a substitute
 	# for Developer ID signing + notarization when distributing downloads.

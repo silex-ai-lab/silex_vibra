@@ -115,4 +115,36 @@ struct ProcessLocatorTests {
         #expect(!ProcessInspector.isAlive(0))
         #expect(!ProcessInspector.isAlive(-1))
     }
+
+    // MARK: - TTY ownership
+    //
+    // vibra used to report every failed jump as "probably a multiplexer".
+    // On a plain iTerm2 tab that is false, and it sent the user looking for a
+    // tmux problem they did not have. These pin the walk itself; which owner a
+    // developer's own shell reports is environment-dependent and deliberately
+    // not asserted.
+
+    @Test func launchdHasNoTerminalInItsAncestry() {
+        // pid 1 is launchd: no shell, no emulator, no multiplexer above it.
+        // If the walk ever claims otherwise it is matching on something far too
+        // loose.
+        #expect(ProcessInspector.ttyOwner(of: 1) == .unknown)
+    }
+
+    @Test func aDeadPidYieldsUnknownRatherThanAGuess() {
+        // ps prints nothing for a pid that does not exist. The walk must end,
+        // not fall through to a default that names a terminal.
+        #expect(ProcessInspector.ttyOwner(of: 999_999) == .unknown)
+    }
+
+    @Test func ownershipWalkTerminatesOnEveryLivePID() {
+        // The bound exists so a cyclic or corrupt parent chain cannot spin.
+        // Walking a handful of real processes exercises it against whatever
+        // this machine actually has running.
+        for pid in [Int32(1), ProcessInfo.processInfo.processIdentifier] {
+            let owner = ProcessInspector.ttyOwner(of: pid)
+            // Any answer is acceptable; not returning is not.
+            #expect(owner == owner)
+        }
+    }
 }

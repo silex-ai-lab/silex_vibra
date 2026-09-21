@@ -149,14 +149,43 @@ final class MenuBarController {
                 "Its process is running without a controlling terminal, so there "
                 + "is no tab to focus."
             )
-        case .noTerminalOwnsTTY(let tty):
+        case .notPermitted(let app):
             explain(
-                "No terminal owns \(tty)",
-                "The session is probably inside a multiplexer such as tmux, "
-                + "screen or herdr. Those own their panes' terminals, so the "
-                + "emulator can't be asked to focus one.\n\nvibra will not guess "
-                + "at a different tab."
+                "vibra isn't allowed to control \(app)",
+                "macOS refused the Apple Event. Focusing a tab means asking "
+                + "\(app) which one owns the session's terminal, and that needs "
+                + "Automation permission.\n\nSystem Settings → Privacy & Security "
+                + "→ Automation → Vibra → enable \(app).\n\nIf Vibra isn't listed "
+                + "there yet, it has never been able to ask — reinstall with "
+                + "`make install` and try once more.\n\nNote: vibra is ad-hoc "
+                + "signed, so rebuilding it changes its identity and macOS may "
+                + "ask again."
             )
+        case .noTerminalOwnsTTY(let tty, let owner):
+            switch owner {
+            case .multiplexer(let name):
+                explain(
+                    "\(tty) belongs to \(name)",
+                    "\(name) owns its panes' terminals, so the emulator never "
+                    + "sees them and can't be asked to focus one.\n\nvibra will "
+                    + "not guess at a different tab."
+                )
+            case .emulator(let name):
+                explain(
+                    "\(name) has that session, but didn't focus it",
+                    "\(tty) traces back to \(name), so this is not a multiplexer "
+                    + "pane — \(name) just didn't report a tab owning that tty. "
+                    + "A detached or restored session can do this.\n\nvibra will "
+                    + "not guess at a different tab."
+                )
+            case .unknown:
+                explain(
+                    "No terminal owns \(tty)",
+                    "Nothing in that process's ancestry is a terminal vibra "
+                    + "knows how to drive.\n\nvibra will not guess at a "
+                    + "different tab."
+                )
+            }
         }
     }
 
