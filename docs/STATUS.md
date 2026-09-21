@@ -17,7 +17,7 @@ jump-back (P1.1).
 | RSS (running app) | 68.1 MB | < 60 MB | ⚠️ missed |
 | Cold start | 0.36s, 7.3 MB read | — | ✅ |
 | Unchanged refresh | 0.02s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 39 in 9 suites | — | ✅ |
+| Tests | 47 in 10 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
 
 Reproduce with `make bench` and `make test`.
@@ -51,7 +51,9 @@ writes to disk. Idle returns to 0.0% immediately.
 | **Menu bar rendering never seen** | Unknown. No Screen Recording permission on the dev machine. | User confirmation |
 | OpenCode `ev=unknown` | DeepSeek sessions rarely report `needs approval`. Column is read and tested; the live transition has never been observed. | Observe a real approval prompt |
 | Ad-hoc signed | macOS refuses notification authorization until enabled by hand. | P3.1, needs a paid Apple account |
-| No terminal jump-back | Largest missing feature. | P1.1 |
+| Terminal jump-back only outside multiplexers | tmux/screen/herdr panes cannot be focused; the emulator never sees their ptys. | Inherent; documented |
+| Terminal.app jump path unexercised | Unknown. Terminal.app was not running during testing. | Run it and retest |
+| OpenCode not locatable | Its sessions cannot be jumped to at all. | Needs a published pid link |
 | Repo is private | Not publicly installable. | One command, user's call |
 
 ## Honest note on the cost figures

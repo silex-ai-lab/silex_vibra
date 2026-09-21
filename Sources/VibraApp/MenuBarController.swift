@@ -107,9 +107,54 @@ final class MenuBarController {
         let tokens = session.usage.total
         let tokenText = tokens >= 1000 ? "\(tokens / 1000)k tok" : "\(tokens) tok"
         let label = "\(dot(session.state)) \(session.projectName) · \(stateText(session.state)) · \(tokenText)"
-        let item = NSMenuItem(title: label, action: nil, keyEquivalent: "")
-        item.toolTip = "\(session.cwd)\n\(session.model ?? "unknown model")"
+        let item = NSMenuItem(title: label, action: #selector(jumpToSession(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = session
+        item.toolTip = "\(session.cwd)\n\(session.model ?? "unknown model")\n\nClick to focus its terminal tab."
         return item
+    }
+
+    /// Clicking a row focuses the terminal the session runs in.
+    ///
+    /// When that is not possible the reason is shown rather than silently
+    /// doing nothing — most often the session lives in a multiplexer pane
+    /// (tmux, screen, herdr), whose pty the terminal emulator never sees.
+    @objc private func jumpToSession(_ sender: NSMenuItem) {
+        guard let session = sender.representedObject as? Session else { return }
+        switch TerminalJumper.jump(to: session) {
+        case .jumped:
+            break
+        case .notLocatable:
+            explain(
+                "Can't find that session's process",
+                "\(session.agent.displayName) doesn't publish a link between its "
+                + "session and its process, or the process has exited."
+            )
+        case .noControllingTerminal:
+            explain(
+                "That session has no terminal",
+                "Its process is running without a controlling terminal, so there "
+                + "is no tab to focus."
+            )
+        case .noTerminalOwnsTTY(let tty):
+            explain(
+                "No terminal owns \(tty)",
+                "The session is probably inside a multiplexer such as tmux, "
+                + "screen or herdr. Those own their panes' terminals, so the "
+                + "emulator can't be asked to focus one.\n\nvibra will not guess "
+                + "at a different tab."
+            )
+        }
+    }
+
+    private func explain(_ title: String, _ detail: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = detail
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     private func dot(_ state: SessionState) -> String {

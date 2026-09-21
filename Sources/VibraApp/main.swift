@@ -94,6 +94,60 @@ if CommandLine.arguments.contains("--bench") {
     exit(finished ? 0 : 1)
 }
 
+// `Vibra --locate` resolves each live session to the process and terminal it
+// is running in. Diagnostic for terminal jump-back (P1.1).
+// `Vibra --jump <projectName>` attempts a terminal jump from the CLI, so the
+// mechanism can be verified without clicking a menu.
+if let i = CommandLine.arguments.firstIndex(of: "--jump"),
+   i + 1 < CommandLine.arguments.count {
+    let wanted = CommandLine.arguments[i + 1]
+    let now = Date()
+    let engine = StateEngine()
+    var matched: Session?
+    for adapter in AdapterRegistry.all() {
+        for s in adapter.discoverSessionsSafely()
+            where now.timeIntervalSince(s.lastActivity) <= 12 * 3600
+            && s.projectName == wanted {
+            var s2 = s
+            s2.state = engine.classify(lastEvent: s.lastEvent, lastActivity: s.lastActivity, now: now)
+            if matched == nil { matched = s2 }
+        }
+    }
+    guard let session = matched else {
+        print("no live session with project name \(wanted)")
+        exit(2)
+    }
+    print("jumping to \(session.agent.displayName) \(session.projectName) ...")
+    switch TerminalJumper.jump(to: session) {
+    case .jumped(let app):            print("OK: focused in \(app)")
+    case .notLocatable:               print("FAIL: no published session->process link, or process exited")
+    case .noControllingTerminal:      print("FAIL: process has no controlling terminal")
+    case .noTerminalOwnsTTY(let tty): print("FAIL: no terminal owns \(tty) (multiplexer pane?)")
+    }
+    exit(0)
+}
+
+if CommandLine.arguments.contains("--locate") {
+    let locator = ProcessLocator()
+    let engine = StateEngine()
+    let now = Date()
+    for adapter in AdapterRegistry.all() {
+        for s in adapter.discoverSessionsSafely()
+            .filter({ now.timeIntervalSince($0.lastActivity) <= 12 * 3600 }) {
+            let found = locator.locate(sessionID: s.id, agent: s.agent)
+            let state = engine.classify(lastEvent: s.lastEvent, lastActivity: s.lastActivity, now: now)
+            if let found {
+                print("\(s.agent.displayName) \(s.projectName) [\(state.rawValue)]")
+                print("   pid=\(found.pid) tty=\(found.tty ?? "none") cwd=\(found.cwd ?? "?")")
+            } else {
+                print("\(s.agent.displayName) \(s.projectName) [\(state.rawValue)]")
+                print("   not locatable (no published pid link, or process exited)")
+            }
+        }
+    }
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--probe") {
     var total = 0
     let aggregator = UsageAggregator()

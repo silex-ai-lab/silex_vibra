@@ -18,7 +18,7 @@ Current state: see [STATUS.md](STATUS.md).
 | 0 | P0.2 Bounded-memory parsing | **Done** 2026-09-20 |
 | 0 | P0.3 OpenCode permission column | **Cut** — already implemented |
 | 0b | P0b.1 Make the notifier testable | **Done** 2026-09-20 |
-| 1 | P1.1 Terminal jump-back | **In progress** |
+| 1 | P1.1 Terminal jump-back | **Done (v1)** 2026-09-20 |
 | 1 | P1.2 Usage figures stay local | **Decided** — no network, ever |
 | 1 | P1.3 Weekly report card | Not started |
 | 2 | P2.1 Auto-detect installed agents | Not started |
@@ -145,7 +145,7 @@ per-session and per-state: two sessions each alert, and `blocked` versus
 
 # Phase 1 — The features users notice
 
-## P1.1 — Terminal jump-back — **IN PROGRESS**
+## P1.1 — Terminal jump-back — **DONE (v1)** 2026-09-20
 
 **Goal.** Click a session row and land in the terminal tab that session is
 running in, so the alert leads somewhere instead of just informing you.
@@ -162,20 +162,49 @@ is exactly the disambiguator.
 wrong tab is worse than not jumping, because it silently moves the user's focus
 away from what they were doing.
 
-**The session→process link is the hard part, and is not solved by tty alone.**
-*DeepSeek.* No JSONL record carries a pid or tty. The link must come from
-matching process cwd plus start-time against the session's `startedAt`, plus a
-session id from argv or env where a CLI exposes one.
+**The session→process link turned out to need no heuristic at all.** Both
+reviewers assumed cwd plus start-time matching would be required, because no
+JSONL record carries a pid. Investigation found that two of the three agents
+publish the link themselves:
+
+- Claude Code writes `~/.claude/sessions/<pid>.json` containing its own pid
+  *and* its sessionId.
+- Codex holds an open lock at `~/.codex/thread-writer-locks/<sessionId>.lock`,
+  so `lsof` yields the holder's pid.
+
+The chain is therefore exact end to end: session id → pid → tty → tab. No
+fuzzy matching anywhere. OpenCode publishes nothing comparable and is simply
+not locatable, which is the correct answer rather than a guess.
+
+**`~/.claude/sessions` also contains `<pid>.<hash>.key` secrets.** Only `*.json`
+is ever enumerated, held to the same standard as the OpenCode auth tokens: a
+canary test asserts key contents reach no output, and the check is
+mutation-tested.
 
 **VS Code is handled separately or not at all in v1.** *DeepSeek.* Its
 integrated terminal exposes no queryable tty, so it cannot join the same
 mechanism.
 
-### Acceptance
+### Acceptance — partly met
 
-The correct tab focused in iTerm2 **and** Terminal.app, including the
-two-agents-in-one-directory case; ambiguity surfaces a chooser rather than a
-guess.
+- **Two agents in one directory: passes.** Demonstrated live — two Claude
+  sessions both in `~/workplace` resolved to *different* ttys (`ttys002` and
+  `ttys007`) via their published pids. A cwd match would have conflated them.
+- **iTerm2: verified.** A session on a real iTerm tab focuses correctly.
+- **Refuses to guess: verified.** A session on a herdr pane (`ttys009`) reports
+  "no terminal owns ttys009" instead of jumping somewhere plausible.
+- **Terminal.app: NOT verified.** It was not running on the test machine. The
+  code path exists and is unexercised.
+
+### Known limitation of v1
+
+**Multiplexer panes are not jumpable.** tmux, screen and herdr own their panes'
+ptys, so the emulator never sees them and there is nothing to focus. On a
+machine where agents mostly run inside a multiplexer — as they do on the
+development machine — jump-back will frequently be unavailable. herdr was
+examined as a special case and rejected for v1: `herdr pane list` exposes no
+tty, and `herdr pane focus` only moves to a *neighbouring* pane, so wiring it
+up would require exactly the cwd-based guessing this step ruled out.
 
 ## P1.2 — Usage figures stay local — **DECIDED**
 
