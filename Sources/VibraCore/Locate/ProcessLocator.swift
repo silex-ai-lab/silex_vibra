@@ -60,7 +60,7 @@ public struct ProcessLocator: Sendable {
         switch agent {
         case .claudeCode: return locateClaude(sessionID: sessionID)
         case .codex: return locateCodex(sessionID: sessionID)
-        case .openCode, .cursor: return nil
+        case .openCode, .cursor, .vsCode: return nil
         }
     }
 
@@ -79,7 +79,7 @@ public struct ProcessLocator: Sendable {
             return Set(claudeLiveStatuses().keys)
         case .codex:
             return Set(candidates.filter { locateCodex(sessionID: $0) != nil })
-        case .openCode, .cursor:
+        case .openCode, .cursor, .vsCode:
             return nil
         }
     }

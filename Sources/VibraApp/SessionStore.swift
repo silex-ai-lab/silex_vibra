@@ -49,6 +49,13 @@ final class SessionStore {
     func start(safetyInterval: TimeInterval = 60) {
         Task { await self.requestRefresh() }
 
+        // VS Code writes one chat log per session under these.
+        let vsCodeChatDirectories = VibraPaths.vsCodeUserDirectories.flatMap { user in
+            [
+                user.appendingPathComponent("workspaceStorage"),
+                user.appendingPathComponent("globalStorage/emptyWindowChatSessions"),
+            ]
+        }
         watcher = FileWatcher(
             // ~/.claude/sessions too: an exiting session only deletes its
             // <pid>.json there, and without this it lingered in the menu until
@@ -62,7 +69,7 @@ final class SessionStore {
                 // Archiving or renaming in the Claude UI only touches this.
                 VibraPaths.home.appendingPathComponent(
                     "Library/Application Support/Claude/claude-code-sessions"),
-            ],
+            ] + vsCodeChatDirectories,
             pollURL: VibraPaths.openCodeDB
         ) { [weak self] _ in
             Task { @MainActor in await self?.requestRefresh() }

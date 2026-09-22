@@ -29,7 +29,7 @@ target on this machine (P2.2).
 | 1 | P1.2 Usage figures stay local | ✅ Decided — no network, ever |
 | 1 | P1.3 Weekly report card | ✅ Done |
 | 2 | P2.1 Auto-detect installed agents | ✅ Done |
-| 2 | P2.2 More adapters | ⛔ Blocked — no viable target found |
+| 2 | P2.2 More adapters | ✅ Done — Cursor, VS Code Copilot Chat |
 | 3 | P3.1 Developer ID signing | ⛔ Blocked on a user decision |
 | 3 | P3.2 Sparkle auto-update | Behind P3.1 |
 | 3 | P3.3 Homebrew cask | Behind P3.1 |
@@ -185,7 +185,7 @@ approval; the certificate is what makes that approval outlive rebuilds.
 
 ## What works, verified against real data
 
-- **Three adapters** — Claude Code and Codex JSONL transcripts, OpenCode SQLite.
+- **Five adapters** — Claude Code, Codex and VS Code Copilot Chat JSONL logs; OpenCode and Cursor SQLite.
 - **Agents are detected, not assumed.** An agent with no state on disk is never
   polled, so supporting one nobody installed costs nothing.
 - **Live state classification.** Verified by driving a real Codex session:

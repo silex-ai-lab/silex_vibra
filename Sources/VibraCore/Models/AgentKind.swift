@@ -9,6 +9,7 @@ public enum AgentKind: String, Codable, Sendable, CaseIterable {
     case codex
     case openCode
     case cursor
+    case vsCode
 
     public var displayName: String {
         switch self {
@@ -16,6 +17,7 @@ public enum AgentKind: String, Codable, Sendable, CaseIterable {
         case .codex: "Codex"
         case .openCode: "OpenCode"
         case .cursor: "Cursor"
+        case .vsCode: "VS Code"
         }
     }
 
@@ -26,6 +28,7 @@ public enum AgentKind: String, Codable, Sendable, CaseIterable {
         case .codex: "chevron.left.forwardslash.chevron.right"
         case .openCode: "cube"
         case .cursor: "cursorarrow.rays"
+        case .vsCode: "curlybraces"
         }
     }
 }

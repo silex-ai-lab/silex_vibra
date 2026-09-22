@@ -16,6 +16,8 @@ Codex
   🔵 silex_poc · working · 8k tok
 OpenCode
   ⚪️ scratchpad · idle · 10k tok
+VS Code
+  🔴 Fix the login flow · needs approval · 3k tok
 ```
 
 ## Why
@@ -29,12 +31,45 @@ agents already write and surfaces the one that needs you.
 
 | Agent | Source it reads |
 |---|---|
-| Claude Code | `~/.claude/projects/<slug>/<uuid>.jsonl` |
-| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
+| Claude Code (CLI, Claude desktop app, VS Code / Cursor extension) | `~/.claude/projects/<slug>/<uuid>.jsonl` |
+| Codex (CLI, `codex exec`, desktop app, IDE extension) | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
 | OpenCode (incl. DeepSeek) | `~/.local/share/opencode/opencode.db` |
+| Cursor agents and chats | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` |
+| Visual Studio Code — GitHub Copilot Chat (Ask, Edit, Agent mode) | `~/Library/Application Support/Code/User/workspaceStorage/<id>/chatSessions/*.jsonl` and `…/globalStorage/emptyWindowChatSessions/*.jsonl` (also `Code - Insiders`) |
 
 Vibra never asks these tools to change what they write. It is a passive reader
 of files that already exist.
+
+### Visual Studio Code
+
+Vibra covers VS Code in two ways:
+
+- **Copilot Chat sessions** appear under their own **VS Code** heading. VS Code
+  records each reply's state itself, so nothing is guessed from timing: a reply
+  in progress is 🔵 working, a tool call or terminal command waiting for you to
+  click **Allow** is 🔴 needs approval, and a finished reply is 🟠 your turn. A
+  cancelled reply is ⚪️ idle. The row is named by the chat's title when it has
+  one, else by the folder the window has open. Chats you opened but never sent
+  anything in are left out, as VS Code's own session list does.
+- **Claude Code and Codex running inside VS Code** (their VS Code extensions)
+  are listed under Claude Code and Codex as usual, since they write the same
+  session files as their CLIs.
+
+Clicking a Copilot chat focuses the VS Code window that has the chat's folder
+open (VS Code has no link to a single chat, so select it in the Chat view from
+there). A chat in an empty window just brings VS Code forward. Clicking a
+Claude Code or Codex session running in the extension brings VS Code forward
+too. Vibra never launches VS Code: if it is closed, nothing is on screen to
+jump to. Stable and Insiders are both read, and a click opens the edition the
+chat belongs to.
+
+Tested against VS Code 1.135. VS Code has changed this file format before (older
+releases kept each chat as one `.json` file), so a future release may need an
+adapter update. The adapter only reads `.jsonl` logs, so the older format is
+ignored rather than misread.
+
+*Visual Studio*, the Windows IDE, is not supported: Vibra is macOS-only, and
+Microsoft retired Visual Studio for Mac in August 2024.
 
 **It installs nothing into your agents** — no hooks, no plugins, no statusline,
 no wrapper binaries. Uninstalling Vibra is deleting one `.app`.
@@ -125,17 +160,22 @@ Codex: available=true sessions=1
   - my-project [stalled] ev=producing 567852 tok $0.4327 model=gpt-5.6-sol
 OpenCode: available=true sessions=1
   - my-project [idle] ev=unknown 13365036 tok $0.4847 model=deepseek-v4-pro
-total sessions: 4
+Cursor: available=false sessions=0
+VS Code: available=true sessions=1
+  - my-project [blocked] ev=permissionPrompt 1840 tok n/a model=copilot/gpt-5 via=vscode
+total sessions: 5
 ```
 
 `probe` prints counts, project names and states. It never prints message
 content. It exits `2` if it found no sessions at all, which usually means you
-have not used any of the three agents in the last 12 hours.
+have not used any of the supported agents in the last 12 hours.
 
 **To see it change live:** start a Claude Code or Codex session in another
 terminal, give it a task, and run `make probe` again — that session should
 appear as `working`. When it finishes and waits for you, it flips to
-`awaitingInput` and the menu bar count shows `1!`.
+`awaitingInput` and the menu bar count shows `1!`. The same works for a
+Copilot Chat in VS Code: send a message in Agent mode, and while it waits on
+**Allow** for a terminal command, `make probe` shows it as `blocked`.
 
 ### Run the tests
 
@@ -143,7 +183,7 @@ appear as `working`. When it finishes and waits for you, it flips to
 make test
 ```
 
-Expect `Test run with 20 tests in 6 suites passed` followed by
+Expect `Test run with N tests in M suites passed` followed by
 `OK: tests executed, canary present`.
 
 ### Development loop
@@ -288,6 +328,14 @@ Vibra reads local files and sends nothing anywhere. Specifically:
 - A **canary test** builds a fixture database containing a sentinel token and
   asserts that string appears nowhere in the returned sessions, their JSON
   encoding, or any error description. `make test` fails if that test did not run.
+- Cursor's `state.vscdb` holds its auth tokens too, so the Cursor adapter gets
+  the same contract: read-only, one hard-coded `SELECT`, and the token table is
+  never referenced.
+- VS Code's chat logs contain the whole conversation. The adapter replays each
+  log onto a reduced state (title, folder, and per request its timestamps,
+  model, token counts and reply state) and discards every message and response
+  body as it parses. A canary test plants a sentinel in the prompt, the response
+  and the input box and asserts it appears nowhere in the returned sessions.
 - Adapters never log or print raw rows.
 
 ## Troubleshooting
@@ -394,6 +442,13 @@ layered on the menu bar, which is the real interface.
   click prompts for it. Vibra is ad-hoc signed, so rebuilding changes its
   identity and macOS may ask again.
 - **No weekly report card.**
+- **VS Code Copilot states come from VS Code's source, not a live run.** The
+  reply-state values were read out of VS Code 1.135's own serializer, and the
+  tests replay logs in that format, but a live Copilot session has not yet been
+  watched end to end through Vibra.
+- **VS Code token counts are not a cost.** Copilot is billed per seat or by
+  premium requests, not per token, and its model ids have no published rate,
+  so a Copilot session shows its tokens and `n/a` for cost.
 - **OpenCode blocked-state detection is unverified.** The adapter does read the
   `permission` column and maps a non-empty value to `needs approval`, but that
   transition has not yet been observed live against a real approval prompt.
@@ -401,6 +456,21 @@ layered on the menu bar, which is the real interface.
   release download and no Homebrew cask.
 
 ## Changelog
+
+### Unreleased
+
+- **Visual Studio Code.** GitHub Copilot Chat sessions (Ask, Edit and Agent
+  mode) from VS Code and VS Code Insiders, with working / needs approval / your
+  turn read from VS Code's own per-reply state. Clicking one focuses the VS
+  Code window with the chat's folder open. See
+  [Visual Studio Code](#visual-studio-code).
+- **Cursor.** Cursor agent and chat sessions, read from Cursor's state database
+  under the same read-only contract as OpenCode's. Clicking one brings Cursor
+  forward.
+- **Codex app and IDE sessions.** `codex exec` runs count as unattended, and a
+  Codex (or Claude Code) session hosted in an app rather than a terminal — the
+  Codex desktop app, or an extension in VS Code or Cursor — jumps by bringing
+  that app forward.
 
 ### 0.2.0 — 2026-09-21
 
@@ -452,7 +522,7 @@ Run `make bench` to reproduce those numbers on your own corpus.
 Current state is tracked in [docs/STATUS.md](docs/STATUS.md); planned work,
 with the reasoning behind each decision, in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-Working against real data: the menu bar, all three adapters, state
+Working against real data: the menu bar, all five adapters, state
 classification, usage/cost accounting, and terminal jump-back. Not yet done:
 weekly report cards, and Developer ID signing.
 

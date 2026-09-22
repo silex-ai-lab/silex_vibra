@@ -22,7 +22,7 @@ Current state: see [STATUS.md](STATUS.md).
 | 1 | P1.2 Usage figures stay local | **Decided** — no network, ever |
 | 1 | P1.3 Weekly report card | **Done** 2026-09-20 |
 | 2 | P2.1 Auto-detect installed agents | **Done** 2026-09-20 |
-| 2 | P2.2 More adapters | **Blocked** — no viable target found |
+| 2 | P2.2 More adapters | **Done** — Cursor, VS Code Copilot Chat |
 | 3 | P3.1 Developer ID signing | Blocked on a user decision |
 | 3 | P3.2 Sparkle auto-update | Not started |
 | 3 | P3.3 Homebrew cask | Not started |
@@ -310,7 +310,7 @@ still passes with detection wired in.
 with no state on disk is dropped from the poll set entirely, and a mutation
 that polls everything regardless of presence fails the suite.
 
-## P2.2 — More adapters — **BLOCKED: no viable target on this machine**
+## P2.2 — More adapters — **DONE: Cursor (2026-09-21), VS Code Copilot Chat (2026-09-22)**
 
 **Goal.** Cover the agents a user actually runs.
 
@@ -330,6 +330,19 @@ tokens, no cost, and cannot be exercised against a live session — an
 unverifiable checkbox rather than a feature. **Deferred until an agent with
 real transcripts is installed**, or until the user asks for presence-only
 Cursor support with its limits stated up front.
+
+### Update, 2026-09-21/22
+
+The user asked for both, so they were built with their limits stated:
+
+- **Cursor** reads Cursor's own per-session state flags (`composerHeaders`),
+  which turned out to state approval / generating / unread outright. Still no
+  token usage.
+- **VS Code (Copilot Chat)** reads the per-chat mutation logs VS Code 1.135
+  writes (`chatSessions/*.jsonl`). The `modelState` values and the log's replay
+  semantics were taken from VS Code's own bundled serializer, not guessed. This
+  machine's chats are all empty, so it is fixture-tested only; a live session
+  has not been watched end to end. Token counts are present; cost is `n/a`.
 
 ### Critical decisions
 

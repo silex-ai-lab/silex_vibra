@@ -40,7 +40,9 @@ enum TerminalJumper {
     /// might work. Checks exactly what `jump` checks first, so a session this
     /// calls a dead end is one `jump` would fail on for the same reason.
     static func deadEnd(for session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome? {
-        if session.desktopSessionID != nil || session.agent == .cursor { return nil }
+        if session.desktopSessionID != nil || session.agent == .cursor || session.agent == .vsCode {
+            return nil
+        }
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
         }
@@ -55,6 +57,12 @@ enum TerminalJumper {
         // with the chat's own sidebar entry there to click.
         if session.agent == .cursor {
             return activateApp(bundleID: cursorBundleID).map { .jumped(app: $0) } ?? .notLocatable
+        }
+        // Copilot chats live in a VS Code window. VS Code has no link to one
+        // chat either, but opening the chat's folder in it focuses the window
+        // that folder is open in, which is where the chat is.
+        if session.agent == .vsCode {
+            return focusVSCode(session).map { .jumped(app: $0) } ?? .notLocatable
         }
         // A Claude UI session opens in the app by its desktop id, whether or
         // not the desktop app currently has a process running for it.
@@ -129,6 +137,31 @@ enum TerminalJumper {
     // MARK: - Apps
 
     private static let cursorBundleID = "com.todesktop.230313mzl4w4u92"
+
+    /// The VS Code edition a session came from, by its entrypoint.
+    private static func vsCodeBundleID(_ session: Session) -> String {
+        session.entrypoint == "vscode-insiders" ? "com.microsoft.VSCodeInsiders" : "com.microsoft.VSCode"
+    }
+
+    /// Focuses the VS Code window showing the session's folder, or just brings
+    /// VS Code forward for a chat in an empty window. Like `activateApp`, never
+    /// launches VS Code: with it closed, the chat is not on screen anywhere.
+    private static func focusVSCode(_ session: Session) -> String? {
+        let bundleID = vsCodeBundleID(session)
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+        else { return nil }
+        let name = app.localizedName ?? "VS Code"
+        var isDir: ObjCBool = false
+        guard !session.cwd.isEmpty, let appURL = app.bundleURL,
+              FileManager.default.fileExists(atPath: session.cwd, isDirectory: &isDir), isDir.boolValue
+        else { return app.activate() ? name : nil }
+        NSWorkspace.shared.open(
+            [URL(fileURLWithPath: session.cwd)],
+            withApplicationAt: appURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
+        return name
+    }
 
     /// Brings a running app forward. Never launches one: if it is not running,
     /// the session it would show cannot be live either.

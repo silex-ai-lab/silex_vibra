@@ -101,4 +101,10 @@ public enum VibraPaths {
     public static var cursorStateDB: URL {
         home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb")
     }
+    /// VS Code's `User` directories: the stable release, then Insiders.
+    public static var vsCodeUserDirectories: [URL] {
+        ["Code", "Code - Insiders"].map {
+            home.appendingPathComponent("Library/Application Support/\($0)/User")
+        }
+    }
 }
