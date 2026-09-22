@@ -406,8 +406,8 @@ struct AttentionNotifierTests {
     }
 
     @Test func scheduledTaskNameIsOnlyReadFromALeadingTag() {
-        #expect(scheduledTaskName(in: #"<scheduled-task name="suoya-hourly-sync" file="/x/SKILL.md">"#)
-            == "suoya-hourly-sync")
+        #expect(scheduledTaskName(in: #"<scheduled-task name="hourly-sync" file="/x/SKILL.md">"#)
+            == "hourly-sync")
         // A prompt that merely mentions the tag is not a scheduled run.
         #expect(scheduledTaskName(in: #"what does <scheduled-task name="x"> mean?"#) == nil)
         // Anything but a short slug is refused rather than trusted as a label.
