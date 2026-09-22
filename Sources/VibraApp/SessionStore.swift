@@ -57,6 +57,8 @@ final class SessionStore {
                 VibraPaths.claudeProjects,
                 VibraPaths.codexSessions,
                 VibraPaths.home.appendingPathComponent(".claude/sessions"),
+                // Cursor writes its agent state into this directory's database.
+                VibraPaths.cursorStateDB.deletingLastPathComponent(),
                 // Archiving or renaming in the Claude UI only touches this.
                 VibraPaths.home.appendingPathComponent(
                     "Library/Application Support/Claude/claude-code-sessions"),

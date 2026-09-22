@@ -98,4 +98,7 @@ public enum VibraPaths {
     public static var openCodeDB: URL {
         home.appendingPathComponent(".local/share/opencode/opencode.db")
     }
+    public static var cursorStateDB: URL {
+        home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb")
+    }
 }

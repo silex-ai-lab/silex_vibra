@@ -13,6 +13,7 @@ enum AdapterRegistry {
             ClaudeCodeAdapter(),
             CodexAdapter(),
             OpenCodeAdapter(),
+            CursorAdapter(),
         ]
     }
 

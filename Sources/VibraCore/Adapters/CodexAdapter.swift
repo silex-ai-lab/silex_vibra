@@ -161,6 +161,9 @@ struct CodexCheckpoint: AdapterCheckpoint {
     var sessionID: String?
     var cwd: String?
     var model: String?
+    /// `session_meta.originator`: "codex-tui" (interactive CLI), "codex_exec"
+    /// (headless `codex exec`), or a desktop app / IDE extension's own name.
+    var originator: String?
     var usage = TokenUsage.zero
     var earliest: Date?
     var latest: Date?
@@ -194,6 +197,7 @@ struct CodexCheckpoint: AdapterCheckpoint {
             if sessionID == nil { sessionID = payload["session_id"] as? String }
             if cwd == nil { cwd = payload["cwd"] as? String }
             if model == nil { model = Self.findModel(in: payload) }
+            if originator == nil { originator = payload["originator"] as? String }
         case "turn_context":
             if cwd == nil {
                 cwd = (payload["cwd"] as? String) ?? (payload["workspace_roots"] as? [String])?.first
@@ -246,7 +250,8 @@ struct CodexCheckpoint: AdapterCheckpoint {
             startedAt: started,
             lastActivity: last,
             usage: usage,
-            lastEvent: lastEvent
+            lastEvent: lastEvent,
+            entrypoint: originator
         )
     }
 

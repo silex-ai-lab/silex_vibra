@@ -79,11 +79,12 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         URL(fileURLWithPath: cwd).lastPathComponent
     }
 
-    /// Started with nobody at the keyboard: a scheduled task run, or a headless
-    /// `claude -p` / SDK run (entrypoint "sdk-cli"), such as a launchd job.
+    /// Started with nobody at the keyboard: a scheduled task run, a headless
+    /// `claude -p` / SDK run (entrypoint "sdk-cli"), or a `codex exec` run
+    /// (originator "codex_exec"), such as a launchd or agent-fleet job.
     /// Finishing its turn is the job being done, not a question for anyone.
     public var isUnattended: Bool {
-        scheduledTask != nil || entrypoint == "sdk-cli"
+        scheduledTask != nil || entrypoint == "sdk-cli" || entrypoint == "codex_exec"
     }
 
     /// Whether this session's current state is worth a notification.

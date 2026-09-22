@@ -8,12 +8,14 @@ public enum AgentKind: String, Codable, Sendable, CaseIterable {
     case claudeCode
     case codex
     case openCode
+    case cursor
 
     public var displayName: String {
         switch self {
         case .claudeCode: "Claude Code"
         case .codex: "Codex"
         case .openCode: "OpenCode"
+        case .cursor: "Cursor"
         }
     }
 
@@ -23,6 +25,7 @@ public enum AgentKind: String, Codable, Sendable, CaseIterable {
         case .claudeCode: "asterisk"
         case .codex: "chevron.left.forwardslash.chevron.right"
         case .openCode: "cube"
+        case .cursor: "cursorarrow.rays"
         }
     }
 }

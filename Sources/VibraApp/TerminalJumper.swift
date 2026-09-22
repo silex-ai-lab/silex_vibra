@@ -40,15 +40,22 @@ enum TerminalJumper {
     /// might work. Checks exactly what `jump` checks first, so a session this
     /// calls a dead end is one `jump` would fail on for the same reason.
     static func deadEnd(for session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome? {
-        if session.desktopSessionID != nil { return nil }
+        if session.desktopSessionID != nil || session.agent == .cursor { return nil }
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
         }
         if found.desktopSessionID != nil { return nil }
-        return found.tty == nil ? .noControllingTerminal : nil
+        if found.tty == nil, hostApp(of: found.pid) == nil { return .noControllingTerminal }
+        return nil
     }
 
     static func jump(to session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome {
+        // Cursor's agents live inside the Cursor window. It publishes no link
+        // Vibra can open a specific chat with, so the app is brought forward
+        // with the chat's own sidebar entry there to click.
+        if session.agent == .cursor {
+            return activateApp(bundleID: cursorBundleID).map { .jumped(app: $0) } ?? .notLocatable
+        }
         // A Claude UI session opens in the app by its desktop id, whether or
         // not the desktop app currently has a process running for it.
         if let desktopID = session.desktopSessionID, openInClaudeApp(desktopID) {
@@ -63,7 +70,15 @@ enum TerminalJumper {
         if let desktopID = found.desktopSessionID, openInClaudeApp(desktopID) {
             return .jumped(app: "Claude")
         }
-        guard let tty = found.tty else { return .noControllingTerminal }
+        // No terminal: the agent runs inside an app - the Codex app, or an
+        // IDE extension (Codex or Claude Code in VS Code or Cursor). Bring
+        // that app forward rather than report a dead end.
+        guard let tty = found.tty else {
+            if let app = hostApp(of: found.pid), app.activate() {
+                return .jumped(app: app.localizedName ?? "its app")
+            }
+            return .noControllingTerminal
+        }
 
         switch focusITerm(tty: tty) {
         case .focused: return .jumped(app: "iTerm2")
@@ -109,6 +124,38 @@ enum TerminalJumper {
               NSWorkspace.shared.urlForApplication(toOpen: url) != nil
         else { return false }
         return NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Apps
+
+    private static let cursorBundleID = "com.todesktop.230313mzl4w4u92"
+
+    /// Brings a running app forward. Never launches one: if it is not running,
+    /// the session it would show cannot be live either.
+    private static func activateApp(bundleID: String) -> String? {
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+              app.activate()
+        else { return nil }
+        return app.localizedName ?? bundleID
+    }
+
+    /// The nearest ancestor of `pid` that is a regular GUI app - one with a
+    /// Dock presence, which is what the user thinks of as "the app". Helpers
+    /// and background agents along the way are skipped, so an extension host
+    /// resolves to the editor and not to its helper process.
+    static func hostApp(of pid: Int32) -> NSRunningApplication? {
+        let table = ProcessInspector.processTable()
+        var current = pid
+        for _ in 0..<32 {
+            if let app = NSRunningApplication(processIdentifier: current),
+               app.activationPolicy == .regular,
+               app.bundleIdentifier != Bundle.main.bundleIdentifier {
+                return app
+            }
+            guard let parent = table[current]?.ppid, parent > 1 else { return nil }
+            current = parent
+        }
+        return nil
     }
 
     // MARK: - herdr
