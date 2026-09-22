@@ -220,6 +220,9 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
             print("FAIL: no terminal owns \(tty), and its ancestry names none Vibra can drive")
         }
     }
+    // Let asynchronous open requests (an editor window) be delivered before
+    // the process exits; the menu bar app outlives them anyway.
+    RunLoop.main.run(until: Date().addingTimeInterval(1))
     exit(0)
 }
 
@@ -336,8 +339,9 @@ if CommandLine.arguments.contains("--probe") {
     let engine = StateEngine()
     let now = Date()
     let window: TimeInterval = 12 * 3600
+    let editorLaunch = TerminalJumper.editorLaunchTimes()
     for adapter in AdapterRegistry.all() {
-        let sessions = adapter.discoverSessionsSafely()
+        let classified = adapter.discoverSessionsSafely()
             .filter { now.timeIntervalSince($0.lastActivity) <= window }
             .map { s -> Session in
                 var s = s
@@ -345,6 +349,7 @@ if CommandLine.arguments.contains("--probe") {
                 return s
             }
             .sorted { $0.lastActivity > $1.lastActivity }
+        let sessions = Session.settlingOrphaned(classified, editorLaunch: editorLaunch)
         total += sessions.count
         print("\(adapter.kind.displayName): available=\(adapter.isAvailable) sessions=\(sessions.count)")
         for s in sessions.prefix(5) {

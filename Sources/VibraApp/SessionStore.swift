@@ -145,7 +145,10 @@ final class SessionStore {
             return (live, claudeStatus, desktopIndex.load())
         }.value
         let enriched = Session.enriched(recent, desktop: desktop, live: claudeStatus)
-        let fresh = Session.withoutExited(enriched, live: live)
+        let fresh = Session.settlingOrphaned(
+            Session.withoutExited(enriched, live: live),
+            editorLaunch: TerminalJumper.editorLaunchTimes()
+        )
 
         guard fresh != sessions else { return }
         let previous = sessions

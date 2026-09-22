@@ -75,8 +75,11 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
     }
 
     /// Last path component of `cwd` - what the user actually recognizes.
+    ///
+    /// An editor chat with no folder open has an empty `cwd`, and resolving
+    /// that as a path names whatever directory Vibra happens to run in.
     public var projectName: String {
-        URL(fileURLWithPath: cwd).lastPathComponent
+        cwd.isEmpty ? "(no folder)" : URL(fileURLWithPath: cwd).lastPathComponent
     }
 
     /// Started with nobody at the keyboard: a scheduled task run, a headless
@@ -156,6 +159,54 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
             // by deep link either way. Unattended runs are the exception -
             // a finished scheduled run is done, not parked.
             return session.desktopSessionID != nil && !session.isUnattended
+        }
+    }
+
+    /// Bundle id of the editor app this session lives inside, for agents that
+    /// run in an editor window rather than in a process of their own.
+    public var editorBundleID: String? {
+        switch agent {
+        case .vsCode:
+            entrypoint == "vscode-insiders" ? "com.microsoft.VSCodeInsiders" : "com.microsoft.VSCode"
+        case .cursor:
+            "com.todesktop.230313mzl4w4u92"
+        default:
+            nil
+        }
+    }
+
+    /// Settles editor-hosted sessions whose editor is gone.
+    ///
+    /// VS Code stops a pending reply when it quits (it asks first), but leaves
+    /// the log saying "waiting for confirmation" or "in progress", and does not
+    /// correct it on relaunch. Read literally, that is a chat stuck on
+    /// "needs approval" for hours. A reply can only be live inside the editor
+    /// process that is running now, so a working, blocked or stalled session
+    /// is idle when its editor is not running, or when nothing has happened in
+    /// it since that editor launched.
+    ///
+    /// Cursor also leaves a turn you stopped looking exactly like one still
+    /// running (status "aborted"), so for Cursor a stall - minutes of silence
+    /// mid-turn - is read as a stopped turn: idle, not a warning.
+    ///
+    /// `editorLaunch` maps a bundle id to the launch time of its running copy;
+    /// an editor absent from it is not running.
+    public static func settlingOrphaned(_ sessions: [Session], editorLaunch: [String: Date]) -> [Session] {
+        sessions.map { session in
+            guard let bundleID = session.editorBundleID,
+                  [.working, .blocked, .stalled].contains(session.state)
+            else { return session }
+            if session.agent == .cursor, session.state == .stalled {
+                var settled = session
+                settled.state = .idle
+                return settled
+            }
+            if let launched = editorLaunch[bundleID], session.lastActivity >= launched {
+                return session
+            }
+            var settled = session
+            settled.state = .idle
+            return settled
         }
     }
 

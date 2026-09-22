@@ -63,10 +63,30 @@ too. Vibra never launches VS Code: if it is closed, nothing is on screen to
 jump to. Stable and Insiders are both read, and a click opens the edition the
 chat belongs to.
 
-Tested against VS Code 1.135. VS Code has changed this file format before (older
+**Quitting VS Code stops a pending reply** (it asks first), but VS Code leaves
+the chat's log saying "in progress" or "waiting for confirmation", and does not
+correct it when relaunched. Vibra therefore treats a working or blocked VS Code
+chat as idle when VS Code is not running, or when nothing has happened in the
+chat since VS Code last launched: a reply can only be live inside the VS Code
+process that started it.
+
+Tested live against VS Code 1.135: working, needs approval, your turn, a reply
+stopped by quitting, and click-to-focus. VS Code has changed this file format before (older
 releases kept each chat as one `.json` file), so a future release may need an
 adapter update. The adapter only reads `.jsonl` logs, so the older format is
 ignored rather than misread.
+
+### Cursor
+
+Cursor's agent and chat sessions (the Agents window and the editor's chat) are
+read from its state database. Cursor 3.18 writes less than earlier versions:
+it never marks a reply as "generating", and instead writes status `aborted`
+while a turn runs and `completed` when it ends. Vibra reads `aborted` as
+working. A turn you stopped is left `aborted` too, so a Cursor turn that goes
+quiet for five minutes is shown as idle rather than 🟡 stalled. A reply you
+have read is idle; 🟠 your turn relies on Cursor's own unread flag. The same
+"editor not running" rule as VS Code applies. Clicking a Cursor session brings
+Cursor forward; Cursor has no link to a single chat.
 
 *Visual Studio*, the Windows IDE, is not supported: Vibra is macOS-only, and
 Microsoft retired Visual Studio for Mac in August 2024.
@@ -442,10 +462,11 @@ layered on the menu bar, which is the real interface.
   click prompts for it. Vibra is ad-hoc signed, so rebuilding changes its
   identity and macOS may ask again.
 - **No weekly report card.**
-- **VS Code Copilot states come from VS Code's source, not a live run.** The
-  reply-state values were read out of VS Code 1.135's own serializer, and the
-  tests replay logs in that format, but a live Copilot session has not yet been
-  watched end to end through Vibra.
+- **Cursor's "your turn" and "needs approval" are unverified live.** In
+  testing, Cursor ran terminal commands without asking, and left its unread
+  flag off for the chat selected in its window even with another app in front,
+  so neither state was observed. Working and idle were verified on Cursor 3.18.
+- **Cursor reports no token usage**, so its sessions show 0 tokens.
 - **VS Code token counts are not a cost.** Copilot is billed per seat or by
   premium requests, not per token, and its model ids have no published rate,
   so a Copilot session shows its tokens and `n/a` for cost.
@@ -466,7 +487,14 @@ layered on the menu bar, which is the real interface.
   [Visual Studio Code](#visual-studio-code).
 - **Cursor.** Cursor agent and chat sessions, read from Cursor's state database
   under the same read-only contract as OpenCode's. Clicking one brings Cursor
-  forward.
+  forward. Reads Cursor 3.18's in-flight status (`aborted`), which is the only
+  sign it writes that a turn is running.
+- **Editor chats stopped by quitting settle to idle.** VS Code and Cursor leave a
+  stopped reply marked as pending; Vibra no longer shows it as working or
+  needing approval once the editor has quit or relaunched.
+- **Fixed:** clicking a VS Code chat said it had focused VS Code without doing
+  so; a chat with no folder was labelled with whatever folder Vibra ran in; a
+  finished Cursor reply or cancelled Copilot reply read as working for 30s.
 - **Codex app and IDE sessions.** `codex exec` runs count as unattended, and a
   Codex (or Claude Code) session hosted in an app rather than a terminal — the
   Codex desktop app, or an extension in VS Code or Cursor — jumps by bringing

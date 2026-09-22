@@ -72,9 +72,36 @@ struct CursorAdapterTests {
             workspacePath: "/w/app", status: "completed", generatingCount: 0
         )
         let session = CursorAdapter.session(from: row)
-        #expect(session?.lastEvent == .unknown)
+        #expect(session?.lastEvent == .settled)
         #expect(session?.displayName == "Cursor chat")
         #expect(session?.projectName == "app")
+    }
+
+    /// Measured on Cursor 3.18: at send the record is rewritten with status
+    /// "aborted" and the header is left alone until the reply is done.
+    @Test func aRecordNewerThanItsHeaderIsATurnInFlight() {
+        var row = CursorAdapter.Row(
+            id: "x", createdMS: 1_000, updatedMS: 14_930_000, name: "Kernel", hasUnread: false,
+            hasBlockingActions: false, isArchived: false, isDraft: false,
+            workspacePath: nil, status: "aborted", generatingCount: 0,
+            recordUpdatedMS: 15_003_000, checkpointMS: 15_005_000
+        )
+        let running = CursorAdapter.session(from: row)
+        #expect(running?.lastEvent == .producing)
+        #expect(running?.lastActivity == Date(timeIntervalSince1970: 15_005))
+
+        // Partway through, the header catches up; "aborted" still says running.
+        row.updatedMS = 15_003_000
+        #expect(CursorAdapter.session(from: row)?.lastEvent == .producing)
+
+        // Finished: header caught up, status completed.
+        row.updatedMS = 15_003_000
+        row.status = "completed"
+        #expect(CursorAdapter.session(from: row)?.lastEvent == .settled)
+
+        // A completed record touched later (renamed, reopened) is not a turn.
+        row.recordUpdatedMS = 16_000_000
+        #expect(CursorAdapter.session(from: row)?.lastEvent == .settled)
     }
 
     @Test func codexExecRunsAreUnattended() {

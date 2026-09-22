@@ -256,7 +256,7 @@ struct VSCodeChatCheckpoint: AdapterCheckpoint {
         case 4: lastEvent = .permissionPrompt
         case 0: lastEvent = .producing
         case 1, 3: lastEvent = .turnComplete
-        case 2: lastEvent = .unknown
+        case 2: lastEvent = .settled
         default:
             // No state recorded yet: the request was just sent.
             lastEvent = last.completedAtMS == nil ? .producing : .turnComplete

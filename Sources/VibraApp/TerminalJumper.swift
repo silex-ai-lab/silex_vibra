@@ -56,7 +56,7 @@ enum TerminalJumper {
         // Vibra can open a specific chat with, so the app is brought forward
         // with the chat's own sidebar entry there to click.
         if session.agent == .cursor {
-            return activateApp(bundleID: cursorBundleID).map { .jumped(app: $0) } ?? .notLocatable
+            return session.editorBundleID.flatMap(activateApp(bundleID:)).map { .jumped(app: $0) } ?? .notLocatable
         }
         // Copilot chats live in a VS Code window. VS Code has no link to one
         // chat either, but opening the chat's folder in it focuses the window
@@ -136,31 +136,39 @@ enum TerminalJumper {
 
     // MARK: - Apps
 
-    private static let cursorBundleID = "com.todesktop.230313mzl4w4u92"
-
-    /// The VS Code edition a session came from, by its entrypoint.
-    private static func vsCodeBundleID(_ session: Session) -> String {
-        session.entrypoint == "vscode-insiders" ? "com.microsoft.VSCodeInsiders" : "com.microsoft.VSCode"
+    /// Launch time of each running editor that hosts agent sessions, keyed by
+    /// bundle id. Feeds `Session.settlingOrphaned`.
+    static func editorLaunchTimes() -> [String: Date] {
+        var launched: [String: Date] = [:]
+        for id in ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.todesktop.230313mzl4w4u92"] {
+            let dates = NSRunningApplication.runningApplications(withBundleIdentifier: id).compactMap(\.launchDate)
+            if let earliest = dates.min() { launched[id] = earliest }
+        }
+        return launched
     }
 
     /// Focuses the VS Code window showing the session's folder, or just brings
     /// VS Code forward for a chat in an empty window. Like `activateApp`, never
     /// launches VS Code: with it closed, the chat is not on screen anywhere.
     private static func focusVSCode(_ session: Session) -> String? {
-        let bundleID = vsCodeBundleID(session)
-        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+        guard let bundleID = session.editorBundleID,
+              let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
         else { return nil }
-        let name = app.localizedName ?? "VS Code"
+        // Activate first: it is synchronous and reports whether it worked.
+        // Opening the folder is asynchronous and reports nothing in time, so
+        // on its own it claimed a jump that had not happened.
+        guard app.activate() else { return nil }
         var isDir: ObjCBool = false
-        guard !session.cwd.isEmpty, let appURL = app.bundleURL,
-              FileManager.default.fileExists(atPath: session.cwd, isDirectory: &isDir), isDir.boolValue
-        else { return app.activate() ? name : nil }
-        NSWorkspace.shared.open(
-            [URL(fileURLWithPath: session.cwd)],
-            withApplicationAt: appURL,
-            configuration: NSWorkspace.OpenConfiguration()
-        )
-        return name
+        if !session.cwd.isEmpty, let appURL = app.bundleURL,
+           FileManager.default.fileExists(atPath: session.cwd, isDirectory: &isDir), isDir.boolValue {
+            // Picks the window: VS Code focuses the one with this folder open.
+            NSWorkspace.shared.open(
+                [URL(fileURLWithPath: session.cwd)],
+                withApplicationAt: appURL,
+                configuration: NSWorkspace.OpenConfiguration()
+            )
+        }
+        return "VS Code"
     }
 
     /// Brings a running app forward. Never launches one: if it is not running,

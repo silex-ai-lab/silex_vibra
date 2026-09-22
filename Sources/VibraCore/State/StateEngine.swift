@@ -12,6 +12,10 @@ public enum LastEventKind: String, Codable, Sendable {
     case turnComplete
     /// Agent is sitting on a permission / approval prompt.
     case permissionPrompt
+    /// The agent itself says the turn is over and nothing is pending (a reply
+    /// you have already read, or one you cancelled). Idle however recent: the
+    /// write that recorded the ending is not a sign of work.
+    case settled
     /// Nothing recognizable.
     case unknown
 }
@@ -75,6 +79,9 @@ public struct StateEngine: Sendable {
             // Claimed to be mid-turn, then went silent. This is the case a
             // naive "is it running?" check reports as healthy forever.
             return .stalled
+
+        case .settled:
+            return .idle
 
         case .unknown:
             return quiet <= config.workingWindow ? .working : .idle

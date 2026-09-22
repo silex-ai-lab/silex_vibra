@@ -79,7 +79,7 @@ struct VSCodeAdapterTests {
 
         // Cancelling the reply settles the session rather than asking for you.
         try append([#"{"kind":1,"k":["requests",0,"modelState"],"v":{"value":2}}"#], to: file)
-        #expect(try adapter.discoverSessions().first?.lastEvent == .unknown)
+        #expect(try adapter.discoverSessions().first?.lastEvent == .settled)
     }
 
     @Test func pushTruncatesBeforeAppendingAndDeleteClears() throws {
@@ -114,6 +114,7 @@ struct VSCodeAdapterTests {
         #expect(sessions.map(\.id) == ["loose"])
         #expect(sessions.first?.cwd == "")
         #expect(sessions.first?.displayName == "Copilot chat")
+        #expect(sessions.first?.projectName == "(no folder)")
     }
 
     @Test func incrementalIngestMatchesFullParseAndSurvivesCompaction() async throws {
@@ -148,5 +149,49 @@ struct VSCodeAdapterTests {
         let encoded = String(decoding: try JSONEncoder().encode(sessions), as: UTF8.self)
         #expect(!String(describing: sessions).contains(Self.canary))
         #expect(!encoded.contains(Self.canary))
+    }
+}
+
+/// A reply can only be live inside the editor process running now.
+struct EditorOrphanTests {
+    private func session(_ agent: AgentKind, _ state: SessionState, at seconds: Double,
+                         entrypoint: String? = nil) -> Session {
+        let at = Date(timeIntervalSince1970: seconds)
+        return Session(id: "\(agent)-\(state)", agent: agent, cwd: "/p", state: state,
+                       startedAt: at, lastActivity: at, entrypoint: entrypoint)
+    }
+
+    @Test func pendingRepliesSettleWhenTheEditorQuitOrRelaunched() {
+        let vscode = "com.microsoft.VSCode"
+        let blocked = session(.vsCode, .blocked, at: 100, entrypoint: "vscode")
+
+        // Not running: VS Code stopped the reply when it quit.
+        #expect(Session.settlingOrphaned([blocked], editorLaunch: [:]).first?.state == .idle)
+        // Relaunched since: the log still says pending, but that process is gone.
+        #expect(Session.settlingOrphaned([blocked], editorLaunch: [vscode: Date(timeIntervalSince1970: 200)])
+            .first?.state == .idle)
+        // Running since before the request: genuinely waiting on you.
+        #expect(Session.settlingOrphaned([blocked], editorLaunch: [vscode: Date(timeIntervalSince1970: 50)])
+            .first?.state == .blocked)
+        // Insiders is its own app: stable VS Code running says nothing about it.
+        let insiders = session(.vsCode, .working, at: 100, entrypoint: "vscode-insiders")
+        #expect(Session.settlingOrphaned([insiders], editorLaunch: [vscode: Date(timeIntervalSince1970: 50)])
+            .first?.state == .idle)
+    }
+
+    @Test func finishedChatsAndTerminalAgentsAreUntouched() {
+        let done = session(.vsCode, .awaitingInput, at: 100, entrypoint: "vscode")
+        let cursor = session(.cursor, .working, at: 100)
+        let claude = session(.claudeCode, .blocked, at: 100)
+        let out = Session.settlingOrphaned([done, cursor, claude], editorLaunch: [:])
+        #expect(out.map(\.state) == [.awaitingInput, .idle, .blocked])
+    }
+
+    @Test func aStalledCursorTurnIsOneYouStopped() {
+        let cursorID = "com.todesktop.230313mzl4w4u92"
+        let launch = [cursorID: Date(timeIntervalSince1970: 50)]
+        let stalled = session(.cursor, .stalled, at: 100)
+        let working = session(.cursor, .working, at: 100)
+        #expect(Session.settlingOrphaned([stalled, working], editorLaunch: launch).map(\.state) == [.idle, .working])
     }
 }

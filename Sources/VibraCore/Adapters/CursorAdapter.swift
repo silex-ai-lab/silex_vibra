@@ -9,7 +9,8 @@ import SQLite3
 /// - Opened read-only (`SQLITE_OPEN_READONLY` plus a `mode=ro` file URI).
 /// - One hardcoded SELECT. It reads the `composerHeaders` table (Cursor's own
 ///   per-session summary) and, from each session's `composerData` record, only
-///   `status` and the length of `generatingBubbleIds`, extracted inside SQLite
+///   `status`, the length of `generatingBubbleIds` and two timestamps,
+///   extracted inside SQLite
 ///   with `json_extract` - the rest of that record (conversation text,
 ///   encryption keys) never leaves the database.
 /// - `ItemTable`, which holds the auth tokens, is never referenced.
@@ -48,7 +49,10 @@ public struct CursorAdapter: AgentAdapter {
         json_extract(h.value, '$.isDraft'), \
         json_extract(h.value, '$.workspaceIdentifier.uri.fsPath'), \
         json_extract(CAST(d.value AS TEXT), '$.status'), \
-        json_array_length(json_extract(CAST(d.value AS TEXT), '$.generatingBubbleIds')) \
+        json_array_length(json_extract(CAST(d.value AS TEXT), '$.generatingBubbleIds')), \
+        json_extract(CAST(d.value AS TEXT), '$.lastUpdatedAt'), \
+        json_extract(h.value, '$.conversationCheckpointLastUpdatedAt'), \
+        json_extract(CAST(d.value AS TEXT), '$.conversationCheckpointLastUpdatedAt') \
         FROM composerHeaders h \
         LEFT JOIN cursorDiskKV d ON d.key = 'composerData:' || h.composerId \
         WHERE h.isSubagent = 0 \
@@ -107,13 +111,34 @@ public struct CursorAdapter: AgentAdapter {
         var workspacePath: String?
         var status: String?
         var generatingCount: Int
+        /// When the session's full record was last written. Cursor writes it
+        /// the moment a message is sent; the header only catches up when the
+        /// turn ends.
+        var recordUpdatedMS: Int? = nil
+        /// Latest conversation checkpoint, which Cursor also writes mid-turn.
+        var checkpointMS: Int? = nil
+
+        /// A turn is running. Cursor 3.18 never writes "generating": at send
+        /// it rewrites the record with status "aborted" and keeps that until
+        /// the reply is done, when it becomes "completed". The header catches
+        /// up partway through the turn, so a record newer than its header only
+        /// covers the first seconds of a turn (measured 2026-09-22).
+        ///
+        /// A turn you stopped is left "aborted" too. The two are told apart by
+        /// silence: see `Session.settlingOrphaned`.
+        var isMidTurn: Bool {
+            if status == "aborted" { return true }
+            guard let record = recordUpdatedMS, let header = updatedMS else { return false }
+            return record > header && status != "completed"
+        }
     }
 
     /// Maps a row to a session, or nil for a draft or archived one.
     ///
     /// Cursor says outright what the other agents make Vibra infer: an action
     /// awaiting approval (`hasBlockingPendingActions`), a reply in progress
-    /// (`status` "generating", or bubbles still generating), and a finished
+    /// (`status` "generating", bubbles still generating, or - in Cursor 3.18,
+    /// which writes neither - `Row.isMidTurn`), and a finished
     /// reply nobody has looked at yet (`hasUnreadMessages`). Once read, a
     /// finished session is idle rather than "your turn" - you have seen it.
     static func session(from row: Row) -> Session? {
@@ -122,16 +147,20 @@ public struct CursorAdapter: AgentAdapter {
         let lastEvent: LastEventKind
         if row.hasBlockingActions {
             lastEvent = .permissionPrompt
-        } else if row.status == "generating" || row.generatingCount > 0 {
+        } else if row.status == "generating" || row.generatingCount > 0 || row.isMidTurn {
             lastEvent = .producing
         } else if row.hasUnread {
             lastEvent = .turnComplete
+        } else if row.status == "completed" {
+            lastEvent = .settled
         } else {
             lastEvent = .unknown
         }
 
         let created = Date(timeIntervalSince1970: Double(row.createdMS) / 1000)
-        let updated = row.updatedMS.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? created
+        let updated = [row.updatedMS, row.recordUpdatedMS, row.checkpointMS]
+            .compactMap { $0.map { Date(timeIntervalSince1970: Double($0) / 1000) } }
+            .max() ?? created
         let name = row.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         return Session(
             id: row.id,
@@ -159,7 +188,9 @@ public struct CursorAdapter: AgentAdapter {
             isDraft: sqlite3_column_int(statement, 7) != 0,
             workspacePath: text(statement, 8),
             status: text(statement, 9),
-            generatingCount: Int(sqlite3_column_int(statement, 10))
+            generatingCount: Int(sqlite3_column_int(statement, 10)),
+            recordUpdatedMS: int64(statement, 11),
+            checkpointMS: [int64(statement, 12), int64(statement, 13)].compactMap { $0 }.max()
         )
     }
 
@@ -175,6 +206,10 @@ public struct CursorAdapter: AgentAdapter {
             if let name = Self.text(statement, 1) { present.insert(name) }
         }
         return Self.headerColumns.allSatisfy { present.contains($0) }
+    }
+
+    private static func int64(_ statement: OpaquePointer?, _ index: Int32) -> Int? {
+        sqlite3_column_type(statement, index) == SQLITE_NULL ? nil : Int(sqlite3_column_int64(statement, index))
     }
 
     private static func text(_ statement: OpaquePointer?, _ index: Int32) -> String? {
