@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import VibraCore
 
-/// Agent transcripts are written by a live process, so vibra reads files that
+/// Agent transcripts are written by a live process, so Vibra reads files that
 /// may be empty, half-written, or outright corrupt. None of that may produce a
 /// bogus row or a crash.
 struct MalformedInputTests {

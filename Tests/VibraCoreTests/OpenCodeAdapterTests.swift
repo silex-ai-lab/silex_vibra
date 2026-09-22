@@ -136,7 +136,7 @@ struct OpenCodeAdapterTests {
 
         // In WAL mode the main .db size/mtime can stay fixed while data flows
         // through the -wal sidecar. Touching only the -wal must move the
-        // descriptor, or vibra goes permanently stale.
+        // descriptor, or Vibra goes permanently stale.
         let walURL = dir.appendingPathComponent("opencode.db-wal")
         try Data("wal data".utf8).write(to: walURL)
 

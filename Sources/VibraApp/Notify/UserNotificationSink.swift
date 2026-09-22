@@ -18,8 +18,8 @@ final class UserNotificationSink: NotificationSink {
         self.center = center
     }
 
-    /// Calls `handler` with the session id when the user clicks one of vibra's
-    /// notifications. Without a delegate a click only activates vibra, which has
+    /// Calls `handler` with the session id when the user clicks one of Vibra's
+    /// notifications. Without a delegate a click only activates Vibra, which has
     /// no window, so it looked like nothing happened.
     /// The handler receives the session id and the notification's own key, so
     /// the clicked notification can always be removed even when this process
@@ -68,18 +68,18 @@ final class UserNotificationSink: NotificationSink {
     func withdraw(keys: [String]) {
         guard !keys.isEmpty else { return }
         // Delivered only: a pending request would be one scheduled for later,
-        // and vibra never schedules — every notification is posted immediately
+        // and Vibra never schedules — every notification is posted immediately
         // with a nil trigger.
         center.removeDeliveredNotifications(withIdentifiers: keys)
     }
 
-    /// Removes every delivered vibra notification whose key is not in `keep`.
+    /// Removes every delivered Vibra notification whose key is not in `keep`.
     ///
     /// Notification Center outlives vibra. A run that ends without reaching
     /// `applicationWillTerminate` - `pkill`, a crash, a reinstall - leaves its
     /// notifications behind, and the next run has no record of them, so
     /// nothing ever withdrew them and clicking one could not clear it either.
-    /// Reconciling against what vibra currently vouches for removes them.
+    /// Reconciling against what Vibra currently vouches for removes them.
     func removeDelivered(except keep: Set<String>) {
         center.getDeliveredNotifications { delivered in
             let stale = delivered.map(\.request.identifier).filter { !keep.contains($0) }

@@ -7,7 +7,7 @@ import VibraCore
 /// startup. Which of them are actually *used* is decided by `AgentDetector`
 /// from what is on disk, not from this list.
 enum AdapterRegistry {
-    /// Every adapter vibra can speak, installed or not.
+    /// Every adapter Vibra can speak, installed or not.
     static func all() -> [any AgentAdapter] {
         [
             ClaudeCodeAdapter(),

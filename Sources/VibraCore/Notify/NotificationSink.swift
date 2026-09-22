@@ -1,6 +1,6 @@
 import Foundation
 
-/// One notification vibra wants delivered.
+/// One notification Vibra wants delivered.
 public struct AttentionNotification: Equatable, Sendable {
     /// Identifies the notification in Notification Center. Delivering again
     /// under the same key replaces the old one. See `Session.notificationKey`.

@@ -131,7 +131,7 @@ public struct ProcessLocator: Sendable {
 
     /// `hostSessionId` of a session the desktop app started. Held to the same
     /// shape the desktop app's own deep-link handler accepts, so nothing else
-    /// from the file can end up in a URL vibra opens.
+    /// from the file can end up in a URL Vibra opens.
     func desktopSessionID(in record: [String: Any]) -> String? {
         guard record["entrypoint"] as? String == "claude-desktop",
               let id = record["hostSessionId"] as? String,

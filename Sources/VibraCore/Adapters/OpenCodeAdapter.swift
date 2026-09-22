@@ -5,7 +5,7 @@ import SQLite3
 ///
 /// Security contract (all mandatory):
 /// - The file is opened read-only (`SQLITE_OPEN_READONLY` plus a `mode=ro`
-///   file URI), so vibra is structurally incapable of corrupting the live DB.
+///   file URI), so Vibra is structurally incapable of corrupting the live DB.
 /// - Only a hardcoded allowlist of columns on the `session` table is read.
 ///   `SELECT *` is never used.
 /// - The `account`, `credential`, `account_state`, and `control_account`
@@ -38,7 +38,7 @@ public struct OpenCodeAdapter: AgentAdapter {
 
     /// Change-detection descriptor for a SQLite database. In WAL mode the main
     /// `.db` file's size and mtime can stay FIXED while data flows through
-    /// `opencode.db-wal`; fingerprinting only the `.db` would make vibra go
+    /// `opencode.db-wal`; fingerprinting only the `.db` would make Vibra go
     /// permanently stale. Fold `-wal` (and `-shm`) in when they exist.
     static func describeDatabase(_ url: URL) -> SourceDescriptor? {
         guard let main = SourceDescriptor.describing(url) else { return nil }

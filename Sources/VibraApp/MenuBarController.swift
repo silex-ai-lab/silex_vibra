@@ -55,7 +55,7 @@ final class MenuBarController {
         store.start()
     }
 
-    /// Clears vibra's own delivered notifications on the way out.
+    /// Clears Vibra's own delivered notifications on the way out.
     ///
     /// A "waiting for you" banner that outlives the process is unactionable —
     /// the menu bar it points at is gone — so leaving it behind is noise the
@@ -70,15 +70,15 @@ final class MenuBarController {
         item.menu = buildMenu(sessions)
     }
 
-    /// e.g. "vibra 2▶ 1!"  - working count, then attention count.
+    /// e.g. "Vibra 2▶ 1!"  - working count, then attention count.
     private func summaryTitle(_ sessions: [Session]) -> String {
         let working = sessions.filter { $0.state == .working }.count
         let attention = sessions.filter { $0.state.needsAttention }.count
-        if sessions.isEmpty { return "vibra" }
+        if sessions.isEmpty { return "Vibra" }
         var parts: [String] = []
         if working > 0 { parts.append("\(working)▶") }
         if attention > 0 { parts.append("\(attention)!") }
-        return parts.isEmpty ? "vibra" : parts.joined(separator: " ")
+        return parts.isEmpty ? "Vibra" : parts.joined(separator: " ")
     }
 
     private func buildMenu(_ sessions: [Session]) -> NSMenu {
@@ -112,7 +112,7 @@ final class MenuBarController {
         menu.addItem(report)
         menu.addItem(NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r"))
         menu.items.last?.target = self
-        menu.addItem(NSMenuItem(title: "Quit vibra", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Vibra", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }
 
@@ -236,13 +236,13 @@ final class MenuBarController {
             )
         case .notPermitted(let app):
             explain(
-                "vibra isn't allowed to control \(app)",
+                "Vibra isn't allowed to control \(app)",
                 "macOS refused the Apple Event. Focusing a tab means asking "
                 + "\(app) which one owns the session's terminal, and that needs "
                 + "Automation permission.\n\nSystem Settings → Privacy & Security "
                 + "→ Automation → Vibra → enable \(app).\n\nIf Vibra isn't listed "
                 + "there yet, it has never been able to ask — reinstall with "
-                + "`make install` and try once more.\n\nNote: vibra is ad-hoc "
+                + "`make install` and try once more.\n\nNote: Vibra is ad-hoc "
                 + "signed, so rebuilding it changes its identity and macOS may "
                 + "ask again."
             )
@@ -266,7 +266,7 @@ final class MenuBarController {
             case .unknown:
                 explain(
                     "No terminal owns \(tty)",
-                    "Nothing in that process's ancestry is a terminal vibra "
+                    "Nothing in that process's ancestry is a terminal Vibra "
                     + "knows how to drive.\n\nvibra will not guess at a "
                     + "different tab."
                 )

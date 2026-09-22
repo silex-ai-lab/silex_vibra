@@ -1,4 +1,4 @@
-# vibra roadmap
+# Vibra roadmap
 
 Every step carries a **Goal**, the **Critical decisions** settled for it, and
 an **Acceptance** check. Decisions are recorded with their reasoning because
@@ -33,7 +33,7 @@ Current state: see [STATUS.md](STATUS.md).
 
 ## P0.1 — Stop re-parsing the world every 2 seconds
 
-**Goal.** Make steady-state polling cost approximately nothing, so vibra can
+**Goal.** Make steady-state polling cost approximately nothing, so Vibra can
 run all day instead of being quit after an hour.
 
 The app sustained ~97% CPU and 626 MB RSS. `SessionStore` polled every 2.0s and
@@ -54,7 +54,7 @@ second would otherwise look unchanged and the stale session would persist.
 
 **OpenCode is fingerprinted across its WAL files.** *Codex.* SQLite in WAL mode
 can change through `opencode.db-wal` while the main `.db` size and mtime sit
-still; fingerprinting only the `.db` would make vibra permanently stale.
+still; fingerprinting only the `.db` would make Vibra permanently stale.
 
 **Ingest runs on its own actor, off the main actor.** A full pass took 13.4s
 while the timer fired every 2s, so refreshes queued faster than they drained —
@@ -208,7 +208,7 @@ up would require exactly the cwd-based guessing this step ruled out.
 
 ## P1.2 — Usage figures stay local — **DECIDED**
 
-**Goal.** Show what usage costs without breaking the promise that makes vibra
+**Goal.** Show what usage costs without breaking the promise that makes Vibra
 worth trusting.
 
 ### Critical decisions
@@ -216,7 +216,7 @@ worth trusting.
 **No network egress, not even opt-in.** Both reviewers rejected the draft's
 opt-in option. *Codex:* an opt-in API call still makes an absolute "zero
 egress" claim false, so the promise would have to change *before* the feature,
-not alongside it. *DeepSeek:* zero-egress is vibra's entire trust story and its
+not alongside it. *DeepSeek:* zero-egress is Vibra's entire trust story and its
 only real differentiator against the paid competitor; a token-bearing egress
 path, even off by default, is a permanently different security posture.
 

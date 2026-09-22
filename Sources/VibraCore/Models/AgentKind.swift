@@ -1,9 +1,9 @@
 import Foundation
 
-/// A coding agent vibra can observe.
+/// A coding agent Vibra can observe.
 ///
 /// Every kind here is backed by an on-disk artifact the agent already writes
-/// for its own purposes. vibra never asks an agent to change how it behaves.
+/// for its own purposes. Vibra never asks an agent to change how it behaves.
 public enum AgentKind: String, Codable, Sendable, CaseIterable {
     case claudeCode
     case codex

@@ -2,7 +2,7 @@ import Foundation
 
 /// One observed agent session, normalized across all three sources.
 ///
-/// `id` is the agent's own session identifier, not something vibra invents, so
+/// `id` is the agent's own session identifier, not something Vibra invents, so
 /// a session keeps its identity across restarts of the monitor.
 public struct Session: Identifiable, Codable, Sendable, Equatable {
     public let id: String

@@ -30,7 +30,7 @@ enum TerminalJumper {
         /// No terminal claims this tty. `owner` says what the process ancestry
         /// actually shows, so the explanation can be true rather than likely.
         case noTerminalOwnsTTY(tty: String, owner: ProcessInspector.TTYOwner)
-        /// macOS refused the Apple Event. vibra has not been granted permission
+        /// macOS refused the Apple Event. Vibra has not been granted permission
         /// to control this terminal, which is a settings problem, not a tty one.
         case notPermitted(app: String)
     }

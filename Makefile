@@ -1,4 +1,4 @@
-# vibra - SwiftPM-only build. Deliberately no .xcodeproj: this must build on a
+# Vibra - SwiftPM-only build. Deliberately no .xcodeproj: this must build on a
 # machine with Command Line Tools and no Xcode installed.
 
 APP_NAME    := Vibra
@@ -57,7 +57,7 @@ app: build
 	  '  <key>LSUIElement</key><true/>' \
 	  '  <key>NSHumanReadableCopyright</key><string>MIT</string>' \
 	  '  <key>NSAppleEventsUsageDescription</key>' \
-	  '  <string>vibra asks your terminal which tab owns a session'"'"'s tty, so clicking a session can focus it.</string>' \
+	  '  <string>Vibra asks your terminal which tab owns a session'"'"'s tty, so clicking a session can focus it.</string>' \
 	  '</dict></plist>' > $(CONTENTS)/Info.plist
 	# Signing identity. SIGN_IDENTITY unset means ad-hoc, which is what a fresh
 	# clone gets and what CI should use.

@@ -79,7 +79,7 @@ public final class AttentionNotifier {
                 AttentionNotification(
                     key: session.notificationKey,
                     sessionID: session.id,
-                    title: "vibra",
+                    title: "Vibra",
                     body: "\(label) is waiting for you"
                 )
             )
@@ -148,7 +148,7 @@ public final class AttentionNotifier {
 
     /// Withdraws the notification under `key` whether or not this notifier
     /// delivered it. For a click: the notification the user clicked must go,
-    /// and it may be one an earlier run of vibra left behind, which this
+    /// and it may be one an earlier run of Vibra left behind, which this
     /// process has no record of.
     public func dismiss(key: String) {
         outstanding.removeValue(forKey: key)

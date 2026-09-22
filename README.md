@@ -1,4 +1,4 @@
-# vibra
+# Vibra
 
 A status companion for AI coding agents on macOS. It tells you which of your
 agent sessions are working, which are waiting on *you*, and what they have cost
@@ -7,7 +7,7 @@ so far — from the menu bar, without switching to a terminal to find out.
 Open source (MIT), local-only, no account, no telemetry, no network egress.
 
 ```
-vibra 2▶ 1!
+Vibra 2▶ 1!
 ─────────────────────────
 Claude Code
   🔵 vibra · working · 41k tok
@@ -22,7 +22,7 @@ OpenCode
 
 Agents work for minutes at a time. The expensive failure isn't a crash — it's an
 agent that finished four minutes ago and has been waiting for you ever since,
-in a terminal tab you aren't looking at. vibra watches the session files the
+in a terminal tab you aren't looking at. Vibra watches the session files the
 agents already write and surfaces the one that needs you.
 
 ## Supported agents
@@ -33,11 +33,11 @@ agents already write and surfaces the one that needs you.
 | Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
 | OpenCode (incl. DeepSeek) | `~/.local/share/opencode/opencode.db` |
 
-vibra never asks these tools to change what they write. It is a passive reader
+Vibra never asks these tools to change what they write. It is a passive reader
 of files that already exist.
 
 **It installs nothing into your agents** — no hooks, no plugins, no statusline,
-no wrapper binaries. Uninstalling vibra is deleting one `.app`.
+no wrapper binaries. Uninstalling Vibra is deleting one `.app`.
 
 ## Session states
 
@@ -57,11 +57,11 @@ one if you only ask "is it running?".
 A "your turn" notification is only posted on the *transition* into 🟠 or 🔴,
 debounced per session so state flicker cannot produce a burst — and it is
 **withdrawn as soon as it stops being true**: when you answer the session and it
-goes back to work, when the session disappears, and when vibra quits. Each
+goes back to work, when the session disappears, and when Vibra quits. Each
 session's notification is keyed by its session id, so one session that keeps
 wanting you replaces its own entry rather than stacking new ones.
 
-That matters because the alternative is what vibra used to do: banners
+That matters because the alternative is what Vibra used to do: banners
 accumulated in Notification Center for the whole login session, all of them
 about prompts that had long since been answered.
 
@@ -88,7 +88,7 @@ pulling changes.
 
 There is no Dock icon and no window — `LSUIElement` is set, so **the menu bar
 item is the entire app**. Look at the right-hand side of your menu bar for
-`vibra`, or a count like `2▶ 1!` when sessions are live.
+`Vibra`, or a count like `2▶ 1!` when sessions are live.
 
 To remove it completely:
 
@@ -158,7 +158,7 @@ make probe      # check adapter output without the UI
 
 ### Stable signing for development
 
-`make install` ad-hoc signs by default, which is fine for running vibra and not
+`make install` ad-hoc signs by default, which is fine for running Vibra and not
 fine for *granting it permissions*. macOS pins a TCC grant to whatever identity
 the bundle has, and an ad-hoc bundle has none — so the grant is pinned to the
 exact code hash instead. Measured on 2026-09-21, the Automation grant's stored
@@ -278,7 +278,7 @@ A model with no known published rate reports `n/a` rather than a guess.
 
 ## Privacy and safety
 
-vibra reads local files and sends nothing anywhere. Specifically:
+Vibra reads local files and sends nothing anywhere. Specifically:
 
 - **No network egress at all.** No account, no telemetry, no update ping.
 - `opencode.db` also contains `access_token`, `refresh_token` and a `credential`
@@ -311,9 +311,9 @@ pkill -f "Vibra.app/Contents/MacOS/Vibra"
 open /Applications/Vibra.app
 ```
 
-**Clicking a session says vibra isn't allowed to control iTerm2/Terminal.**
+**Clicking a session says Vibra isn't allowed to control iTerm2/Terminal.**
 That is macOS refusing the Apple Event. Grant it under System Settings →
-Privacy & Security → Automation → Vibra. To see what vibra thinks it is dealing
+Privacy & Security → Automation → Vibra. To see what Vibra thinks it is dealing
 with before clicking anything:
 
 ```sh
@@ -328,7 +328,7 @@ than a guess.
 **herdr panes are jumpable.** A session in a herdr pane is traced up its
 process ancestry to the herdr server; the ancestor directly below the server is
 the pane's shell, which herdr reports per pane as `shell_pid`, so the pane
-match is exact. vibra then runs `herdr agent focus` (or `tab focus`) against
+match is exact. Vibra then runs `herdr agent focus` (or `tab focus`) against
 that same herdr session and focuses the iTerm2/Terminal tab where a herdr
 client for it is attached. With no client attached anywhere there is nothing
 to look at, and the jump is reported as failed. To try it on any process:
@@ -343,11 +343,11 @@ The window is `activityWindow` in `Sources/VibraApp/SessionStore.swift`.
 **`swift test` says everything passed but nothing ran.** Use `make test`. See
 the testing note above — this is expected on a machine without Xcode.
 
-**Old notifications pile up, or one won't go away.** vibra removes any of its
+**Old notifications pile up, or one won't go away.** Vibra removes any of its
 notifications it is not currently tracking on every refresh, so leftovers from
-an earlier run (a `pkill`, a crash, a reinstall) clear themselves once vibra is
+an earlier run (a `pkill`, a crash, a reinstall) clear themselves once Vibra is
 running again. A clicked notification is always removed, whether or not the
-jump worked. To see what macOS still holds for vibra (ids only, never bodies):
+jump worked. To see what macOS still holds for Vibra (ids only, never bodies):
 
 ```sh
 /Applications/Vibra.app/Contents/MacOS/Vibra --notifications
@@ -391,7 +391,7 @@ layered on the menu bar, which is the real interface.
   the iTerm2 or Terminal tab it runs in, which means asking that app which tab
   owns the session's tty — an Apple Event, so macOS gates it behind
   **System Settings → Privacy & Security → Automation → Vibra**. The first
-  click prompts for it. vibra is ad-hoc signed, so rebuilding changes its
+  click prompts for it. Vibra is ad-hoc signed, so rebuilding changes its
   identity and macOS may ask again.
 - **No weekly report card.**
 - **OpenCode blocked-state detection is unverified.** The adapter does read the
@@ -404,7 +404,7 @@ layered on the menu bar, which is the real interface.
 
 ### 0.2.0 — 2026-09-21
 
-Four bugs, all in the parts of vibra that talk to macOS rather than to your
+Four bugs, all in the parts of Vibra that talk to macOS rather than to your
 agents, all found on macOS 15.7.3 and fixed. Full diagnosis and measurements in
 [docs/STATUS.md](docs/STATUS.md).
 
@@ -416,7 +416,7 @@ agents, all found on macOS 15.7.3 and fixed. Full diagnosis and measurements in
   accumulate in Notification Center for the whole login, including alerts for
   prompts you had already answered. They are keyed by session id now, so one
   session replaces its own entry instead of stacking, and the alert is pulled
-  when the session stops needing you, disappears, or vibra quits.
+  when the session stops needing you, disappears, or Vibra quits.
 - **Terminal jump-back works.** It never had Automation permission, because the
   bundle did not declare `NSAppleEventsUsageDescription` and so macOS never
   prompted for it. Every failure was also reported as "probably a multiplexer",

@@ -77,7 +77,7 @@ sessions gone from `current` do get pruned, so the dictionary stays bounded.
 
 1. **Push target** — branch + PR, or straight to `main`? (`silex_project`'s
    convention is direct-to-main; this repo has no stated rule.)
-2. **Withdraw on quit** — also clear vibra's delivered notifications when the
+2. **Withdraw on quit** — also clear Vibra's delivered notifications when the
    app terminates? Stale "waiting for you" banners outlive the process today.
    Cheap to add, but it is a behaviour choice, not a bug fix.
 

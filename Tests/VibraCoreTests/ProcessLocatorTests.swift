@@ -118,7 +118,7 @@ struct ProcessLocatorTests {
 
     // MARK: - TTY ownership
     //
-    // vibra used to report every failed jump as "probably a multiplexer".
+    // Vibra used to report every failed jump as "probably a multiplexer".
     // On a plain iTerm2 tab that is false, and it sent the user looking for a
     // tmux problem they did not have. These pin the walk itself; which owner a
     // developer's own shell reports is environment-dependent and deliberately

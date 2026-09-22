@@ -58,7 +58,7 @@ if CommandLine.arguments.contains("--test-notification") {
             return
         }
         let content = UNMutableNotificationContent()
-        content.title = "vibra"
+        content.title = "Vibra"
         content.body = "Test notification - delivery works on this machine."
         // A fixed identifier, for the same reason the real path uses the session
         // id: macOS replaces a delivered notification that reuses one. With a
@@ -109,7 +109,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--herdr-jump"),
     exit(1)
 }
 
-// `Vibra --notifications` prints vibra's notification authorization and every
+// `Vibra --notifications` prints Vibra's notification authorization and every
 // notification of its own that macOS still reports as delivered - ids only,
 // never bodies. Answers "why is Notification Center still full?" directly.
 // Run it from the installed bundle, like --test-notification.
@@ -208,7 +208,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
     case .notLocatable:               print("FAIL: no published session->process link, or process exited")
     case .noControllingTerminal:      print("FAIL: process has no controlling terminal")
     case .notPermitted(let app):
-        print("FAIL: macOS refused the Apple Event - vibra has no Automation permission for \(app)")
+        print("FAIL: macOS refused the Apple Event - Vibra has no Automation permission for \(app)")
         print("      System Settings > Privacy & Security > Automation > Vibra > enable \(app)")
     case .noTerminalOwnsTTY(let tty, let owner):
         switch owner {
@@ -217,7 +217,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
         case .emulator(let name):
             print("FAIL: \(tty) traces back to \(name), but it reported no tab owning that tty")
         case .unknown:
-            print("FAIL: no terminal owns \(tty), and its ancestry names none vibra can drive")
+            print("FAIL: no terminal owns \(tty), and its ancestry names none Vibra can drive")
         }
     }
     exit(0)

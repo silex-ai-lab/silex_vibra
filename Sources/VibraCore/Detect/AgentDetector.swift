@@ -1,6 +1,6 @@
 import Foundation
 
-/// What vibra found for one agent.
+/// What Vibra found for one agent.
 public struct AgentDetection: Sendable, Equatable {
     public let kind: AgentKind
     /// The agent has readable state on disk.

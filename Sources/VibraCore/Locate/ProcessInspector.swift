@@ -30,11 +30,11 @@ public enum ProcessInspector {
     /// What is sitting between a session's process and the window server.
     ///
     /// Answers "is this tty really inside a multiplexer?" instead of assuming
-    /// it. vibra used to report every failed jump as a multiplexer pane, which
+    /// it. Vibra used to report every failed jump as a multiplexer pane, which
     /// on a plain iTerm2 tab is simply false and sends people looking in the
     /// wrong place.
     public enum TTYOwner: Equatable, Sendable {
-        /// A terminal emulator holds it; a failed jump is vibra's problem.
+        /// A terminal emulator holds it; a failed jump is Vibra's problem.
         case emulator(String)
         /// tmux, screen or herdr holds it; its panes are invisible to the emulator.
         case multiplexer(String)

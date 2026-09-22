@@ -3,7 +3,7 @@ import Foundation
 /// Reads sessions for exactly one `AgentKind` from that agent's on-disk state.
 ///
 /// Adapters are read-only by contract. An adapter that writes to, locks, or
-/// otherwise mutates the observed agent's files is a bug: vibra is a passive
+/// otherwise mutates the observed agent's files is a bug: Vibra is a passive
 /// observer and must never be able to damage the tool it is watching.
 public protocol AgentAdapter: Sendable {
     var kind: AgentKind { get }
@@ -79,7 +79,7 @@ public enum VibraPaths {
     ///
     /// `VIBRA_HOME` overrides it. A bundled app resolves `NSHomeDirectory()`
     /// from the password database rather than `$HOME`, so without an explicit
-    /// override there is no way to point vibra at a fixture tree — which makes
+    /// override there is no way to point Vibra at a fixture tree — which makes
     /// it impossible to test behaviour against malformed or absent agent data
     /// without touching the developer's real sessions.
     public static var home: URL {

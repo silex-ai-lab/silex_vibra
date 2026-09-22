@@ -1,4 +1,4 @@
-# vibra — current status
+# Vibra — current status
 
 **0.2.0.** Last verified **2026-09-21** on macOS 15.7.3 / Swift 6.1.2 from a
 clean clone and a full clean rebuild; before that, **2026-09-20** on a Mac mini
@@ -10,7 +10,7 @@ refer to the 2026-09-20 run.
 
 ## Verdict
 
-**Usable day to day.** Phases 0, 0b, 1 and P2.1 are closed: vibra runs
+**Usable day to day.** Phases 0, 0b, 1 and P2.1 are closed: Vibra runs
 continuously at 0.0% idle CPU, reports live agent state, alerts when a session
 wants you, focuses the terminal a session runs in, and produces a rolling
 usage report.
@@ -80,7 +80,7 @@ so there was no stable handle to withdraw by, and repeat alerts for one
 session stacked as separate entries.
 
 Notifications are keyed by session id now, and pulled when the session leaves
-the attention state, disappears, or vibra quits. The debounce is deliberately
+the attention state, disappears, or Vibra quits. The debounce is deliberately
 **not** cleared on withdrawal: it exists for state flicker, and clearing it
 would let a flickering session re-alert. Seven new tests, including the two
 that would silently undo the feature (still-waiting must not withdraw, flicker
@@ -100,7 +100,7 @@ iTerm2 tab that is false, and it sent the user looking for a problem they did
 not have.
 
 The real chain: `Info.plist` had no `NSAppleEventsUsageDescription`, so macOS
-refused the Apple Event outright and **never prompted**, which meant vibra
+refused the Apple Event outright and **never prompted**, which meant Vibra
 could never be granted Automation permission at all. `NSAppleScript` returned
 -1743, `runAppleScript` collapsed every error into `false`, and the caller read
 that as "no terminal owns this tty".
@@ -204,13 +204,13 @@ approval; the certificate is what makes that approval outlive rebuilds.
 ## Safety properties
 
 - **No network egress at all.** No account, no telemetry, no update ping.
-- **vibra installs nothing into your agents.** No hooks, no plugins, no
+- **Vibra installs nothing into your agents.** No hooks, no plugins, no
   statusline, no wrapper binaries. It only reads files the agents already
   write. This matters: the commercial tool this project was written against
   installed 14 hooks into `~/.claude/settings.json`, 10 into
   `~/.codex/hooks.json`, a Copilot hook, an OpenCode plugin, and replaced the
   Claude Code status line — all of which survived uninstalling its app, and
-  kept executing on every tool call. vibra is a passive reader by design, so
+  kept executing on every tool call. Vibra is a passive reader by design, so
   removing it is deleting one `.app`.
 - **Secrets are never read.** `opencode.db` holds auth tokens beside session
   data, and `~/.claude/sessions/` holds `.key` files beside the JSON. The
@@ -225,7 +225,7 @@ approval; the certificate is what makes that approval outlive rebuilds.
 | RSS sometimes exceeds the 60 MB target | Minor. Flat within a run, not leaking. | AppKit + cold-parse high water |
 | **Notch overlay has never executed** | Unknown. `makeIfSupported()` returns nil on this hardware, so the code path has never run once. | Needs a notched Mac |
 | **Terminal.app jump path unexercised** | Unknown. It was not running during testing; only iTerm2 was verified. | Run Terminal.app and retest |
-| Jump-back unavailable inside multiplexers | tmux, screen and herdr own their panes' ptys, so the emulator never sees them. vibra refuses to guess. | Inherent; documented |
+| Jump-back unavailable inside multiplexers | tmux, screen and herdr own their panes' ptys, so the emulator never sees them. Vibra refuses to guess. | Inherent; documented |
 | OpenCode not locatable | Its sessions cannot be jumped to at all. | Needs a published pid link |
 | OpenCode usage cannot be dated | Its tokens appear on a separate "undated" line in the report. | Needs per-record timestamps |
 | OpenCode `ev=unknown` | Rarely reports `needs approval`. The column is read and tested; the live transition has never been observed. | Observe a real approval prompt |

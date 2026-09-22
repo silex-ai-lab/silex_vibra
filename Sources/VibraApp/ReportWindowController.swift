@@ -73,7 +73,7 @@ final class ReportWindowController {
             backing: .buffered,
             defer: false
         )
-        w.title = "vibra — usage"
+        w.title = "Vibra — usage"
         w.isReleasedWhenClosed = false
         w.center()
 
