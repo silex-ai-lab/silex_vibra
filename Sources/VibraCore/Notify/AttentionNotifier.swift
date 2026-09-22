@@ -142,6 +142,13 @@ public final class AttentionNotifier {
         sink.withdraw(keys: [key])
     }
 
+    /// Sessions whose notification is currently showing, sorted. One per key:
+    /// an older run of a scheduled task whose notification a newer run
+    /// replaced is not listed.
+    public var outstandingSessionIDs: [String] {
+        outstanding.values.sorted()
+    }
+
     /// Withdraws everything still outstanding. Used when the app is going away:
     /// a "waiting for you" banner that outlives the process it came from can no
     /// longer be acted on from the menu bar, so it is pure noise.

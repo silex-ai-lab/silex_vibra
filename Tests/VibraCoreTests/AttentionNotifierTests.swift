@@ -411,4 +411,21 @@ struct AttentionNotifierTests {
         #expect(scheduledTaskName(in: #"<scheduled-task name="a b">"#) == nil)
         #expect(scheduledTaskName(in: "plain prompt") == nil)
     }
+
+    @Test func outstandingSessionIDsListsOnlyTheLatestRunPerKey() {
+        let (notifier, _) = make()
+        notifier.notifyIfNeeded(
+            previous: [],
+            current: [
+                session("run1", .awaitingInput, task: "hourly-sync"),
+                session("run2", .awaitingInput, task: "hourly-sync"),
+                session("c", .blocked),
+            ],
+            now: t0
+        )
+        #expect(notifier.outstandingSessionIDs == ["c", "run2"])
+
+        notifier.dismiss(sessionID: "c")
+        #expect(notifier.outstandingSessionIDs == ["run2"])
+    }
 }

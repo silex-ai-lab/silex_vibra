@@ -137,41 +137,81 @@ final class MenuBarController {
     /// (tmux, screen, herdr), whose pty the terminal emulator never sees.
     @objc private func jumpToSession(_ sender: NSMenuItem) {
         guard let session = sender.representedObject as? Session else { return }
-        jump(to: session)
+        explainFailure(TerminalJumper.jump(to: session), for: session)
     }
 
     /// A clicked notification jumps like a clicked menu row, and on success the
-    /// notification is cleared: it has taken you where it pointed. A failed jump
-    /// leaves it in place, since the session still needs you and you have not
-    /// reached it.
+    /// notification is cleared: it has taken you where it pointed.
+    ///
+    /// A dead end - no process to find, or a process with no terminal - is not
+    /// going to change on a second click, so that notification is cleared too,
+    /// and so is every other outstanding one that is a dead end for the same
+    /// reason: you found out by clicking one, and should not have to click
+    /// through the rest to find out again. Any other failure (a permission, a
+    /// multiplexer pane) leaves the notification in place.
     ///
     /// A session no longer in the snapshot is not jumped to - its notification
     /// was already withdrawn when it left, so this is a click that raced that.
     private func jumpFromNotification(sessionID: String) {
         guard let session = store.sessions.first(where: { $0.id == sessionID }) else { return }
-        if jump(to: session) {
+        let outcome = TerminalJumper.jump(to: session)
+        switch outcome {
+        case .jumped:
             notifier.dismiss(sessionID: sessionID)
+        case .notLocatable, .noControllingTerminal:
+            notifier.dismiss(sessionID: sessionID)
+            let others = dismissDeadEndNotifications()
+            // Withdrawn before the alert: it is modal, and the sweep should not
+            // wait on the user reading it.
+            explainFailure(
+                outcome, for: session,
+                footnote: others > 0
+                    ? "\n\nCleared this notification and \(others) other"
+                      + (others == 1 ? "" : "s") + " that can't be reached either."
+                    : "\n\nCleared this notification."
+            )
+        case .notPermitted, .noTerminalOwnsTTY:
+            explainFailure(outcome, for: session)
         }
     }
 
-    /// Returns whether the terminal was focused. Every failure is explained
-    /// to the user before returning.
-    @discardableResult
-    private func jump(to session: Session) -> Bool {
-        switch TerminalJumper.jump(to: session) {
+    /// Withdraws every outstanding notification whose session is a dead end.
+    /// Returns how many it withdrew.
+    private func dismissDeadEndNotifications() -> Int {
+        let byID = Dictionary(
+            store.sessions.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var count = 0
+        for id in notifier.outstandingSessionIDs {
+            guard let session = byID[id], TerminalJumper.deadEnd(for: session) != nil
+            else { continue }
+            notifier.dismiss(sessionID: id)
+            count += 1
+        }
+        return count
+    }
+
+    /// Tells the user why a jump failed. Does nothing for a jump that worked.
+    private func explainFailure(
+        _ outcome: TerminalJumper.Outcome,
+        for session: Session,
+        footnote: String = ""
+    ) {
+        switch outcome {
         case .jumped:
-            return true
+            return
         case .notLocatable:
             explain(
                 "Can't find that session's process",
                 "\(session.agent.displayName) doesn't publish a link between its "
-                + "session and its process, or the process has exited."
+                + "session and its process, or the process has exited." + footnote
             )
         case .noControllingTerminal:
             explain(
                 "That session has no terminal",
                 "Its process is running without a controlling terminal, so there "
-                + "is no tab to focus."
+                + "is no tab to focus." + footnote
             )
         case .notPermitted(let app):
             explain(
@@ -211,7 +251,6 @@ final class MenuBarController {
                 )
             }
         }
-        return false
     }
 
     private func explain(_ title: String, _ detail: String) {

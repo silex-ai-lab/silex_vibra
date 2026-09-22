@@ -35,6 +35,18 @@ enum TerminalJumper {
         case notPermitted(app: String)
     }
 
+    /// Why a session cannot be jumped to at all, found without focusing
+    /// anything: `.notLocatable` or `.noControllingTerminal`, or nil when a jump
+    /// might work. Checks exactly what `jump` checks first, so a session this
+    /// calls a dead end is one `jump` would fail on for the same reason.
+    static func deadEnd(for session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome? {
+        guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
+            return .notLocatable
+        }
+        if found.desktopSessionID != nil { return nil }
+        return found.tty == nil ? .noControllingTerminal : nil
+    }
+
     static func jump(to session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome {
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
