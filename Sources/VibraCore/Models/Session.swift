@@ -37,6 +37,11 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
     /// source does not say.
     public var entrypoint: String?
 
+    /// The Claude desktop app's id for this session (`local_...`), when it is
+    /// a Claude UI session. Such a session opens in the app by deep link, with
+    /// or without a running process.
+    public var desktopSessionID: String?
+
     public init(
         id: String,
         agent: AgentKind,
@@ -50,7 +55,8 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         title: String? = nil,
         lastEvent: LastEventKind = .unknown,
         scheduledTask: String? = nil,
-        entrypoint: String? = nil
+        entrypoint: String? = nil,
+        desktopSessionID: String? = nil
     ) {
         self.id = id
         self.agent = agent
@@ -65,6 +71,7 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         self.lastEvent = lastEvent
         self.scheduledTask = scheduledTask
         self.entrypoint = entrypoint
+        self.desktopSessionID = desktopSessionID
     }
 
     /// Last path component of `cwd` - what the user actually recognizes.
@@ -93,11 +100,47 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         }
     }
 
+    /// What to call the session: its Claude UI title when it has one, else the
+    /// project folder.
+    public var displayName: String {
+        title ?? projectName
+    }
+
+    /// Applies what the Claude desktop app and Claude Code's live status files
+    /// know, and drops sessions archived in the Claude UI.
+    ///
+    /// - A Claude UI session gets its sidebar title and its desktop id.
+    /// - A running Claude session's own status overrides the transcript
+    ///   inference: `waiting` is blocked on the user (a permission prompt
+    ///   leaves no trace in the transcript), `busy` is working.
+    public static func enriched(
+        _ sessions: [Session],
+        desktop: [String: DesktopSessionInfo],
+        live: [String: ClaudeLiveStatus]
+    ) -> [Session] {
+        sessions.compactMap { session in
+            guard session.agent == .claudeCode else { return session }
+            var s = session
+            if let info = desktop[s.id] {
+                if info.isArchived { return nil }
+                s.desktopSessionID = info.localID
+                if let title = info.title { s.title = title }
+            }
+            switch live[s.id]?.status {
+            case "waiting": s.state = .blocked
+            case "busy": s.state = .working
+            default: break
+            }
+            return s
+        }
+    }
+
     /// Drops sessions whose process is known to have exited.
     ///
     /// `live` maps an agent to the ids that still have a process; an agent
     /// absent from it cannot tell (OpenCode publishes no link) and keeps every
-    /// session. A session working right now is kept regardless - output in the
+    /// session. A Claude UI session is kept while it is open in the app. A
+    /// session working right now is kept regardless - output in the
     /// last few seconds is proof enough of life, and a headless run that writes
     /// no session file must not vanish mid-job.
     public static func withoutExited(
@@ -106,7 +149,12 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
     ) -> [Session] {
         sessions.filter { session in
             guard let ids = live[session.agent] else { return true }
-            return session.state == .working || ids.contains(session.id)
+            if session.state == .working || ids.contains(session.id) { return true }
+            // A Claude UI session outlives its process: the desktop app parks
+            // it when quiet and respawns it on the next message, and it opens
+            // by deep link either way. Unattended runs are the exception -
+            // a finished scheduled run is done, not parked.
+            return session.desktopSessionID != nil && !session.isUnattended
         }
     }
 

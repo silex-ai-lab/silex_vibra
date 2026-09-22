@@ -60,7 +60,7 @@ final class NotchOverlay {
     func update(sessions: [Session]) {
         let attention = sessions.filter { $0.state.needsAttention }
         if let first = attention.first {
-            label.stringValue = "● \(first.projectName) needs you"
+            label.stringValue = "● \(first.displayName) needs you"
             panel.orderFrontRegardless()
         } else if sessions.contains(where: { $0.state == .working }) {
             let n = sessions.filter { $0.state == .working }.count

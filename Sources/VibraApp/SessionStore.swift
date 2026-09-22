@@ -20,6 +20,7 @@ final class SessionStore {
     private let activityWindow: TimeInterval
 
     private var watcher: FileWatcher?
+    private let desktopIndex = ClaudeDesktopIndex()
     private var safetyTimer: Timer?
 
     /// Coalescing guards. `refreshRequested` means "something changed while a
@@ -56,6 +57,9 @@ final class SessionStore {
                 VibraPaths.claudeProjects,
                 VibraPaths.codexSessions,
                 VibraPaths.home.appendingPathComponent(".claude/sessions"),
+                // Archiving or renaming in the Claude UI only touches this.
+                VibraPaths.home.appendingPathComponent(
+                    "Library/Application Support/Claude/claude-code-sessions"),
             ],
             pollURL: VibraPaths.openCodeDB
         ) { [weak self] _ in
@@ -116,16 +120,23 @@ final class SessionStore {
         // A session whose process has exited is over: jumping to it fails
         // with "can't find that session's process", and it has nothing more
         // to say. Off the main actor, since Codex's check runs lsof.
+        // Claude UI sessions are enriched first - title, desktop id, archived -
+        // since whether an exited process means "gone" depends on it.
         let candidates = Dictionary(grouping: recent, by: \.agent).mapValues { $0.map(\.id) }
-        let live = await Task.detached {
+        let desktopIndex = self.desktopIndex
+        let (live, claudeStatus, desktop) = await Task.detached {
             let locator = ProcessLocator()
+            let claudeStatus = locator.claudeLiveStatuses()
             var live: [AgentKind: Set<String>] = [:]
             for (agent, ids) in candidates {
-                live[agent] = locator.liveSessionIDs(agent: agent, candidates: ids)
+                live[agent] = agent == .claudeCode
+                    ? Set(claudeStatus.keys)
+                    : locator.liveSessionIDs(agent: agent, candidates: ids)
             }
-            return live
+            return (live, claudeStatus, desktopIndex.load())
         }.value
-        let fresh = Session.withoutExited(recent, live: live)
+        let enriched = Session.enriched(recent, desktop: desktop, live: claudeStatus)
+        let fresh = Session.withoutExited(enriched, live: live)
 
         guard fresh != sessions else { return }
         let previous = sessions

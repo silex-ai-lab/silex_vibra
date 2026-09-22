@@ -76,22 +76,31 @@ public struct ProcessLocator: Sendable {
     public func liveSessionIDs(agent: AgentKind, candidates: [String]) -> Set<String>? {
         switch agent {
         case .claudeCode:
-            var live = Set<String>()
-            for url in claudeSessionFiles() {
-                guard let data = try? Data(contentsOf: url),
-                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let id = obj["sessionId"] as? String,
-                      let pid = (obj["pid"] as? NSNumber)?.int32Value,
-                      ProcessInspector.isAlive(pid)
-                else { continue }
-                live.insert(id)
-            }
-            return live
+            return Set(claudeLiveStatuses().keys)
         case .codex:
             return Set(candidates.filter { locateCodex(sessionID: $0) != nil })
         case .openCode:
             return nil
         }
+    }
+
+    /// Status of every running Claude Code session, keyed by session id. A
+    /// file whose pid is gone is a session that exited without cleaning up.
+    public func claudeLiveStatuses() -> [String: ClaudeLiveStatus] {
+        var live: [String: ClaudeLiveStatus] = [:]
+        for url in claudeSessionFiles() {
+            guard let data = try? Data(contentsOf: url),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let id = obj["sessionId"] as? String,
+                  let pid = (obj["pid"] as? NSNumber)?.int32Value,
+                  ProcessInspector.isAlive(pid)
+            else { continue }
+            live[id] = ClaudeLiveStatus(
+                status: obj["status"] as? String,
+                waitingFor: obj["waitingFor"] as? String
+            )
+        }
+        return live
     }
 
     // MARK: - Claude Code

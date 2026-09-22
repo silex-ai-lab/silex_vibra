@@ -132,11 +132,14 @@ final class MenuBarController {
     private func row(for session: Session) -> NSMenuItem {
         let tokens = session.usage.total
         let tokenText = tokens >= 1000 ? "\(tokens / 1000)k tok" : "\(tokens) tok"
-        let label = "\(dot(session.state)) \(session.projectName) · \(stateText(session.state)) · \(tokenText)"
+        let label = "\(dot(session.state)) \(session.displayName) · \(stateText(session.state)) · \(tokenText)"
         let item = NSMenuItem(title: label, action: #selector(jumpToSession(_:)), keyEquivalent: "")
         item.target = self
         item.representedObject = session
-        item.toolTip = "\(session.cwd)\n\(session.model ?? "unknown model")\n\nClick to focus its terminal tab."
+        let action = session.desktopSessionID != nil
+            ? "Click to open it in Claude."
+            : "Click to focus its terminal tab."
+        item.toolTip = "\(session.cwd)\n\(session.model ?? "unknown model")\n\n\(action)"
         return item
     }
 

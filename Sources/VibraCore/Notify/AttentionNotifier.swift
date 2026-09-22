@@ -74,7 +74,7 @@ public final class AttentionNotifier {
             outstanding[session.notificationKey] = session.id
 
             let label = session.scheduledTask.map { "\($0) (\(session.projectName))" }
-                ?? session.projectName
+                ?? session.displayName
             sink.deliver(
                 AttentionNotification(
                     key: session.notificationKey,

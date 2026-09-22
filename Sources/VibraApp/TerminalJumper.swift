@@ -40,6 +40,7 @@ enum TerminalJumper {
     /// might work. Checks exactly what `jump` checks first, so a session this
     /// calls a dead end is one `jump` would fail on for the same reason.
     static func deadEnd(for session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome? {
+        if session.desktopSessionID != nil { return nil }
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
         }
@@ -48,6 +49,11 @@ enum TerminalJumper {
     }
 
     static func jump(to session: Session, locator: ProcessLocator = ProcessLocator()) -> Outcome {
+        // A Claude UI session opens in the app by its desktop id, whether or
+        // not the desktop app currently has a process running for it.
+        if let desktopID = session.desktopSessionID, openInClaudeApp(desktopID) {
+            return .jumped(app: "Claude")
+        }
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
         }
