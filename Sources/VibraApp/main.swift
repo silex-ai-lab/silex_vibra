@@ -95,6 +95,20 @@ if CommandLine.arguments.contains("--test-notification") {
     exit(0)
 }
 
+// `Vibra --herdr-jump <pid>` focuses the herdr pane running <pid> and the
+// terminal window showing it, then reports what it focused. Lets the herdr half
+// of jump-back be checked against any process, not only an agent session.
+if let i = CommandLine.arguments.firstIndex(of: "--herdr-jump"),
+   i + 1 < CommandLine.arguments.count,
+   let pid = Int32(CommandLine.arguments[i + 1]) {
+    if let app = TerminalJumper.focusHerdr(pid: pid) {
+        print("OK: focused in \(app)")
+        exit(0)
+    }
+    print("FAIL: \(pid) is not in a herdr pane, or no terminal shows that herdr session")
+    exit(1)
+}
+
 // `Vibra --notifications` prints vibra's notification authorization and every
 // notification of its own that macOS still reports as delivered - ids only,
 // never bodies. Answers "why is Notification Center still full?" directly.
@@ -302,6 +316,7 @@ if CommandLine.arguments.contains("--locate") {
                 let owner: String
                 switch ProcessInspector.ttyOwner(of: found.pid) {
                 case .emulator(let name):    owner = "emulator \(name) - jumpable"
+                case .multiplexer("herdr"):  owner = "multiplexer herdr - jumpable via herdr's CLI"
                 case .multiplexer(let name): owner = "multiplexer \(name) - not jumpable"
                 case .unknown:               owner = "unknown"
                 }

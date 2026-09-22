@@ -91,6 +91,13 @@ public enum ProcessInspector {
         return nil
     }
 
+    /// The whole process table, for walking ancestry in one read rather than
+    /// one `ps` per level. Empty if `ps` cannot be run.
+    public static func processTable() -> [Int32: ProcessEntry] {
+        guard let out = run("/bin/ps", ["-axo", "pid=,ppid=,tty=,args="]) else { return [:] }
+        return HerdrLocator.parseProcessTable(out)
+    }
+
     /// "/dev/ttys001" and "ttys001" both normalize to "ttys001", so a tty from
     /// `ps` compares equal to one reported by a terminal emulator.
     public static func normalizeTTY(_ raw: String) -> String {

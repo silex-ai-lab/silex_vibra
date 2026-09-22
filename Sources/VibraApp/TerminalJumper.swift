@@ -69,7 +69,11 @@ enum TerminalJumper {
         case .refused: return .notPermitted(app: "Terminal")
         case .notFound, .notRunning: break
         }
-        return .noTerminalOwnsTTY(tty: tty, owner: ProcessInspector.ttyOwner(of: found.pid))
+        let owner = ProcessInspector.ttyOwner(of: found.pid)
+        if owner == .multiplexer("herdr"), let app = focusHerdr(pid: found.pid) {
+            return .jumped(app: app)
+        }
+        return .noTerminalOwnsTTY(tty: tty, owner: owner)
     }
 
     /// Why an emulator did not end up focused.
@@ -99,6 +103,86 @@ enum TerminalJumper {
               NSWorkspace.shared.urlForApplication(toOpen: url) != nil
         else { return false }
         return NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - herdr
+
+    /// Focuses the herdr pane running `pid`, then the terminal window showing
+    /// that herdr session. Returns the emulator's name, or nil when either half
+    /// could not be done - focusing a pane in a herdr nobody is looking at is
+    /// not a jump.
+    ///
+    /// The pane is found exactly: herdr reports each pane's `shell_pid`, and the
+    /// session's ancestor directly below the herdr server is that shell. The
+    /// window is the one whose tab holds a herdr client for the same session.
+    static func focusHerdr(pid: Int32) -> String? {
+        let table = ProcessInspector.processTable()
+        guard let route = HerdrLocator.route(from: pid, in: table),
+              let herdr = herdrExecutable(route)
+        else { return nil }
+        let session = route.session.map { ["--session", $0] } ?? []
+
+        guard let listing = runHerdr(herdr, session + ["pane", "list"]) else { return nil }
+        var match: (paneID: String, tabID: String)?
+        for pane in HerdrLocator.parsePaneList(listing) {
+            guard let info = runHerdr(herdr, session + ["pane", "process-info", "--pane", pane.paneID])
+            else { continue }
+            if HerdrLocator.parseShellPID(info) == route.paneShellPID {
+                match = pane
+                break
+            }
+        }
+        guard let pane = match else { return nil }
+
+        // `agent focus` lands on the pane itself, splits included, and marks
+        // it seen; it only accepts panes herdr recognises an agent in, so fall
+        // back to the pane's tab. Both switch workspace as needed.
+        if runHerdr(herdr, session + ["agent", "focus", pane.paneID]) == nil {
+            guard runHerdr(herdr, session + ["tab", "focus", pane.tabID]) != nil else { return nil }
+        }
+
+        for clientTTY in HerdrLocator.clientTTYs(of: route.session, in: table) {
+            if focusITerm(tty: clientTTY) == .focused { return "herdr in iTerm2" }
+            if focusTerminalApp(tty: clientTTY) == .focused { return "herdr in Terminal" }
+        }
+        return nil
+    }
+
+    /// The server's own binary when its command line names it, else the usual
+    /// install locations. A GUI app's PATH does not include ~/.local/bin, so
+    /// "herdr" alone would not resolve.
+    private static func herdrExecutable(_ route: HerdrRoute) -> String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [route.executable].compactMap { $0 } + [
+            "\(home)/.local/bin/herdr",
+            "/opt/homebrew/bin/herdr",
+            "/usr/local/bin/herdr",
+            "\(home)/.cargo/bin/herdr",
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Runs one herdr CLI request and returns stdout, or nil on a non-zero
+    /// exit (herdr reports errors as JSON on stderr with status 1). Bounded:
+    /// a wedged server must not hang the click.
+    private static func runHerdr(_ executable: String, _ args: [String]) -> Data? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = args
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        let deadline = Date().addingTimeInterval(3)
+        while process.isRunning && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        if process.isRunning {
+            process.terminate()
+            return nil
+        }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        return process.terminationStatus == 0 ? data : nil
     }
 
     // MARK: - Emulators

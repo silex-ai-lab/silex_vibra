@@ -325,6 +325,18 @@ The `tty owner:` line reads `emulator iTerm2 - jumpable` for a normal tab and
 from walking the process ancestry, so it is a fact about your machine rather
 than a guess.
 
+**herdr panes are jumpable.** A session in a herdr pane is traced up its
+process ancestry to the herdr server; the ancestor directly below the server is
+the pane's shell, which herdr reports per pane as `shell_pid`, so the pane
+match is exact. vibra then runs `herdr agent focus` (or `tab focus`) against
+that same herdr session and focuses the iTerm2/Terminal tab where a herdr
+client for it is attached. With no client attached anywhere there is nothing
+to look at, and the jump is reported as failed. To try it on any process:
+
+```sh
+/Applications/Vibra.app/Contents/MacOS/Vibra --herdr-jump <pid>
+```
+
 **`make probe` says `total sessions: 0`.** Nothing has run in the last 12 hours.
 The window is `activityWindow` in `Sources/VibraApp/SessionStore.swift`.
 
