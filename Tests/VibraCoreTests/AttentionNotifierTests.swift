@@ -428,4 +428,25 @@ struct AttentionNotifierTests {
         notifier.dismiss(sessionID: "c")
         #expect(notifier.outstandingSessionIDs == ["run2"])
     }
+
+    @Test func dismissByKeyWithdrawsEvenAnUntrackedNotification() {
+        let (notifier, sink) = make()
+        // Left behind by an earlier run: this notifier never delivered it.
+        notifier.dismiss(key: "scheduled-task:hourly-sync")
+        #expect(sink.withdrawn == [["scheduled-task:hourly-sync"]])
+        #expect(notifier.outstandingKeys.isEmpty)
+    }
+
+    @Test func dismissByKeyStopsTrackingIt() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [], current: [session("a", .awaitingInput)], now: t0
+        )
+        #expect(notifier.outstandingKeys == ["a"])
+        notifier.dismiss(key: "a")
+        #expect(notifier.outstandingKeys.isEmpty)
+        // Quitting does not withdraw it a second time.
+        notifier.withdrawAll()
+        #expect(sink.withdrawn == [["a"]])
+    }
 }

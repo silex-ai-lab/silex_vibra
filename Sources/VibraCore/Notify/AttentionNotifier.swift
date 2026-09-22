@@ -142,6 +142,20 @@ public final class AttentionNotifier {
         sink.withdraw(keys: [key])
     }
 
+    /// Withdraws the notification under `key` whether or not this notifier
+    /// delivered it. For a click: the notification the user clicked must go,
+    /// and it may be one an earlier run of vibra left behind, which this
+    /// process has no record of.
+    public func dismiss(key: String) {
+        outstanding.removeValue(forKey: key)
+        sink.withdraw(keys: [key])
+    }
+
+    /// Keys of every notification this notifier currently vouches for.
+    public var outstandingKeys: Set<String> {
+        Set(outstanding.keys)
+    }
+
     /// Sessions whose notification is currently showing, sorted. One per key:
     /// an older run of a scheduled task whose notification a newer run
     /// replaced is not listed.

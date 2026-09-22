@@ -95,6 +95,34 @@ if CommandLine.arguments.contains("--test-notification") {
     exit(0)
 }
 
+// `Vibra --notifications` prints vibra's notification authorization and every
+// notification of its own that macOS still reports as delivered - ids only,
+// never bodies. Answers "why is Notification Center still full?" directly.
+// Run it from the installed bundle, like --test-notification.
+if CommandLine.arguments.contains("--notifications") {
+    guard Bundle.main.bundleIdentifier != nil else {
+        print("FAIL: no bundle identifier - run this from inside Vibra.app, not the bare binary")
+        exit(1)
+    }
+    let done = CompletionFlag()
+    UNUserNotificationCenter.current().getNotificationSettings { @Sendable settings in
+        print("authorization: \(settings.authorizationStatus.rawValue) (0 notDetermined, 1 denied, 2 authorized, 3 provisional)")
+        print("alert style: \(settings.alertStyle.rawValue) (0 none, 1 banner, 2 alert)")
+        UNUserNotificationCenter.current().getDeliveredNotifications { @Sendable delivered in
+            print("delivered: \(delivered.count)")
+            for n in delivered.sorted(by: { $0.date > $1.date }) {
+                print("  \(n.date)  \(n.request.identifier)")
+            }
+            done.signal()
+        }
+    }
+    let deadline = Date().addingTimeInterval(10)
+    while !done.isSet && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.1))
+    }
+    exit(0)
+}
+
 // `Vibra --bench` measures the Phase 0 acceptance criteria directly: how long
 // a cold pass takes, and how many bytes a warm pass reads when nothing has
 // changed. The warm number must be 0.

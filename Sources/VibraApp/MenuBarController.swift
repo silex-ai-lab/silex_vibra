@@ -14,6 +14,7 @@ final class MenuBarController {
     private lazy var reportWindow = ReportWindowController(adapters: AdapterRegistry.detected())
     private let notificationSink = UserNotificationSink()
     private lazy var notifier = AttentionNotifier(sink: notificationSink)
+    private var hasBaseline = false
 
     init(store: SessionStore) {
         self.store = store
@@ -31,15 +32,24 @@ final class MenuBarController {
         // bundle, so a refusal here must not be fatal - the menu bar still
         // shows everything the notification would have said.
         notificationSink.requestAuthorizationIfNeeded()
-        notificationSink.onClick { [weak self] sessionID in
-            self?.jumpFromNotification(sessionID: sessionID)
+        notificationSink.onClick { [weak self] sessionID, key in
+            self?.jumpFromNotification(sessionID: sessionID, key: key)
         }
 
         store.onChange = { [weak self] previous, sessions in
             guard let self else { return }
             self.render(sessions)
             self.notchOverlay?.update(sessions: sessions)
-            self.notifier.notifyIfNeeded(previous: previous, current: sessions)
+            // The first snapshot is a baseline, not a transition. Diffed
+            // against an empty list, every session that was already waiting -
+            // some for hours - looked like it had just started to, and each
+            // launch re-alerted for all of them.
+            self.notifier.notifyIfNeeded(
+                previous: self.hasBaseline ? previous : sessions,
+                current: sessions
+            )
+            self.hasBaseline = true
+            self.notificationSink.removeDelivered(except: self.notifier.outstandingKeys)
         }
         render(store.sessions)
         store.start()
@@ -148,18 +158,26 @@ final class MenuBarController {
     /// and so is every other outstanding one that is a dead end for the same
     /// reason: you found out by clicking one, and should not have to click
     /// through the rest to find out again. Any other failure (a permission, a
-    /// multiplexer pane) leaves the notification in place.
+    /// multiplexer pane) removes only the clicked notification: a clicked
+    /// notification never stays behind.
     ///
-    /// A session no longer in the snapshot is not jumped to - its notification
-    /// was already withdrawn when it left, so this is a click that raced that.
-    private func jumpFromNotification(sessionID: String) {
-        guard let session = store.sessions.first(where: { $0.id == sessionID }) else { return }
+    /// A session no longer in the snapshot is not jumped to, and its
+    /// notification is removed.
+    private func jumpFromNotification(sessionID: String, key: String) {
+        // Gone from the snapshot: exited, or aged out. Nothing to jump to, and
+        // nothing the notification says is still true.
+        guard let session = store.sessions.first(where: { $0.id == sessionID }) else {
+            notifier.dismiss(key: key)
+            return
+        }
         let outcome = TerminalJumper.jump(to: session)
         switch outcome {
         case .jumped:
-            notifier.dismiss(sessionID: sessionID)
+            notifier.dismiss(key: key)
         case .notLocatable, .noControllingTerminal:
-            notifier.dismiss(sessionID: sessionID)
+            // By key, not by session: the clicked notification is removed even
+            // when it was left behind by an earlier run and never tracked here.
+            notifier.dismiss(key: key)
             let others = dismissDeadEndNotifications()
             // Withdrawn before the alert: it is modal, and the sweep should not
             // wait on the user reading it.
@@ -171,6 +189,9 @@ final class MenuBarController {
                     : "\n\nCleared this notification."
             )
         case .notPermitted, .noTerminalOwnsTTY:
+            // Clicked, so it goes too. Only the sweep is withheld: a
+            // permission can be granted, so the others may still work.
+            notifier.dismiss(key: key)
             explainFailure(outcome, for: session)
         }
     }

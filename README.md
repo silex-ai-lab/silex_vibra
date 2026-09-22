@@ -331,6 +331,16 @@ The window is `activityWindow` in `Sources/VibraApp/SessionStore.swift`.
 **`swift test` says everything passed but nothing ran.** Use `make test`. See
 the testing note above — this is expected on a machine without Xcode.
 
+**Old notifications pile up, or one won't go away.** vibra removes any of its
+notifications it is not currently tracking on every refresh, so leftovers from
+an earlier run (a `pkill`, a crash, a reinstall) clear themselves once vibra is
+running again. A clicked notification is always removed, whether or not the
+jump worked. To see what macOS still holds for vibra (ids only, never bodies):
+
+```sh
+/Applications/Vibra.app/Contents/MacOS/Vibra --notifications
+```
+
 **Notifications never arrive.** Test it directly:
 
 ```sh

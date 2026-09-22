@@ -21,7 +21,10 @@ final class UserNotificationSink: NotificationSink {
     /// Calls `handler` with the session id when the user clicks one of vibra's
     /// notifications. Without a delegate a click only activates vibra, which has
     /// no window, so it looked like nothing happened.
-    func onClick(_ handler: @escaping @MainActor @Sendable (String) -> Void) {
+    /// The handler receives the session id and the notification's own key, so
+    /// the clicked notification can always be removed even when this process
+    /// never delivered it (one left behind by an earlier run).
+    func onClick(_ handler: @escaping @MainActor @Sendable (_ sessionID: String, _ key: String) -> Void) {
         let clickHandler = ClickHandler(onClick: handler)
         self.clickHandler = clickHandler
         center.delegate = clickHandler
@@ -69,14 +72,31 @@ final class UserNotificationSink: NotificationSink {
         // with a nil trigger.
         center.removeDeliveredNotifications(withIdentifiers: keys)
     }
+
+    /// Removes every delivered vibra notification whose key is not in `keep`.
+    ///
+    /// Notification Center outlives vibra. A run that ends without reaching
+    /// `applicationWillTerminate` - `pkill`, a crash, a reinstall - leaves its
+    /// notifications behind, and the next run has no record of them, so
+    /// nothing ever withdrew them and clicking one could not clear it either.
+    /// Reconciling against what vibra currently vouches for removes them.
+    func removeDelivered(except keep: Set<String>) {
+        center.getDeliveredNotifications { delivered in
+            let stale = delivered.map(\.request.identifier).filter { !keep.contains($0) }
+            guard !stale.isEmpty else { return }
+            // Looked up again rather than captured: the center is not Sendable,
+            // and this runs on the notification center's own queue.
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: stale)
+        }
+    }
 }
 
 /// Separate from the sink so it can be `Sendable`: the notification center
 /// calls its delegate off the main thread, and this holds nothing mutable.
 private final class ClickHandler: NSObject, UNUserNotificationCenterDelegate, Sendable {
-    private let onClick: @MainActor @Sendable (String) -> Void
+    private let onClick: @MainActor @Sendable (String, String) -> Void
 
-    init(onClick: @escaping @MainActor @Sendable (String) -> Void) {
+    init(onClick: @escaping @MainActor @Sendable (String, String) -> Void) {
         self.onClick = onClick
     }
 
@@ -89,10 +109,10 @@ private final class ClickHandler: NSObject, UNUserNotificationCenterDelegate, Se
         // not a request to be taken anywhere.
         if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
             let request = response.notification.request
-            let sessionID = request.content.userInfo["sessionID"] as? String
-                ?? request.identifier
+            let key = request.identifier
+            let sessionID = request.content.userInfo["sessionID"] as? String ?? key
             let onClick = self.onClick
-            Task { @MainActor in onClick(sessionID) }
+            Task { @MainActor in onClick(sessionID, key) }
         }
         completionHandler()
     }
