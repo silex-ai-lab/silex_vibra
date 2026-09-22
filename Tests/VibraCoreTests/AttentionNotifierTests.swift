@@ -12,7 +12,8 @@ struct AttentionNotifierTests {
         _ state: SessionState,
         cwd: String = "/fake/my-project",
         at: Date = Date(timeIntervalSince1970: 1_000_000),
-        task: String? = nil
+        task: String? = nil,
+        entrypoint: String? = nil
     ) -> Session {
         Session(
             id: id,
@@ -21,7 +22,8 @@ struct AttentionNotifierTests {
             state: state,
             startedAt: at,
             lastActivity: at,
-            scheduledTask: task
+            scheduledTask: task,
+            entrypoint: entrypoint
         )
     }
 
@@ -337,17 +339,18 @@ struct AttentionNotifierTests {
 
     @Test func runsOfOneScheduledTaskShareOneNotification() {
         let (notifier, sink) = make()
-        // Hourly job: every run is a new session.
+        // Hourly job: every run is a new session, and each one got stuck on
+        // an approval (finishing a turn alone would not notify - see below).
         notifier.notifyIfNeeded(
             previous: [],
-            current: [session("run1", .awaitingInput, task: "hourly-sync")],
+            current: [session("run1", .blocked, task: "hourly-sync")],
             now: t0
         )
         notifier.notifyIfNeeded(
-            previous: [session("run1", .awaitingInput, task: "hourly-sync")],
+            previous: [session("run1", .blocked, task: "hourly-sync")],
             current: [
-                session("run1", .awaitingInput, task: "hourly-sync"),
-                session("run2", .awaitingInput, task: "hourly-sync"),
+                session("run1", .blocked, task: "hourly-sync"),
+                session("run2", .blocked, task: "hourly-sync"),
             ],
             now: t0.addingTimeInterval(3600)
         )
@@ -361,15 +364,15 @@ struct AttentionNotifierTests {
     @Test func olderRunResolvingDoesNotPullTheNewerRunsNotification() {
         let (notifier, sink) = make()
         let both = [
-            session("run1", .awaitingInput, task: "hourly-sync"),
-            session("run2", .awaitingInput, task: "hourly-sync"),
+            session("run1", .blocked, task: "hourly-sync"),
+            session("run2", .blocked, task: "hourly-sync"),
         ]
         notifier.notifyIfNeeded(previous: [], current: both, now: t0)
 
         // run1 ages out; run2 still waits. The shared notification is run2's.
         notifier.notifyIfNeeded(
             previous: both,
-            current: [session("run2", .awaitingInput, task: "hourly-sync")],
+            current: [session("run2", .blocked, task: "hourly-sync")],
             now: t0.addingTimeInterval(60)
         )
         #expect(sink.withdrawn.isEmpty)
@@ -380,7 +383,7 @@ struct AttentionNotifierTests {
 
         // run2 resolving does.
         notifier.notifyIfNeeded(
-            previous: [session("run2", .awaitingInput, task: "hourly-sync")],
+            previous: [session("run2", .blocked, task: "hourly-sync")],
             current: [session("run2", .working, task: "hourly-sync")],
             now: t0.addingTimeInterval(120)
         )
@@ -392,8 +395,8 @@ struct AttentionNotifierTests {
         notifier.notifyIfNeeded(
             previous: [],
             current: [
-                session("a", .awaitingInput, task: "hourly-sync"),
-                session("b", .awaitingInput, task: "nightly-report"),
+                session("a", .blocked, task: "hourly-sync"),
+                session("b", .blocked, task: "nightly-report"),
                 session("c", .awaitingInput),
             ],
             now: t0
@@ -417,8 +420,8 @@ struct AttentionNotifierTests {
         notifier.notifyIfNeeded(
             previous: [],
             current: [
-                session("run1", .awaitingInput, task: "hourly-sync"),
-                session("run2", .awaitingInput, task: "hourly-sync"),
+                session("run1", .blocked, task: "hourly-sync"),
+                session("run2", .blocked, task: "hourly-sync"),
                 session("c", .blocked),
             ],
             now: t0
@@ -448,5 +451,45 @@ struct AttentionNotifierTests {
         // Quitting does not withdraw it a second time.
         notifier.withdrawAll()
         #expect(sink.withdrawn == [["a"]])
+    }
+
+    // MARK: - Unattended jobs
+
+    @Test func unattendedJobFinishingItsTurnDoesNotNotify() {
+        let (notifier, sink) = make()
+        notifier.notifyIfNeeded(
+            previous: [
+                session("sched", .working, task: "hourly-sync"),
+                session("headless", .working, entrypoint: "sdk-cli"),
+                session("human", .working, entrypoint: "cli"),
+            ],
+            current: [
+                session("sched", .awaitingInput, task: "hourly-sync"),
+                session("headless", .awaitingInput, entrypoint: "sdk-cli"),
+                session("human", .awaitingInput, entrypoint: "cli"),
+            ],
+            now: t0
+        )
+        #expect(sink.delivered.map(\.sessionID) == ["human"])
+    }
+
+    @Test func unattendedJobStuckOnApprovalStillNotifies() {
+        let (notifier, sink) = make()
+        // Finished a turn (quiet), then hit a permission prompt: that one
+        // needs someone, scheduled or not.
+        notifier.notifyIfNeeded(
+            previous: [session("sched", .awaitingInput, task: "hourly-sync")],
+            current: [session("sched", .blocked, task: "hourly-sync")],
+            now: t0
+        )
+        #expect(sink.delivered.map(\.sessionID) == ["sched"])
+
+        // Approved, and it finished: the alert is withdrawn, not left behind.
+        notifier.notifyIfNeeded(
+            previous: [session("sched", .blocked, task: "hourly-sync")],
+            current: [session("sched", .awaitingInput, task: "hourly-sync")],
+            now: t0.addingTimeInterval(30)
+        )
+        #expect(sink.withdrawnIDs == ["scheduled-task:hourly-sync"])
     }
 }

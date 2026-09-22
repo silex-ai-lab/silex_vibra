@@ -350,7 +350,7 @@ if CommandLine.arguments.contains("--probe") {
         for s in sessions.prefix(5) {
             let cost = aggregator.cost(for: s)
             let costText = cost.map { String(format: "$%.4f", $0) } ?? "n/a"
-            print("  - \(s.projectName) [\(s.state.rawValue)] ev=\(s.lastEvent.rawValue) \(s.usage.total) tok \(costText) model=\(s.model ?? "?")\(s.scheduledTask.map { " task=\($0)" } ?? "")")
+            print("  - \(s.projectName) [\(s.state.rawValue)] ev=\(s.lastEvent.rawValue) \(s.usage.total) tok \(costText) model=\(s.model ?? "?")\(s.scheduledTask.map { " task=\($0)" } ?? "")\(s.entrypoint.map { " via=\($0)" } ?? "")\(s.isUnattended ? " unattended" : "")")
         }
     }
     print("total sessions: \(total)")

@@ -22,6 +22,10 @@ import Foundation
 /// hourly job pile up one notification per run. Keyed by task, each run
 /// replaces the last and only the latest is ever shown.
 ///
+/// Only `Session.wantsNotification` states notify: an unattended job (a
+/// scheduled task, a headless run) finishing its turn is not a question for
+/// anyone, so it only notifies when stuck on an approval.
+///
 /// Holds no system dependency and takes its clock as a parameter, so the rules
 /// can be tested without a signed bundle, user authorization, or waiting a
 /// real minute for the debounce to expire.
@@ -55,10 +59,10 @@ public final class AttentionNotifier {
         )
 
         for session in current {
-            guard session.state.needsAttention else { continue }
+            guard session.wantsNotification else { continue }
 
             // Rule 1: staying in an attention state is not a transition.
-            if previousByID[session.id]?.state.needsAttention == true { continue }
+            if previousByID[session.id]?.wantsNotification == true { continue }
 
             // Rule 2: debounce per (session, state).
             let key = "\(session.id)|\(session.state.rawValue)"
@@ -93,7 +97,7 @@ public final class AttentionNotifier {
         guard !outstanding.isEmpty else { return }
 
         let stillNeedsAttention = Set(
-            current.filter { $0.state.needsAttention }.map(\.id)
+            current.filter { $0.wantsNotification }.map(\.id)
         )
         let resolved = outstanding
             .filter { !stillNeedsAttention.contains($0.value) }

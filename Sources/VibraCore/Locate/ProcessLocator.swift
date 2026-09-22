@@ -64,6 +64,36 @@ public struct ProcessLocator: Sendable {
         }
     }
 
+    // MARK: - Liveness
+
+    /// Which of `candidates` still have a running process, for the agents
+    /// that publish a session->process link. Nil for an agent that publishes
+    /// none (OpenCode): not knowing is not the same as knowing it exited.
+    ///
+    /// Claude Code is one directory read for all candidates. Codex is one
+    /// `lsof` per candidate, because its lock file outlives the process and
+    /// only an open handle proves it is still running.
+    public func liveSessionIDs(agent: AgentKind, candidates: [String]) -> Set<String>? {
+        switch agent {
+        case .claudeCode:
+            var live = Set<String>()
+            for url in claudeSessionFiles() {
+                guard let data = try? Data(contentsOf: url),
+                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let id = obj["sessionId"] as? String,
+                      let pid = (obj["pid"] as? NSNumber)?.int32Value,
+                      ProcessInspector.isAlive(pid)
+                else { continue }
+                live.insert(id)
+            }
+            return live
+        case .codex:
+            return Set(candidates.filter { locateCodex(sessionID: $0) != nil })
+        case .openCode:
+            return nil
+        }
+    }
+
     // MARK: - Claude Code
 
     /// Reads only `*.json`. The same directory holds `<pid>.<hash>.key` files,

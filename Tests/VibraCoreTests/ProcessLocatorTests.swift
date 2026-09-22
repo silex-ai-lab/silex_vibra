@@ -181,4 +181,33 @@ struct ProcessLocatorTests {
             "entrypoint": "claude-desktop", "hostSessionId": "local_abc-123",
         ]) == "local_abc-123")
     }
+
+    // MARK: - Liveness
+
+    @Test func liveClaudeIDsAreThoseWithARunningProcess() throws {
+        let me = ProcessInfo.processInfo.processIdentifier
+        let tree = try makeTree(claude: [
+            "\(me).json": #"{"pid":\#(me),"sessionId":"alive"}"#,
+            "999999.json": #"{"pid":999999,"sessionId":"exited"}"#,
+        ])
+        defer { try? FileManager.default.removeItem(at: tree.root) }
+        let locator = ProcessLocator(claudeSessionsDir: tree.claudeDir, codexLocksDir: tree.codexDir)
+        #expect(locator.liveSessionIDs(agent: .claudeCode, candidates: []) == ["alive"])
+        // OpenCode cannot tell, which must not read as "all exited".
+        #expect(locator.liveSessionIDs(agent: .openCode, candidates: ["x"]) == nil)
+    }
+
+    @Test func exitedSessionsAreDroppedButUnknownAndWorkingAreKept() {
+        let at = Date(timeIntervalSince1970: 1_000_000)
+        func s(_ id: String, _ agent: AgentKind, _ state: SessionState) -> Session {
+            Session(id: id, agent: agent, cwd: "/p", state: state, startedAt: at, lastActivity: at)
+        }
+        let kept = Session.withoutExited([
+            s("live", .claudeCode, .awaitingInput),
+            s("gone", .claudeCode, .awaitingInput),
+            s("gone-but-writing", .claudeCode, .working),
+            s("oc", .openCode, .idle),
+        ], live: [.claudeCode: ["live"]])
+        #expect(kept.map(\.id) == ["live", "gone-but-writing", "oc"])
+    }
 }

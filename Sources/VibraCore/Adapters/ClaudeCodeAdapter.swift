@@ -161,6 +161,7 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
     var lastRecordType: String?
     var lastAssistantStopReason: String?
     var scheduledTask: String?
+    var entrypoint: String?
     var sawFirstPrompt = false
     var parsedRecords = 0
 
@@ -179,6 +180,7 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
         if sessionID == nil { sessionID = (record["sessionId"] as? String) ?? (record["session_id"] as? String) }
         if cwd == nil { cwd = record["cwd"] as? String }
         if gitBranch == nil { gitBranch = record["gitBranch"] as? String }
+        if entrypoint == nil { entrypoint = record["entrypoint"] as? String }
 
         // Only the first typed prompt, and only the task's name from it: a
         // scheduled run opens with `<scheduled-task name="..." ...>`. The rest
@@ -239,7 +241,8 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
             lastActivity: last,
             usage: usage,
             lastEvent: lastEvent,
-            scheduledTask: scheduledTask
+            scheduledTask: scheduledTask,
+            entrypoint: entrypoint
         )
     }
 }

@@ -49,7 +49,14 @@ final class SessionStore {
         Task { await self.requestRefresh() }
 
         watcher = FileWatcher(
-            watchedDirectories: [VibraPaths.claudeProjects, VibraPaths.codexSessions],
+            // ~/.claude/sessions too: an exiting session only deletes its
+            // <pid>.json there, and without this it lingered in the menu until
+            // the safety rescan.
+            watchedDirectories: [
+                VibraPaths.claudeProjects,
+                VibraPaths.codexSessions,
+                VibraPaths.home.appendingPathComponent(".claude/sessions"),
+            ],
             pollURL: VibraPaths.openCodeDB
         ) { [weak self] _ in
             Task { @MainActor in await self?.requestRefresh() }
@@ -91,7 +98,7 @@ final class SessionStore {
         let raw = await ingest.refresh()
         let now = Date()
 
-        let fresh = raw
+        let recent = raw
             .filter { now.timeIntervalSince($0.lastActivity) <= activityWindow }
             .map { session -> Session in
                 // Adapters report WHAT happened; StateEngine decides what that
@@ -105,6 +112,20 @@ final class SessionStore {
                 return s
             }
             .sorted { $0.lastActivity > $1.lastActivity }
+
+        // A session whose process has exited is over: jumping to it fails
+        // with "can't find that session's process", and it has nothing more
+        // to say. Off the main actor, since Codex's check runs lsof.
+        let candidates = Dictionary(grouping: recent, by: \.agent).mapValues { $0.map(\.id) }
+        let live = await Task.detached {
+            let locator = ProcessLocator()
+            var live: [AgentKind: Set<String>] = [:]
+            for (agent, ids) in candidates {
+                live[agent] = locator.liveSessionIDs(agent: agent, candidates: ids)
+            }
+            return live
+        }.value
+        let fresh = Session.withoutExited(recent, live: live)
 
         guard fresh != sessions else { return }
         let previous = sessions
