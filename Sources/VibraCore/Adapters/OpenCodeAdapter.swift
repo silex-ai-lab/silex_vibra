@@ -76,6 +76,8 @@ public struct OpenCodeAdapter: AgentAdapter {
         []
     }
 
+    public var reportsUndatedTotals: Bool { true }
+
     // MARK: - Allowlist
 
     /// The single table this adapter may read.

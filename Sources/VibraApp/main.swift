@@ -341,7 +341,8 @@ if CommandLine.arguments.contains("--locate") {
 if CommandLine.arguments.contains("--dump-sessions") {
     let all = CommandLine.arguments.contains("--all")
     let store = all
-        ? SessionStore(adapters: AdapterRegistry.all(), activityWindow: .infinity, horizon: nil)
+        ? SessionStore(adapters: AdapterRegistry.all(),
+                       overrides: .init(activityWindow: .infinity, horizon: nil))
         : SessionStore(adapters: AdapterRegistry.all())
     nonisolated(unsafe) var finished = false
     Task { @MainActor in
@@ -392,15 +393,84 @@ if CommandLine.arguments.contains("--probe") {
     exit(total > 0 ? 0 : 2)
 }
 
-// `Vibra --show-report [--snapshot <path>]` launches the GUI, opens the usage
-// report, optionally writes the window's own rendered pixels to a PNG, and
-// reports what it rendered. Used to confirm the window actually draws.
-if CommandLine.arguments.contains("--show-report") {
-    let snapshotPath = CommandLine.arguments.firstIndex(of: "--snapshot").flatMap { i -> String? in
+/// The value after `flag` on the command line, if any.
+func argument(after flag: String) -> String? {
+    CommandLine.arguments.firstIndex(of: flag).flatMap { i in
         i + 1 < CommandLine.arguments.count ? CommandLine.arguments[i + 1] : nil
     }
+}
+
+// `Vibra --query [--attention] [--agent <kind>]` prints the menu's live
+// sessions as JSON, for scripts and agents. Same pipeline and settings as the
+// menu. Never titles or message content.
+if CommandLine.arguments.contains("--query") {
+    let agentFilter = argument(after: "--agent")
+    if let agentFilter, AgentKind(rawValue: agentFilter) == nil {
+        FileHandle.standardError.write(Data(
+            "unknown agent \(agentFilter); one of: \(AgentKind.allCases.map(\.rawValue).joined(separator: ", "))\n".utf8))
+        exit(1)
+    }
+    let store = SessionStore(adapters: AdapterRegistry.detected())
+    nonisolated(unsafe) var status: Int32? = nil
+    Task { @MainActor in
+        await store.requestRefresh()
+        let output = QueryOutput(
+            sessions: store.sessions,
+            settings: store.settings,
+            now: Date(),
+            attentionOnly: CommandLine.arguments.contains("--attention"),
+            agent: agentFilter.flatMap(AgentKind.init(rawValue:))
+        )
+        if let data = try? output.json() {
+            FileHandle.standardOutput.write(data)
+            FileHandle.standardOutput.write(Data("\n".utf8))
+            status = 0
+        } else {
+            status = 1
+        }
+    }
+    let deadline = Date().addingTimeInterval(300)
+    while status == nil && Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(status ?? 1)
+}
+
+// `Vibra --history-stats [--days N]` counts the questions the History window
+// would show, per day and agent. Counts only - never question text.
+if CommandLine.arguments.contains("--history-stats") {
+    let days = HistoryIndex.clampDays(argument(after: "--days").flatMap(Int.init) ?? 7)
+    let ingest = HistoryIngest(adapters: AdapterRegistry.all())
+    nonisolated(unsafe) var finished = false
+    Task.detached {
+        let records = await ingest.collect(windowDays: days)
+        let bytes = await ingest.lastBytesRead
+        let index = HistoryIndex.build(records, windowDays: days, now: Date())
+        print(HistoryStats.format(index, windowDays: days, bytesRead: bytes), terminator: "")
+        finished = true
+    }
+    let deadline = Date().addingTimeInterval(300)
+    while !finished && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(finished ? 0 : 1)
+}
+
+// `Vibra --show-report | --show-history | --show-settings [--snapshot <path>]`
+// launches the GUI, opens that window, optionally writes the window's own
+// rendered pixels to a PNG, and reports what it rendered. Used to confirm the
+// window actually draws.
+let showWindow = ["--show-report", "--show-history", "--show-settings"]
+    .first { CommandLine.arguments.contains($0) }
+if let showWindow {
+    let snapshotPath = argument(after: "--snapshot")
     let app = NSApplication.shared
-    let controller = ReportWindowController(adapters: AdapterRegistry.all())
+    let controller: any RenderableWindow
+    switch showWindow {
+    case "--show-history": controller = HistoryWindowController(adapters: AdapterRegistry.all())
+    case "--show-settings": controller = SettingsWindowController()
+    default: controller = ReportWindowController(adapters: AdapterRegistry.all())
+    }
     let delegate = ReportOnlyDelegate(controller: controller, snapshotPath: snapshotPath)
     app.delegate = delegate
     app.setActivationPolicy(.regular)

@@ -8,7 +8,7 @@ import VibraCore
 /// polling path. The window shows a loading line first rather than blocking
 /// the menu.
 @MainActor
-final class ReportWindowController {
+final class ReportWindowController: RenderableWindow {
     private var window: NSWindow?
     private var textView: NSTextView?
     private let adapters: [any AgentAdapter]
@@ -27,12 +27,7 @@ final class ReportWindowController {
     /// needs no Screen Recording grant — the app is only rendering itself.
     @discardableResult
     func snapshot(to url: URL) -> Bool {
-        guard let view = window?.contentView,
-              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
-        else { return false }
-        view.cacheDisplay(in: view.bounds, to: rep)
-        guard let png = rep.representation(using: .png, properties: [:]) else { return false }
-        return (try? png.write(to: url)) != nil
+        snapshotContent(of: window, to: url)
     }
 
     /// Rendered text, for verifying content without an image.

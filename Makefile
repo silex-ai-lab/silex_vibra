@@ -3,14 +3,14 @@
 
 APP_NAME    := Vibra
 BUNDLE_ID   := ai.silexlab.vibra
-VERSION := 0.2.0
+VERSION := 0.3.0
 CONFIG      := release
 BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
 BIN_SRC     := .build/$(CONFIG)/VibraApp
 
-.PHONY: all build app run test clean fmt install uninstall probe bench restart
+.PHONY: all build app run test clean fmt install uninstall probe bench restart query
 
 all: app
 
@@ -115,6 +115,11 @@ run: app
 # project names and states - never message content.
 probe: build
 	@$(BIN_SRC) --probe
+
+# The menu's live sessions as JSON, for scripts and agents. Reads the same
+# ai.silexlab.vibra settings as the installed app. Never message content.
+query: build
+	@$(BIN_SRC) --query
 
 # Phase 0 acceptance check: a refresh where nothing changed must read 0 bytes.
 bench: build

@@ -39,6 +39,19 @@ public protocol AgentAdapter: Sendable {
     /// time, and its totals are reported as undated rather than guessed at.
     func usageSamples(from records: [String]) -> [UsageSample]
 
+    /// True for an adapter whose store keeps per-session token totals with no
+    /// per-record timestamps. The report then counts its sessions' totals on
+    /// the "undated" line instead of guessing a day for them.
+    var reportsUndatedTotals: Bool { get }
+
+    /// A fresh per-source question extractor for the History window, or nil
+    /// when this adapter's JSONL sources hold no history Vibra reads — then
+    /// `HistoryIngest` does not open them at all.
+    func historyExtractor() -> (any HistoryExtractor)?
+
+    /// Questions from a database store since `cutoff`. History window only.
+    func storedQuestions(since cutoff: Date) -> [QuestionRecord]
+
     /// Folds one source's new input into its previous state.
     func update(
         source: SourceDescriptor,
@@ -54,6 +67,15 @@ public extension AgentAdapter {
 
     /// Default: no per-record attribution available.
     func usageSamples(from records: [String]) -> [UsageSample] { [] }
+
+    /// Default: usage, if any, is dated per record.
+    var reportsUndatedTotals: Bool { false }
+
+    /// Default: no history.
+    func historyExtractor() -> (any HistoryExtractor)? { nil }
+
+    /// Default: no stored history.
+    func storedQuestions(since cutoff: Date) -> [QuestionRecord] { [] }
 
     /// Default: ignore the incremental input and full-parse.
     func update(
@@ -97,6 +119,9 @@ public enum VibraPaths {
     }
     public static var openCodeDB: URL {
         home.appendingPathComponent(".local/share/opencode/opencode.db")
+    }
+    public static var hermesStateDB: URL {
+        home.appendingPathComponent(".hermes/state.db")
     }
     public static var cursorStateDB: URL {
         home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb")

@@ -15,6 +15,7 @@ enum AdapterRegistry {
             OpenCodeAdapter(),
             CursorAdapter(),
             VSCodeAdapter(),
+            HermesAdapter(),
         ]
     }
 

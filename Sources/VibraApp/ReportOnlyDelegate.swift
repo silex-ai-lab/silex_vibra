@@ -6,10 +6,10 @@ import VibraCore
 /// without Screen Recording permission.
 @MainActor
 final class ReportOnlyDelegate: NSObject, NSApplicationDelegate {
-    private let controller: ReportWindowController
+    private let controller: any RenderableWindow
     private let snapshotPath: String?
 
-    init(controller: ReportWindowController, snapshotPath: String?) {
+    init(controller: any RenderableWindow, snapshotPath: String?) {
         self.controller = controller
         self.snapshotPath = snapshotPath
     }

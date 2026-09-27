@@ -84,10 +84,12 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
 
     /// Started with nobody at the keyboard: a scheduled task run, a headless
     /// `claude -p` / SDK run (entrypoint "sdk-cli"), or a `codex exec` run
-    /// (originator "codex_exec"), such as a launchd or agent-fleet job.
+    /// (originator "codex_exec"), such as a launchd or agent-fleet job, or a
+    /// Hermes subagent (source "subagent"), which answers to its parent agent.
     /// Finishing its turn is the job being done, not a question for anyone.
     public var isUnattended: Bool {
         scheduledTask != nil || entrypoint == "sdk-cli" || entrypoint == "codex_exec"
+            || (agent == .hermes && entrypoint == "subagent")
     }
 
     /// Whether this session's current state is worth a notification.

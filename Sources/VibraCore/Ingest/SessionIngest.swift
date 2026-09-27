@@ -30,7 +30,7 @@ public actor SessionIngest {
     /// and parsing almost nothing. A transcript not written to in this long
     /// cannot contain activity inside the display window, so reading it is
     /// pure waste. Set nil to read everything (used by full-parse tests).
-    private let horizon: TimeInterval?
+    private var horizon: TimeInterval?
 
     public init(
         adapters: [any AgentAdapter],
@@ -39,6 +39,14 @@ public actor SessionIngest {
     ) {
         self.adapters = adapters
         self.reader = reader
+        self.horizon = horizon
+    }
+
+    /// Changes the freshness horizon, e.g. when the activity window setting
+    /// changes. Checkpoints of sources already read are kept, so this costs no
+    /// cold pass; a widened horizon just lets the next refresh consider
+    /// sources it used to skip.
+    public func setHorizon(_ horizon: TimeInterval?) {
         self.horizon = horizon
     }
 

@@ -1,5 +1,12 @@
 # Vibra — current status
 
+**0.3.0** (unreleased; branch `feat/history-query-settings-hermes`). Verified
+**2026-09-26** on macOS 15 / Swift 6.1.2: `make test` 156 tests, `make bench`
+PASS (0 bytes on an unchanged refresh; cold 0.47 s, 254 sessions), History,
+Settings and `--query` checked against this machine's real data, Hermes
+discovery checked against a real `state.db`. Adds Phase 4: History,
+`--query`, Settings, Hermes.
+
 **0.2.0.** Last verified **2026-09-21** on macOS 15.7.3 / Swift 6.1.2 from a
 clean clone and a full clean rebuild; before that, **2026-09-20** on a Mac mini
 (M4, macOS 26.6.2) against a 488-file, 339 MB session corpus, with `.build`,
@@ -30,6 +37,11 @@ target on this machine (P2.2).
 | 1 | P1.3 Weekly report card | ✅ Done |
 | 2 | P2.1 Auto-detect installed agents | ✅ Done |
 | 2 | P2.2 More adapters | ✅ Done — Cursor, VS Code Copilot Chat |
+| 4 | P4.1 History window (no storage) | ✅ Done 2026-09-26 |
+| 4 | P4.2 `--query` JSON | ✅ Done 2026-09-26 |
+| 4 | P4.3 Attention-rule settings | ✅ Done 2026-09-26 |
+| 4 | P4.4 Hermes adapter | ✅ Done 2026-09-26 — states fixture-only |
+| 4 | P4.5 OpenClaw adapter | ⏸ Deferred — not installed here |
 | 3 | P3.1 Developer ID signing | ⛔ Blocked on a user decision |
 | 3 | P3.2 Sparkle auto-update | Behind P3.1 |
 | 3 | P3.3 Homebrew cask | Behind P3.1 |

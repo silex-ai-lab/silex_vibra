@@ -118,6 +118,10 @@ public struct CodexAdapter: AgentAdapter {
         return samples
     }
 
+    // MARK: - History
+
+    public func historyExtractor() -> (any HistoryExtractor)? { CodexHistoryExtractor() }
+
     // MARK: - Full parse
 
     public func discoverSessions() throws -> [Session] {

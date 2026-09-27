@@ -111,6 +111,10 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         }
     }
 
+    // MARK: - History
+
+    public func historyExtractor() -> (any HistoryExtractor)? { ClaudeHistoryExtractor() }
+
     // MARK: - Full parse
 
     public func discoverSessions() throws -> [Session] {

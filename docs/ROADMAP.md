@@ -23,9 +23,35 @@ Current state: see [STATUS.md](STATUS.md).
 | 1 | P1.3 Weekly report card | **Done** 2026-09-20 |
 | 2 | P2.1 Auto-detect installed agents | **Done** 2026-09-20 |
 | 2 | P2.2 More adapters | **Done** — Cursor, VS Code Copilot Chat |
+| 4 | P4.1 History window (no storage) | **Done** 2026-09-26 |
+| 4 | P4.2 `--query` JSON interface | **Done** 2026-09-26 |
+| 4 | P4.3 Attention-rule settings | **Done** 2026-09-26 |
+| 4 | P4.4 Hermes adapter | **Done** 2026-09-26 (states fixture-only) |
+| 4 | P4.5 OpenClaw adapter | **Deferred** — not installed here; would be a guessed format |
 | 3 | P3.1 Developer ID signing | Blocked on a user decision |
 | 3 | P3.2 Sparkle auto-update | Not started |
 | 3 | P3.3 Homebrew cask | Not started |
+
+---
+
+# Phase 4 — Parity with a history-oriented monitor — **DONE** 2026-09-26
+
+A comparison with another local agent monitor, one that copies every prompt
+into its own database, found four things Vibra lacked. All four were built
+without giving up "stores nothing". The plan, the three review rounds that
+changed it, the code review and every verdict are in
+[PLAN-2026-09-26-history-query-settings-hermes.md](PLAN-2026-09-26-history-query-settings-hermes.md).
+
+- **P4.1 History.** On-demand, in-memory, like the usage report. Claude Code,
+  Codex, Hermes. The per-record day window matches the report's arithmetic.
+- **P4.2 `--query`.** The menu's own pipeline (now `LivePipeline` in
+  VibraCore) as JSON. No titles, since titles are derived from message text.
+- **P4.3 Settings.** Three thresholds in the `ai.silexlab.vibra` domain, read
+  through CFPreferences so the bare CLI and the app agree.
+- **P4.4 Hermes.** Read-only, column allowlist, status SQL without `content`,
+  one indexed single-row lookup per open session.
+- **P4.5 OpenClaw — deferred.** Not installed on the development machine, so an
+  adapter would be a guessed format with no live check.
 
 ---
 
@@ -321,7 +347,7 @@ honestly, there is currently **nothing to add**:
 
 | Candidate | Found | Verdict |
 |---|---|---|
-| Hermes | `~/.hermes/sessions/sessions.json` | **Not a coding agent here.** Keys are `agent:main:feishu:dm:…` — Feishu/Lark chat threads. No transcripts, no token usage. |
+| Hermes | `~/.hermes/sessions/sessions.json` | **Not a coding agent here.** Keys are `agent:main:feishu:dm:…` — Feishu/Lark chat threads. No transcripts, no token usage. *Corrected 2026-09-26: incomplete. `sessions.json` is only a gateway routing map; Hermes' session store is `~/.hermes/state.db` (`schema_version` 17), with per-session cwd, branch and token totals and a `messages` table, including CLI sessions. Adapter added in P4.4; schema recorded in the P4 plan.* |
 | Cursor | `…/Cursor/User/globalStorage/state.vscdb` | **No token usage.** `composerHeaders` (14 rows) has ids, timestamps and modes but no counts; the rest is 631 opaque `agentKv:blob:` records. Database untouched since 2026-09-01, so nothing could be verified live. Also holds `cursorAuth/accessToken` and `refreshToken`. |
 | Copilot | `~/.copilot/` | Config and logs only. No transcripts. |
 
@@ -353,6 +379,9 @@ come later.
 **Every adapter is built against fixtures.** No adapter is developed by reading
 the user's real session data — sanitized fixtures are extracted first. This is
 a privacy rule and a correctness one: the exact observed schema beats a guess.
+*Clarified 2026-09-26:* reading a schema and row counts is not reading session
+data, and neither are record-type and key-name counts or classifying a leading
+wrapper tag — no message text beyond that. P4 was built that way.
 
 ### Acceptance
 

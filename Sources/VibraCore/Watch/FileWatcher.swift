@@ -68,7 +68,7 @@ public struct JSONLIncrementalReader {
     }
 }
 
-/// Watches the JSONL trees with FSEvents and polls a SQLite database with a
+/// Watches the JSONL trees with FSEvents and polls SQLite databases with a
 /// timer, invoking `onChange` whenever something changes.
 ///
 /// `@unchecked Sendable` because all mutable state is confined to the private
@@ -78,21 +78,21 @@ public final class FileWatcher: @unchecked Sendable {
     public typealias ChangeHandler = @Sendable ([URL]) -> Void
 
     private let watchedDirectories: [URL]
-    private let pollURL: URL?
+    private let pollURLs: [URL]
     private let onChange: ChangeHandler
 
     private let queue = DispatchQueue(label: "vibra.filewatcher", qos: .utility)
     private var stream: FSEventStreamRef?
     private var pollTimer: DispatchSourceTimer?
-    private var lastPollSignature: (mtime: TimeInterval, size: UInt64)?
+    private var lastPollSignatures: [URL: [PollStamp]] = [:]
 
     public init(
         watchedDirectories: [URL],
-        pollURL: URL? = nil,
+        pollURLs: [URL] = [],
         onChange: @escaping ChangeHandler
     ) {
         self.watchedDirectories = watchedDirectories
-        self.pollURL = pollURL
+        self.pollURLs = pollURLs
         self.onChange = onChange
     }
 
@@ -160,23 +160,48 @@ public final class FileWatcher: @unchecked Sendable {
     // MARK: - Polling
 
     private func startPolling() {
-        guard let pollURL else { return }
+        guard !pollURLs.isEmpty else { return }
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now(), repeating: 1.0)
-        timer.setEventHandler { [weak self] in self?.pollOnce(pollURL) }
+        timer.setEventHandler { [weak self] in self?.pollAll() }
         timer.resume()
         pollTimer = timer
     }
 
-    private func pollOnce(_ url: URL) {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) else { return }
-        let mtime = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        let size = (attrs[.size] as? UInt64) ?? 0
-        let signature = (mtime, size)
-        if let last = lastPollSignature, last != signature {
+    private func pollAll() {
+        for url in pollURLs { pollOnce(url) }
+    }
+
+    /// One file's (mtime, size), or nil when it does not exist.
+    struct PollStamp: Equatable {
+        var mtime: TimeInterval
+        var size: UInt64
+    }
+
+    /// The database and its `-wal` / `-shm` sidecars. In WAL mode a write can
+    /// land only in `-wal` while the main file's size and mtime sit still, so
+    /// watching the main file alone can miss it until a checkpoint.
+    static func pollSignature(of url: URL) -> [PollStamp]? {
+        func stamp(_ path: String) -> PollStamp? {
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return nil }
+            return PollStamp(
+                mtime: (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0,
+                size: (attrs[.size] as? UInt64) ?? 0
+            )
+        }
+        guard let main = stamp(url.path) else { return nil }
+        let sidecars = [url.path + "-wal", url.path + "-shm"].map { stamp($0) ?? PollStamp(mtime: 0, size: 0) }
+        return [main] + sidecars
+    }
+
+    /// Fires `onChange` when the signature differs from the previous poll.
+    /// Internal so a test can drive it without a timer.
+    func pollOnce(_ url: URL) {
+        guard let signature = Self.pollSignature(of: url) else { return }
+        if let last = lastPollSignatures[url], last != signature {
             onChange([url])
         }
-        lastPollSignature = signature
+        lastPollSignatures[url] = signature
     }
 
     /// Called from the C callback. If FSEvents dropped events, we cannot know

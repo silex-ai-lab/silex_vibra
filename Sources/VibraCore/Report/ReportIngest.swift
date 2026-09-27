@@ -61,7 +61,7 @@ public actor ReportIngest {
 
             // Adapters that cannot attribute usage in time still contribute
             // their totals, reported as undated rather than guessed onto a day.
-            if samples.isEmpty, adapter.kind == .openCode {
+            if samples.isEmpty, adapter.reportsUndatedTotals {
                 for session in adapter.discoverSessionsSafely() where session.usage.total > 0 {
                     samples.append(
                         UsageSample(timestamp: nil, model: session.model, usage: session.usage)

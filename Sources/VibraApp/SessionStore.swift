@@ -13,11 +13,21 @@ final class SessionStore {
     private(set) var sessions: [Session] = []
 
     private let ingest: SessionIngest
-    private let engine: StateEngine
-    /// Sessions untouched for longer than this are not shown at all. Without
-    /// it the list is every session ever recorded — 491 on the development
-    /// machine — which is an archive, not a status display.
-    private let activityWindow: TimeInterval
+    private let settingsStore: any SettingsStore
+
+    /// Fixed values that win over the per-refresh settings load. Only the
+    /// diagnostics set these (`--dump-sessions --all` shows everything,
+    /// whatever the user's activity window is).
+    struct Overrides {
+        /// Sessions quiet for longer than this are not shown.
+        var activityWindow: TimeInterval
+        /// Sources untouched for longer than this are never read; nil reads all.
+        var horizon: TimeInterval?
+    }
+    private let overrides: Overrides?
+
+    /// The settings the last refresh used.
+    private(set) var settings: VibraSettings
 
     private var watcher: FileWatcher?
     private let desktopIndex = ClaudeDesktopIndex()
@@ -33,15 +43,23 @@ final class SessionStore {
     /// callers can detect transitions (e.g. into `awaitingInput`).
     var onChange: (([Session], [Session]) -> Void)?
 
+    /// Sessions untouched for longer than the activity window (a setting,
+    /// 12 h by default) are not shown at all. Without it the list is every
+    /// session ever recorded — 491 on the development machine — which is an
+    /// archive, not a status display.
     init(
         adapters: [any AgentAdapter],
-        engine: StateEngine = StateEngine(),
-        activityWindow: TimeInterval = 12 * 3600,
-        horizon: TimeInterval? = 12 * 3600
+        settingsStore: any SettingsStore = PreferencesStore(),
+        overrides: Overrides? = nil
     ) {
-        self.ingest = SessionIngest(adapters: adapters, horizon: horizon)
-        self.engine = engine
-        self.activityWindow = activityWindow
+        self.settingsStore = settingsStore
+        self.overrides = overrides
+        let settings = VibraSettings.load(from: settingsStore)
+        self.settings = settings
+        self.ingest = SessionIngest(
+            adapters: adapters,
+            horizon: overrides.map(\.horizon) ?? settings.activityWindowSeconds
+        )
     }
 
     /// `safetyInterval` is a backstop, not the primary mechanism: FSEvents
@@ -71,7 +89,7 @@ final class SessionStore {
                 VibraPaths.home.appendingPathComponent(
                     "Library/Application Support/Claude/claude-code-sessions"),
             ] + vsCodeChatDirectories,
-            pollURL: VibraPaths.openCodeDB
+            pollURLs: [VibraPaths.openCodeDB, VibraPaths.hermesStateDB]
         ) { [weak self] _ in
             Task { @MainActor in await self?.requestRefresh() }
         }
@@ -107,48 +125,21 @@ final class SessionStore {
     }
 
     private func performRefresh() async {
+        // Settings are re-read every refresh, so a change in the Settings
+        // window (or a `defaults write`) applies without a relaunch.
+        settings = VibraSettings.load(from: settingsStore)
+        if overrides == nil {
+            await ingest.setHorizon(settings.activityWindowSeconds)
+        }
+
         // The read happens on the ingest actor; only the finished snapshot
         // crosses back to the main actor.
         let raw = await ingest.refresh()
-        let now = Date()
-
-        let recent = raw
-            .filter { now.timeIntervalSince($0.lastActivity) <= activityWindow }
-            .map { session -> Session in
-                // Adapters report WHAT happened; StateEngine decides what that
-                // means, so all three classify identically.
-                var s = session
-                s.state = engine.classify(
-                    lastEvent: session.lastEvent,
-                    lastActivity: session.lastActivity,
-                    now: now
-                )
-                return s
-            }
-            .sorted { $0.lastActivity > $1.lastActivity }
-
-        // A session whose process has exited is over: jumping to it fails
-        // with "can't find that session's process", and it has nothing more
-        // to say. Off the main actor, since Codex's check runs lsof.
-        // Claude UI sessions are enriched first - title, desktop id, archived -
-        // since whether an exited process means "gone" depends on it.
-        let candidates = Dictionary(grouping: recent, by: \.agent).mapValues { $0.map(\.id) }
-        let desktopIndex = self.desktopIndex
-        let (live, claudeStatus, desktop) = await Task.detached {
-            let locator = ProcessLocator()
-            let claudeStatus = locator.claudeLiveStatuses()
-            var live: [AgentKind: Set<String>] = [:]
-            for (agent, ids) in candidates {
-                live[agent] = agent == .claudeCode
-                    ? Set(claudeStatus.keys)
-                    : locator.liveSessionIDs(agent: agent, candidates: ids)
-            }
-            return (live, claudeStatus, desktopIndex.load())
-        }.value
-        let enriched = Session.enriched(recent, desktop: desktop, live: claudeStatus)
-        let fresh = Session.settlingOrphaned(
-            Session.withoutExited(enriched, live: live),
-            editorLaunch: TerminalJumper.editorLaunchTimes()
+        let fresh = await LiveSessions.snapshot(
+            raw: raw,
+            settings: settings,
+            activityWindow: overrides?.activityWindow,
+            desktopIndex: desktopIndex
         )
 
         guard fresh != sessions else { return }

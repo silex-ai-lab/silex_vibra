@@ -1,7 +1,6 @@
 # Plan — history, query, settings, Hermes (2026-09-26)
 
-> Status: **Plan approved (r5, unanimous). Implementation in progress.**
-> seat on the roster returns PLAN-APPROVED.
+> Status: **Done.** Plan approved r5 and code approved on revision `68db063`, both unanimous; a final confirmation round covers this Outcome section.
 
 ## Why
 
@@ -510,11 +509,93 @@ r4 verdicts: nemotron PLAN-APPROVED; mimo PLAN-APPROVED; claude PLAN-APPROVED.
 | n6 | garbage → default vs clamp (mimo) | Body now says default |
 | n7 | bytes-read meaning (mimo) | Stated |
 
+## Implementation deviations (for the code gate)
+
+1. **Claude history wrappers widened from real data.** Rendering the History
+   window against the dev machine's transcripts showed `<task-notification>`
+   and `<bash-stdout>` rows. A content-free survey of leading tag names in 60
+   recent transcripts (counts only: task-notification 36, bash-input 17,
+   bash-stdout 17, command-message 16, pasted_content 6, bash-stderr 2,
+   command-name 1, local-command-stdout 1) led to adding `task-notification`,
+   `bash-input`, `bash-stdout`, `bash-stderr` to the excluded wrappers. The
+   code's full list also has `command-message` (observed, 16),
+   `command-args` and `local-command-stderr` (not observed; siblings of
+   observed tags, kept defensively).
+   `pasted_content` is text the user pasted, so it is kept and only its tag
+   markers are removed. Fixture test extended to cover all of them.
+2. **`describeDatabase` not moved.** Hermes reuses
+   `OpenCodeAdapter.describeDatabase` the way `CursorAdapter` already did,
+   instead of moving it to a new helper — same behaviour, smaller diff.
+3. **Keyword search also matches the project name**, not only the question
+   text (the search field says "Search questions and projects").
+4. **`NSTableView` with group rows** instead of `NSOutlineView`: the same
+   day-grouped list, simpler.
+5. **The Settings window stores each field's raw value** rather than going
+   through `VibraSettings.save`; every read goes through `VibraSettings.load`,
+   which clamps, and the window redisplays the clamped value at once.
+
 ## Outcome
 
-_(filled in after the code gate)_
+**Roster:** claude (plan, implementation, vote), reviewer-mimo
+(`opencode/mimo-v2.6-flash-free`), reviewer-nemotron
+(`opencode/nemotron-3-ultra-free`), via OpenCode 1.18.32. Reviewers saw only
+this public repo, this plan and diffs; no agent state, no screenshots (they
+show the user's prompts).
+
+**Plan gate: 5 rounds.** Nemotron approved every round. MiMo rejected r1 (6
+blocking), r2 (1) and r3 (2), approved r4, and confirmed r5. What review
+changed: Hermes grounded in its real schema (the repo's ROADMAP had it wrong);
+the security split between status and history SQL, enforced by tests; the
+test-critical code moved into VibraCore so the tests could build at all; one
+settings domain for app and CLI; one meaning for the day window; stateful
+per-source history extraction; and, found while answering a provenance note,
+a Codex history rule that did not match how current Codex writes prompts.
+
+**Code gate: 2 rounds.** r1 (diff `2461a25`): nemotron IMPL-APPROVED, mimo
+IMPL-REJECTED — the Claude extractor did not carry `entrypoint` across
+batches, so an `sdk-cli` session whose later records omit it could leak into
+History while the menu called it unattended. Fixed with a batch-boundary
+test and negative control; reverting the fix fails it. r2 (diff `68db063`):
+both IMPL-APPROVED. A network drop interrupted r1 once; it was re-sent
+unchanged.
+
+**What each seat caught.** MiMo: every blocking issue, most found by reading
+the code against the plan (unlinkable test target, unpinned defaults domain,
+vacuous acceptances, batch-boundary state). Nemotron: approved throughout,
+fast. Claude: real-data checks that fixtures could not show — the Codex
+record shape, and injected `<task-notification>`/`<bash-*>` records in
+History (deviation 1).
+
+**Verified.** `make test` 156 (was 117), canary present; mutation checks:
+`content` in Hermes status SQL, a fresh extractor per batch, and per-record
+`entrypoint` each fail the suite. `make bench` PASS (0 bytes on an unchanged
+refresh; cold 0.47 s, 254 sessions). `--dump-sessions` identical before and
+after the T0 refactor except one live session's `lastActivity`. Hermes real
+data: 6 of 6 non-archived sessions found, ids equal to `sqlite3`'s; 3 ended →
+idle (settled); the subagent → unattended; the 3 open ones are months old, so
+outside the menu's window (they show `stalled` only under `--all`). Settings:
+`defaults write stallThresholdSeconds 60` flips a 90 s-silent fixture session
+`working` → `stalled` in a fresh `--query`, and back after `defaults delete`
+(the user's domain was absent before and was left absent). Real-data
+`--query | python3 -m json.tool` valid, 5 sessions. History, Settings and
+usage windows render (snapshots, kept local).
+
+**Not verified.** A live Hermes state transition; the running app picking up
+a `defaults write` without relaunch (by design via
+`CFPreferencesAppSynchronize` per refresh, not watched).
+
+**Final verdicts** (diff `68db063`, base `2164fa6`):
+- reviewer-nemotron: IMPL-APPROVED
+- reviewer-mimo: IMPL-APPROVED
+- CLAUDE: IMPL-APPROVED
+
+**Confirmation round r3** (diff `f1a5a78`: the STATUS count, one test
+comment, and this Outcome section; nothing else): reviewer-nemotron
+IMPL-APPROVED, reviewer-mimo IMPL-APPROVED, CLAUDE: IMPL-APPROVED.
 
 ## Votes
 
 CLAUDE: PLAN-APPROVED (r4)
 CLAUDE: PLAN-APPROVED (r5)
+CLAUDE: IMPL-APPROVED (68db063)
+CLAUDE: IMPL-APPROVED (f1a5a78, final)

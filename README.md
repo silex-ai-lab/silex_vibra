@@ -36,6 +36,7 @@ agents already write and surfaces the one that needs you.
 | OpenCode (incl. DeepSeek) | `~/.local/share/opencode/opencode.db` |
 | Cursor agents and chats | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` |
 | Visual Studio Code — GitHub Copilot Chat (Ask, Edit, Agent mode) | `~/Library/Application Support/Code/User/workspaceStorage/<id>/chatSessions/*.jsonl` and `…/globalStorage/emptyWindowChatSessions/*.jsonl` (also `Code - Insiders`) |
+| Hermes Agent (CLI and chat gateways) | `~/.hermes/state.db` |
 
 Vibra never asks these tools to change what they write. It is a passive reader
 of files that already exist.
@@ -93,6 +94,47 @@ Microsoft retired Visual Studio for Mac in August 2024.
 
 **It installs nothing into your agents** — no hooks, no plugins, no statusline,
 no wrapper binaries. Uninstalling Vibra is deleting one `.app`.
+
+## History, settings and `--query`
+
+**History…** (⌘Y in the menu) lists the questions you typed into Claude Code,
+Codex and Hermes over the last 1, 3, 7, 14 or 30 days, grouped by day, with a
+search box and an agent filter. Double-click a row to jump to its session if it
+is still live, or to copy the question. It is read from the agents' files when
+you open the window — the same way the usage report is — held in memory while
+the window is open, and dropped when you close it. Nothing is saved. Excluded:
+anything the agent injected rather than you typed (tool results, slash-command
+and shell output, background-task notifications, subagent prompts) and
+unattended runs (`claude -p`, scheduled tasks, `codex exec`, Hermes
+subagents). OpenCode, Cursor and VS Code are not covered: their prompt text
+lives in stores Vibra deliberately does not read beyond session metadata.
+
+**Settings…** (⌘,) has three numbers: when a mid-turn session counts as
+stalled (default 5 min), when an unanswered "your turn" fades to idle (8 h),
+and how far back the menu looks (12 h). They are stored in the
+`ai.silexlab.vibra` preferences domain, apply on the next refresh without a
+relaunch, and can also be set from a shell:
+
+```sh
+defaults write ai.silexlab.vibra stallThresholdSeconds -int 600
+defaults delete ai.silexlab.vibra        # back to the defaults
+```
+
+**`--query`** prints what the menu shows as JSON, for scripts and agents:
+
+```sh
+/Applications/Vibra.app/Contents/MacOS/Vibra --query              # after make install
+make query                                                        # from a build
+Vibra --query --attention                                         # only sessions that need you
+Vibra --query --agent codex                                       # one agent
+```
+
+Each session has `agent`, `id`, `project`, `cwd`, `gitBranch`, `state`,
+`needsAttention`, `lastEvent`, `lastActivity`, `startedAt`, `model`, `tokens`,
+`estimatedCostUSD` (`null` when the model has no published rate) and
+`unattended`, plus the settings in force. It never contains message text, so no
+titles either. [docs/skills/vibra-query/SKILL.md](docs/skills/vibra-query/SKILL.md)
+tells a coding agent how to use it.
 
 ## Session states
 
@@ -356,6 +398,20 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   model, token counts and reply state) and discards every message and response
   body as it parses. A canary test plants a sentinel in the prompt, the response
   and the input box and asserts it appears nowhere in the returned sessions.
+- Hermes keeps secrets in `~/.hermes/.env` and `auth.json`. The Hermes adapter
+  knows one path, `state.db`, opens it read-only, and reads an allowlist of
+  columns. The status path never selects message text; the one statement that
+  does runs only for the History window, and a test proves the status path
+  never prepares it. A canary in a message row, the system prompt, `.env` and
+  `auth.json` appears in no session, no `--query` output and no error.
+- **History is the one feature that shows what you typed.** It reads on demand,
+  keeps the text in memory only while its window is open, and writes nothing.
+  Everything machine-readable stays content-free: `--query`, `--probe`,
+  `--dump-sessions` and `--history-stats` print states, counts and project
+  names, never message text, and a canary test covers `--history-stats`.
+- The only thing Vibra persists between runs is its three settings, in the
+  `ai.silexlab.vibra` preferences domain. (The `--show-* --snapshot <path>`
+  diagnostics write a PNG where you tell them to.)
 - Adapters never log or print raw rows.
 
 ## Troubleshooting
@@ -473,12 +529,35 @@ layered on the menu bar, which is the real interface.
 - **OpenCode blocked-state detection is unverified.** The adapter does read the
   `permission` column and maps a non-empty value to `needs approval`, but that
   transition has not yet been observed live against a real approval prompt.
+- **Hermes states are fixture-tested only.** The adapter was checked against a
+  real `state.db` for discovery (every session found, ended ones idle, a
+  subagent unattended), but that machine's newest Hermes activity was months
+  old, so no live transition was watched. Hermes records no approval state
+  Vibra can see, so a Hermes session never shows "needs approval".
+  `reasoning_tokens` are not counted, to avoid counting them twice if they are
+  already inside `output_tokens`.
+- **History covers Claude Code, Codex and Hermes only.** A Codex version that
+  wrote prompts only as `event_msg` records would show no history; the current
+  one writes them as `response_item` messages, which is what Vibra reads.
 - **Not signed or notarized**, so this is build-from-source only. There is no
   release download and no Homebrew cask.
 
 ## Changelog
 
 ### Unreleased
+
+- **History window** (⌘Y): the questions you asked in Claude Code, Codex and
+  Hermes, by day, searchable, read on demand and never stored.
+- **Settings window** (⌘,): stall threshold, "your turn" decay and the menu's
+  activity window, applied without a relaunch.
+- **`--query`**: the menu's live sessions as JSON, for scripts and agents; no
+  message content. Also `--history-stats` (counts only) and `--dump-sessions`
+  (the menu pipeline's own rows, for diagnostics).
+- **Hermes Agent** sessions from `~/.hermes/state.db`, read-only.
+- **Fixed:** a write that landed only in an SQLite `-wal` file (OpenCode,
+  Hermes) could go unnoticed until the 60 s safety rescan.
+- Plan and review record:
+  [docs/PLAN-2026-09-26-history-query-settings-hermes.md](docs/PLAN-2026-09-26-history-query-settings-hermes.md).
 
 - **Visual Studio Code.** GitHub Copilot Chat sessions (Ask, Edit and Agent
   mode) from VS Code and VS Code Insiders, with working / needs approval / your
@@ -550,7 +629,7 @@ Run `make bench` to reproduce those numbers on your own corpus.
 Current state is tracked in [docs/STATUS.md](docs/STATUS.md); planned work,
 with the reasoning behind each decision, in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-Working against real data: the menu bar, all five adapters, state
+Working against real data: the menu bar, all six adapters, state
 classification, usage/cost accounting, and terminal jump-back. Not yet done:
 weekly report cards, and Developer ID signing.
 

@@ -12,6 +12,17 @@ final class MenuBarController {
     private let store: SessionStore
     private let notchOverlay: NotchOverlay?
     private lazy var reportWindow = ReportWindowController(adapters: AdapterRegistry.detected())
+    private lazy var historyWindow = HistoryWindowController(
+        adapters: AdapterRegistry.detected(),
+        liveSession: { [weak self] id in self?.store.sessions.first { $0.id == id } }
+    )
+    private lazy var settingsWindow: SettingsWindowController = {
+        let controller = SettingsWindowController()
+        controller.onChange = { [weak self] in
+            Task { @MainActor in await self?.store.requestRefresh() }
+        }
+        return controller
+    }()
     private let notificationSink = UserNotificationSink()
     private lazy var notifier = AttentionNotifier(sink: notificationSink)
     private var hasBaseline = false
@@ -110,6 +121,12 @@ final class MenuBarController {
         let report = NSMenuItem(title: "Usage Report…", action: #selector(showReport), keyEquivalent: "u")
         report.target = self
         menu.addItem(report)
+        let history = NSMenuItem(title: "History…", action: #selector(showHistory), keyEquivalent: "y")
+        history.target = self
+        menu.addItem(history)
+        let settings = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
         menu.addItem(NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r"))
         menu.items.last?.target = self
         menu.addItem(NSMenuItem(title: "Quit Vibra", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -310,4 +327,6 @@ final class MenuBarController {
     @objc private func refreshNow() { Task { await store.requestRefresh() } }
 
     @objc private func showReport() { reportWindow.show() }
+    @objc private func showHistory() { historyWindow.show() }
+    @objc private func showSettings() { settingsWindow.show() }
 }
