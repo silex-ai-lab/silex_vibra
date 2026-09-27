@@ -333,6 +333,36 @@ if CommandLine.arguments.contains("--locate") {
     exit(0)
 }
 
+// `Vibra --dump-sessions [--all]` runs one refresh of the menu's own
+// `SessionStore` and prints each session it would show: agent, id, project,
+// state, last event, last activity, entrypoint. Never titles or message
+// content. `--all` lifts the activity window and ingest horizon, to check an
+// adapter against real data older than the window.
+if CommandLine.arguments.contains("--dump-sessions") {
+    let all = CommandLine.arguments.contains("--all")
+    let store = all
+        ? SessionStore(adapters: AdapterRegistry.all(), activityWindow: .infinity, horizon: nil)
+        : SessionStore(adapters: AdapterRegistry.all())
+    nonisolated(unsafe) var finished = false
+    Task { @MainActor in
+        await store.requestRefresh()
+        let iso = ISO8601DateFormatter()
+        for s in store.sessions {
+            print([
+                s.agent.rawValue, s.id, s.projectName, s.state.rawValue, s.lastEvent.rawValue,
+                iso.string(from: s.lastActivity), s.entrypoint ?? "-", s.isUnattended ? "unattended" : "attended",
+            ].joined(separator: "\t"))
+        }
+        print("total: \(store.sessions.count)")
+        finished = true
+    }
+    let deadline = Date().addingTimeInterval(300)
+    while !finished && Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(finished ? 0 : 1)
+}
+
 if CommandLine.arguments.contains("--probe") {
     var total = 0
     let aggregator = UsageAggregator()

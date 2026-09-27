@@ -36,9 +36,10 @@ final class SessionStore {
     init(
         adapters: [any AgentAdapter],
         engine: StateEngine = StateEngine(),
-        activityWindow: TimeInterval = 12 * 3600
+        activityWindow: TimeInterval = 12 * 3600,
+        horizon: TimeInterval? = 12 * 3600
     ) {
-        self.ingest = SessionIngest(adapters: adapters)
+        self.ingest = SessionIngest(adapters: adapters, horizon: horizon)
         self.engine = engine
         self.activityWindow = activityWindow
     }
