@@ -1,5 +1,20 @@
 # Vibra — current status
 
+**2026-09-27 — SF Symbols icons on the History controls.** Every History
+button keeps its text label and gains an SF Symbol beside it (Copy
+`doc.on.doc` in both places, Copy Path `link`, Open `arrow.up.forward`); the
+Tasks and Timeline section headers carry `checklist` / `clock` between the
+disclosure triangle and the word, through a file-private `NSImage.vibraSymbol`
+helper — an unresolvable name yields nil and the control stays text-only.
+Menu bar, emoji state dots and the report window untouched. Verified
+**2026-09-27**: `swift build` clean, `make test` 165 tests + canary;
+`--show-history --snapshot` still 980×568 / 175 chars / 7 lines; a flattened
+window snapshot eyeballed all six symbols beside their labels (temporary
+selection/expansion driver removed before the gate; live hover check blocked
+by the locked screen, recorded in the plan). Plan gate and code gate both
+unanimous at round 1. Record:
+[PLAN-2026-09-27-icons.md](PLAN-2026-09-27-icons.md).
+
 **2026-09-27 — OpenCode/Hermes rows no longer alert on click.** Those two
 agents publish no session→process link, so their menu rows now render gray
 with a tooltip explaining why instead of a modal that could only ever repeat

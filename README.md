@@ -106,7 +106,9 @@ Path** and **Open**; and, for Claude Code, collapsed **Tasks** (the todo list
 under that question) and **Timeline** (which tools ran, never their
 arguments), read from that file only when you select the row. Copy the
 question from there, or **Copy** to put every visible row on the clipboard as
-tab-separated fields. Double-click a row — or press ⌘J — to jump to its
+tab-separated fields. Every button keeps its text label and gains an SF Symbol
+beside it; the section headers carry one between the disclosure triangle and
+the word. Double-click a row — or press ⌘J — to jump to its
 session if it is still live, or to copy the question; ⌘F focuses the search,
 ⌘⇧C copies the visible rows, and Esc clears the search. It is read from the
 agents' files when

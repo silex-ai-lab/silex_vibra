@@ -1,6 +1,17 @@
 import AppKit
 import VibraCore
 
+private extension NSImage {
+    /// An SF Symbol for the given name, nil when the name does not resolve —
+    /// so every caller keeps working as a plain text-only control. The
+    /// description carries the control's title, so the picture is never
+    /// unnamed to VoiceOver. Symbols come back as templates: they follow
+    /// light/dark beside the label they sit with.
+    static func vibraSymbol(_ name: String, description: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: description)
+    }
+}
+
 /// The questions you asked, by day, searchable.
 ///
 /// Read on demand when the window opens (like the usage report), held in
@@ -205,6 +216,8 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         daysPopup.action = #selector(daysChanged)
 
         copyRowsButton.title = "Copy"
+        copyRowsButton.image = NSImage.vibraSymbol("doc.on.doc", description: "Copy")
+        copyRowsButton.imagePosition = .imageLeading
         copyRowsButton.target = self
         copyRowsButton.action = #selector(copyRows)
 
@@ -268,6 +281,8 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         detailMeta.lineBreakMode = .byTruncatingTail
         detailMeta.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         copyDetailButton.title = "Copy"
+        copyDetailButton.image = NSImage.vibraSymbol("doc.on.doc", description: "Copy")
+        copyDetailButton.imagePosition = .imageLeading
         copyDetailButton.isEnabled = false
         copyDetailButton.target = self
         copyDetailButton.action = #selector(copyDetail)
@@ -282,10 +297,14 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         pathLabel.lineBreakMode = .byTruncatingTail
         pathLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         copyPathButton.title = "Copy Path"
+        copyPathButton.image = NSImage.vibraSymbol("link", description: "Copy Path")
+        copyPathButton.imagePosition = .imageLeading
         copyPathButton.isEnabled = false
         copyPathButton.target = self
         copyPathButton.action = #selector(copyPath)
         openPathButton.title = "Open"
+        openPathButton.image = NSImage.vibraSymbol("arrow.up.forward", description: "Open")
+        openPathButton.imagePosition = .imageLeading
         openPathButton.isEnabled = false
         openPathButton.target = self
         openPathButton.action = #selector(openPath)
@@ -318,15 +337,27 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         }
         // The disclosure bezel sizes to the triangle alone, so the visible
         // word sits beside it; the button keeps its title for accessibility
-        // and for anyone matching on it.
+        // and for anyone matching on it. The symbol goes between triangle and
+        // word as its own view — the bezel must not carry an image, its cell
+        // draws the triangle.
         for title in [tasksTitle, timelineTitle] {
             title.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         }
-        let tasksRow = NSStackView(views: [tasksHeader, tasksTitle])
+        func sectionIcon(_ name: String, _ description: String) -> NSImageView {
+            let view = NSImageView()
+            view.image = NSImage.vibraSymbol(name, description: description)?
+                .withSymbolConfiguration(.init(pointSize: 11, weight: .regular))
+            return view
+        }
+        let tasksRow = NSStackView(views: [
+            tasksHeader, sectionIcon("checklist", "Tasks"), tasksTitle,
+        ])
         tasksRow.orientation = .horizontal
         tasksRow.spacing = 4
         tasksRow.alignment = .centerY
-        let timelineRow = NSStackView(views: [timelineHeader, timelineTitle])
+        let timelineRow = NSStackView(views: [
+            timelineHeader, sectionIcon("clock", "Timeline"), timelineTitle,
+        ])
         timelineRow.orientation = .horizontal
         timelineRow.spacing = 4
         timelineRow.alignment = .centerY
