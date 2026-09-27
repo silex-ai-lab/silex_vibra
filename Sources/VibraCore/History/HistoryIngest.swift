@@ -45,7 +45,13 @@ public actor HistoryIngest {
                     if batch.lines.isEmpty && !advanced { break }
                     // Drain per batch, as ReportIngest does.
                     autoreleasepool {
-                        records.append(contentsOf: extractor.fold(batch.lines))
+                        for var record in extractor.fold(batch.lines) {
+                            // The extractor never sees the file; the reader
+                            // does, so the path is stamped here — one source,
+                            // one path, for every question folded from it.
+                            record.originFile = source.url.path
+                            records.append(record)
+                        }
                     }
                     if !advanced { break }
                 }

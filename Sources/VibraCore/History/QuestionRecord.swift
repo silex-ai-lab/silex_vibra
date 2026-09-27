@@ -11,13 +11,21 @@ public struct QuestionRecord: Sendable, Equatable {
     public let timestamp: Date
     public let cwd: String
     public let text: String
+    /// The transcript file this question was read from, stamped by
+    /// `HistoryIngest` for JSONL sources. `nil` for database-backed adapters
+    /// (nothing to open) and never required by any consumer.
+    public var originFile: String?
 
-    public init(agent: AgentKind, sessionID: String, timestamp: Date, cwd: String, text: String) {
+    public init(
+        agent: AgentKind, sessionID: String, timestamp: Date, cwd: String, text: String,
+        originFile: String? = nil
+    ) {
         self.agent = agent
         self.sessionID = sessionID
         self.timestamp = timestamp
         self.cwd = cwd
         self.text = text
+        self.originFile = originFile
     }
 
     public var project: String {

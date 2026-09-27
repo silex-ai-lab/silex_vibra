@@ -1,5 +1,42 @@
 # Vibra — current status
 
+**2026-09-27 — History window UI, wave 2 (`the reference dashboard` borrow).** Adds each
+question's transcript path row (Copy Path / Open) and its session id in the
+detail pane, on-demand **Tasks** and **Timeline** sections for Claude Code
+(read only on selection, capped at 12/60 rows, released on close), and
+⌘F / ⌘⇧C / ⌘J / Esc inside the History window. Verified **2026-09-27**:
+`swift build` clean, `make test` 164 tests + canary (8 new); a temporary
+in-process driver passed 40/40 checks (selection metadata, path row, sections,
+both disclosure toggles, keyboard handlers, close/reopen clearing) and its
+app-rendered snapshots were eyeballed collapsed and with both sections
+expanded; `--show-history --snapshot` still prints status and day headers only
+(175 chars, 7 lines). Real input injection was blocked when the screen
+re-locked mid-session (documented in the plan; keyboard routing covered by
+synthetic NSEvents through the real window handlers, window opened earlier via
+real AX). Fixes found during verification: section stacks needed explicit
+alignment pins, disclosure headers needed their own visible labels, and
+programmatic text now refits its frame. Plan gate unanimous at r1 (both
+reviewer seats). Record:
+[PLAN-2026-09-27-history-ui.md](PLAN-2026-09-27-history-ui.md).
+
+**2026-09-27 — History window UI, wave 1 (`the reference dashboard` borrow).** Merged to
+`main` and pushed: `568b008` (approved plan) and `4a9005c` (code), diff
+`a530ab8..4a9005c`. Adds per-agent counts in the menu headers
+(`Claude Code · 3` style), a side-by-side History detail pane (read-only,
+selectable question text, in-place Copy, close/reopen clears it), tab-separated
+Copy of the visible rows, per-agent counts in the filter popup, and an
+empty-state label. Verified **2026-09-27**: `swift build` clean, `make test`
+156 tests + canary; menu structure read back over AX (header followed by
+exactly N rows); the History window opened from the menu on a fresh bundle at
+980×568 with both Copy messages, popup counts and the empty state exercised on
+the real window by a temporary selftest driver (38 checks PASS, both live and
+non-live branches, driver removed afterwards); `--show-history --snapshot`
+prints status and day headers only, no question text; live-window OCR matches
+the status line and `All agents (83)`. Gates were unanimous at every round:
+plan r1–r4, code gate r1 (both reviewer seats `IMPL-APPROVED` plus the
+implementer's written vote against diff `7e421da8`), final text confirmed.
+Record: [PLAN-2026-09-27-history-ui.md](PLAN-2026-09-27-history-ui.md).
+
 **0.3.0** (unreleased; branch `feat/history-query-settings-hermes`). Verified
 **2026-09-26** on macOS 15 / Swift 6.1.2: `make test` 156 tests, `make bench`
 PASS (0 bytes on an unchanged refresh; cold 0.47 s, 254 sessions), History,

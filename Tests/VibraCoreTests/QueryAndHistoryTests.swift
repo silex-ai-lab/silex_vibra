@@ -260,6 +260,27 @@ struct HistoryExtractionTests {
         #expect(await ingest.collect(windowDays: 7).isEmpty)
         #expect(await ingest.lastBytesRead == 0)
     }
+
+    /// Every question folded from a JSONL source carries that file's path —
+    /// stamped by the ingest, never by an adapter.
+    @Test func originFileIsStampedFromTheSourceFile() async throws {
+        let dir = try tempTree()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("claude/p/s.jsonl")
+        try write([claudeLine("first"), claudeLine("second", minutesAgo: 1)], to: file)
+        let ingest = HistoryIngest(adapters: [ClaudeCodeAdapter(projectsRoot: dir.appendingPathComponent("claude"))])
+        let records = await ingest.collect(windowDays: 7)
+        #expect(records.count == 2)
+        #expect(records.allSatisfy { $0.originFile == file.path })
+    }
+
+    /// Records built without a file (database-backed adapters, direct
+    /// construction) default to nil — consumers must not assume a path.
+    @Test func originFileDefaultsToNil() {
+        let record = QuestionRecord(
+            agent: .codex, sessionID: "s", timestamp: Date(), cwd: "/tmp", text: "q")
+        #expect(record.originFile == nil)
+    }
 }
 
 struct HistoryIndexTests {

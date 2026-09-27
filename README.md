@@ -9,14 +9,14 @@ Open source (MIT), local-only, no account, no telemetry, no network egress.
 ```
 Vibra 2▶ 1!
 ─────────────────────────
-Claude Code
+Claude Code · 2
   🔵 vibra · working · 41k tok
   🟠 jayskills · your turn · 12k tok
-Codex
+Codex · 1
   🔵 silex_poc · working · 8k tok
-OpenCode
+OpenCode · 1
   ⚪️ scratchpad · idle · 10k tok
-VS Code
+VS Code · 1
   🔴 Fix the login flow · needs approval · 3k tok
 ```
 
@@ -99,8 +99,17 @@ no wrapper binaries. Uninstalling Vibra is deleting one `.app`.
 
 **History…** (⌘Y in the menu) lists the questions you typed into Claude Code,
 Codex and Hermes over the last 1, 3, 7, 14 or 30 days, grouped by day, with a
-search box and an agent filter. Double-click a row to jump to its session if it
-is still live, or to copy the question. It is read from the agents' files when
+search box and an agent filter that carries each agent's question count. Click
+a row to read the question in the detail pane beside the list — its time,
+agent, project and session id; the transcript file it came from, with **Copy
+Path** and **Open**; and, for Claude Code, collapsed **Tasks** (the todo list
+under that question) and **Timeline** (which tools ran, never their
+arguments), read from that file only when you select the row. Copy the
+question from there, or **Copy** to put every visible row on the clipboard as
+tab-separated fields. Double-click a row — or press ⌘J — to jump to its
+session if it is still live, or to copy the question; ⌘F focuses the search,
+⌘⇧C copies the visible rows, and Esc clears the search. It is read from the
+agents' files when
 you open the window — the same way the usage report is — held in memory while
 the window is open, and dropped when you close it. Nothing is saved. Excluded:
 anything the agent injected rather than you typed (tool results, slash-command
@@ -547,7 +556,14 @@ layered on the menu bar, which is the real interface.
 ### Unreleased
 
 - **History window** (⌘Y): the questions you asked in Claude Code, Codex and
-  Hermes, by day, searchable, read on demand and never stored.
+  Hermes, by day, searchable, with a detail pane to read a question in place
+  and tab-separated copy of the visible rows, read on demand and never stored.
+  The agent filter and the menu's section headers show their counts.
+- **History detail, wave 2:** each question's transcript file with **Copy
+  Path** / **Open** and its session id; on-demand **Tasks** and **Timeline**
+  sections for Claude Code (read on selection, bounded, released on close);
+  and ⌘F / ⌘⇧C / ⌘J / Esc in the window. Record:
+  [PLAN-2026-09-27-history-ui.md](docs/PLAN-2026-09-27-history-ui.md).
 - **Settings window** (⌘,): stall threshold, "your turn" decay and the menu's
   activity window, applied without a relaunch.
 - **`--query`**: the menu's live sessions as JSON, for scripts and agents; no

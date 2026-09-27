@@ -111,7 +111,7 @@ final class MenuBarController {
             for group in AgentKind.allCases {
                 let inGroup = ordered.filter { $0.agent == group }
                 guard !inGroup.isEmpty else { continue }
-                menu.addItem(sectionHeader(group.displayName))
+                menu.addItem(sectionHeader("\(group.displayName) · \(inGroup.count)"))
                 for session in inGroup { menu.addItem(row(for: session)) }
                 menu.addItem(.separator())
             }
