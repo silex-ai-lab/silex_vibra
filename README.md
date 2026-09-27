@@ -458,6 +458,13 @@ The `tty owner:` line reads `emulator iTerm2 - jumpable` for a normal tab and
 from walking the process ancestry, so it is a fact about your machine rather
 than a guess.
 
+**An OpenCode or Hermes row is grayed out and does nothing when clicked.**
+Neither agent publishes a link between its session and its process, and a
+directory does not identify a session — so there is no exact jump to make, and
+Vibra will not guess at one. The row still reports the session's state and
+tokens, and its tooltip says why there is no jump. Clicking a "waiting for
+you" notification for such a session just clears the notification.
+
 **herdr panes are jumpable.** A session in a herdr pane is traced up its
 process ancestry to the herdr server; the ancestor directly below the server is
 the pane's shell, which herdr reports per pane as `shell_pid`, so the pane

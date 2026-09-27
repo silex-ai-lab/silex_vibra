@@ -64,6 +64,21 @@ public struct ProcessLocator: Sendable {
         }
     }
 
+    /// Whether Vibra can ever jump to a session of this agent.
+    ///
+    /// True when either half of a jump exists: the agent publishes an exact
+    /// session->process link (Claude Code, Codex), or the session lives in a
+    /// window that can be focused directly (Cursor, VS Code, the Claude
+    /// desktop app). OpenCode and Hermes publish neither — `locate` returns
+    /// nil for them unconditionally — so their rows are never actionable:
+    /// clicking one could only ever repeat the same failure.
+    public static func canJump(_ agent: AgentKind) -> Bool {
+        switch agent {
+        case .claudeCode, .codex, .cursor, .vsCode: return true
+        case .openCode, .hermes: return false
+        }
+    }
+
     // MARK: - Liveness
 
     /// Which of `candidates` still have a running process, for the agents

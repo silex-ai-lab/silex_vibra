@@ -150,12 +150,28 @@ final class MenuBarController {
         let tokens = session.usage.total
         let tokenText = tokens >= 1000 ? "\(tokens / 1000)k tok" : "\(tokens) tok"
         let label = "\(dot(session.state)) \(session.displayName) · \(stateText(session.state)) · \(tokenText)"
-        let item = NSMenuItem(title: label, action: #selector(jumpToSession(_:)), keyEquivalent: "")
+        // An agent that publishes no session->process link (OpenCode, Hermes)
+        // can never be jumped to. Its row carries no action, so it renders
+        // gray and a click cannot repeat the failure an alert would report
+        // every time; the tooltip says why instead.
+        let jumpable = ProcessLocator.canJump(session.agent)
+        let item = NSMenuItem(
+            title: label,
+            action: jumpable ? #selector(jumpToSession(_:)) : nil,
+            keyEquivalent: ""
+        )
+        item.isEnabled = jumpable
         item.target = self
         item.representedObject = session
-        let action = session.desktopSessionID != nil
-            ? "Click to open it in Claude."
-            : "Click to focus its terminal tab."
+        let action: String
+        if session.desktopSessionID != nil {
+            action = "Click to open it in Claude."
+        } else if jumpable {
+            action = "Click to focus its terminal tab."
+        } else {
+            action = "\(session.agent.displayName) publishes no link between its "
+                + "session and its process, so there is no tab to focus."
+        }
         item.toolTip = "\(session.cwd)\n\(session.model ?? "unknown model")\n\n\(action)"
         return item
     }
@@ -188,6 +204,15 @@ final class MenuBarController {
         // nothing the notification says is still true.
         guard let session = store.sessions.first(where: { $0.id == sessionID }) else {
             notifier.dismiss(key: key)
+            return
+        }
+        // An agent that publishes no session->process link (OpenCode, Hermes)
+        // can never be jumped to. The banner pointed at a real waiting
+        // session, so the click clears it — and every other dead end beside
+        // it — without repeating an alert whose text would never change.
+        guard ProcessLocator.canJump(session.agent) else {
+            notifier.dismiss(key: key)
+            _ = dismissDeadEndNotifications()
             return
         }
         let outcome = TerminalJumper.jump(to: session)

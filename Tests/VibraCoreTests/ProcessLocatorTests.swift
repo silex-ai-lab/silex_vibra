@@ -83,6 +83,28 @@ struct ProcessLocatorTests {
         #expect(locator.locate(sessionID: "anything", agent: .openCode) == nil)
     }
 
+    /// The menu grays the rows of agents that can never be jumped to, and a
+    /// clicked notification for one dismisses silently instead of alerting.
+    /// Both rest on this mapping, so every kind is pinned: OpenCode and
+    /// Hermes have no jump path at all; the others have either an exact
+    /// pid link or a window that can be focused.
+    @Test func canJumpIsPinnedPerAgent() {
+        #expect(ProcessLocator.canJump(.claudeCode))
+        #expect(ProcessLocator.canJump(.codex))
+        #expect(ProcessLocator.canJump(.cursor))
+        #expect(ProcessLocator.canJump(.vsCode))
+        #expect(!ProcessLocator.canJump(.openCode))
+        #expect(!ProcessLocator.canJump(.hermes))
+        // Exhaustive over AgentKind: a new kind must be classified above.
+        for agent in AgentKind.allCases {
+            let jumpable: Bool = switch agent {
+            case .claudeCode, .codex, .cursor, .vsCode: true
+            case .openCode, .hermes: false
+            }
+            #expect(ProcessLocator.canJump(agent) == jumpable, "unclassified agent \(agent)")
+        }
+    }
+
     @Test func codexWithoutALockIsNotLocated() throws {
         let tree = try makeTree(codexLocks: ["other-session.lock"])
         defer { try? FileManager.default.removeItem(at: tree.root) }

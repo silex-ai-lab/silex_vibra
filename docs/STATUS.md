@@ -1,5 +1,13 @@
 # Vibra — current status
 
+**2026-09-27 — OpenCode/Hermes rows no longer alert on click.** Those two
+agents publish no session→process link, so their menu rows now render gray
+with a tooltip explaining why instead of a modal that could only ever repeat
+itself; clicking their "waiting for you" notifications clears them silently.
+`ProcessLocator.canJump` pins the mapping per agent (exhaustive over
+`AgentKind`), 165 tests green; README troubleshooting entry. The alert is
+unchanged for Claude Code/Codex, where "the process has exited" is news.
+
 **2026-09-27 — History window UI, wave 2 (`the reference dashboard` borrow).** Adds each
 question's transcript path row (Copy Path / Open) and its session id in the
 detail pane, on-demand **Tasks** and **Timeline** sections for Claude Code
