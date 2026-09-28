@@ -4,7 +4,7 @@ A status companion for AI coding agents on macOS. It tells you which of your
 agent sessions are working, which are waiting on *you*, and what they have cost
 so far — from the menu bar, without switching to a terminal to find out.
 
-Open source (MIT), local-only, no account, no telemetry, no network egress.
+Open source (Apache 2.0), local-only, no account, no telemetry, no network egress.
 
 ```
 Vibra 2▶ 1!
@@ -660,4 +660,4 @@ weekly report cards, and Developer ID signing.
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE)
