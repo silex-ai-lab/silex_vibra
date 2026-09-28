@@ -369,6 +369,9 @@ The user asked for both, so they were built with their limits stated:
   semantics were taken from VS Code's own bundled serializer, not guessed. This
   machine's chats are all empty, so it is fixture-tested only; a live session
   has not been watched end to end. Token counts are present; cost is `n/a`.
+  *Superseded 2026-09-22:* live testing followed (commit `2164fa6`), against
+  VS Code 1.135: working, needs approval, your turn, a reply stopped by
+  quitting, and click-to-focus — see [agents/vscode.md](agents/vscode.md).
 
 ### Critical decisions
 

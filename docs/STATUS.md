@@ -83,8 +83,9 @@ wants you, focuses the terminal a session runs in, and produces a rolling
 usage report.
 
 Everything achievable without the user's involvement is done. What remains is
-either blocked on a paid Apple Developer account (P3.x) or has no viable
-target on this machine (P2.2).
+blocked on a paid Apple Developer account (P3.x). *(Earlier this line also
+listed P2.2 as having no viable target; P2.2 has since been done — Cursor and
+VS Code Copilot Chat, see the table below.)*
 
 | Phase | Step | State |
 |---|---|---|
@@ -297,12 +298,12 @@ approval; the certificate is what makes that approval outlive rebuilds.
 | RSS sometimes exceeds the 60 MB target | Minor. Flat within a run, not leaking. | AppKit + cold-parse high water |
 | **Notch overlay has never executed** | Unknown. `makeIfSupported()` returns nil on this hardware, so the code path has never run once. | Needs a notched Mac |
 | **Terminal.app jump path unexercised** | Unknown. It was not running during testing; only iTerm2 was verified. | Run Terminal.app and retest |
-| Jump-back unavailable inside multiplexers | tmux, screen and herdr own their panes' ptys, so the emulator never sees them. Vibra refuses to guess. | Inherent; documented |
+| Jump-back unavailable inside tmux and screen | tmux and screen own their panes' ptys, so the emulator never sees them. Vibra refuses to guess. *(herdr was listed here too; herdr panes are now jumpable via `HerdrLocator` — see [troubleshooting.md](troubleshooting.md).)* | Inherent; documented |
 | OpenCode not locatable | Its sessions cannot be jumped to at all. | Needs a published pid link |
 | OpenCode usage cannot be dated | Its tokens appear on a separate "undated" line in the report. | Needs per-record timestamps |
 | OpenCode `ev=unknown` | Rarely reports `needs approval`. The column is read and tested; the live transition has never been observed. | Observe a real approval prompt |
 | Ad-hoc signed | macOS refuses notification authorization until enabled by hand. | P3.1 — needs a paid Apple account |
-| Repo is private | Not publicly installable. | One command, user's call |
+| ~~Repo is private~~ | *Resolved:* the repository is public under Apache 2.0. Install is still source-only — see P3.1. | — |
 
 ## Honest note on the cost figures
 

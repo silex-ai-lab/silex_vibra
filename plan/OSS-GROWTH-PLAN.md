@@ -35,6 +35,20 @@ steps and receive notifications.**
 - Repository topics are empty; no homepage is set.
 - README is ~663 lines; the Install section starts at line 176.
 
+Found while executing Day 1 (checked at `d40c4fb`, recorded in
+[PLAN-2026-09-28-oss-growth-day1.md](PLAN-2026-09-28-oss-growth-day1.md)):
+
+- A second stale claim, README line 659: "Not yet done: weekly report cards".
+- The README never documented **Usage Report…** (⌘U).
+- The 2026-09-27 Release body links two files that do not exist in the repo.
+- Not every agent can show every state: Vibra reads no approval state from
+  Codex or Hermes; OpenCode never shows your turn or stalled; a stalled Cursor
+  turn is shown idle. Click-to-jump is per agent (none for OpenCode/Hermes).
+- No live observation of Claude Code's states is recorded in the docs; only
+  Codex working → your turn, and VS Code / Cursor's live-tested states.
+- `docs/ROADMAP.md` and `docs/STATUS.md` contradicted the README on VS Code
+  live testing, P2.2 and herdr jump-back.
+
 ## Plan
 
 | # | Pri | Item | Change | Scope / dependency | Success signal |

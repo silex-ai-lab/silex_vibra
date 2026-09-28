@@ -113,7 +113,7 @@ this matrix plus D1's evidence, and keeps the two ideas apart.
    build, `make uninstall`, first-launch Gatekeeper step), plus one added
    sentence: "There is no downloadable app yet: Vibra is ad-hoc signed and not
    notarized, so notifications need one manual System Settings step — see
-   [Troubleshooting](docs/troubleshooting.md#troubleshooting)."
+   `[Troubleshooting](docs/troubleshooting.md#troubleshooting)`."
 7. **First two minutes** (#5) — scoped to an **interactive Claude Code or Codex
    session in a terminal**: open the app → from the cloned repo, run
    `make probe` → give the agent a task → it shows 🔵 working → when the turn
@@ -170,7 +170,7 @@ heading lines excluded) falls in exactly one class:
   ```
   ); line 485–486 "**`swift
   test` says everything passed but nothing ran.** … See the testing note
-  above …" (→ same sentence with "the [testing note](development.md#testing-note)"),
+  above …" (→ same sentence with "the `[testing note](development.md#testing-note)`"),
   and any other cross-file "above"/"below" wording, each listed with old and
   new text in the Outcome section's appendix before the code gate.
 - **D — deleted.** Exactly one block: line 538 "**No weekly report card.**"
@@ -318,4 +318,97 @@ limitations item(s) (539–556) verbatim under `## Limits`. Link to
 
 ## Outcome
 
-_(filled after the code gate)_
+**Code gate passed at round 2, unanimous**, on review diff revision
+`fb136a254f2125b84bb86f94a6f5704077528a69` (`git diff d40c4fb`, blob hash of the
+diff file). Only this Outcome record changed after it.
+
+| Seat | Plan gate (v3) | Code round 1 | Code round 2 (final) |
+|---|---|---|---|
+| coder-deepseek | PLAN-APPROVED (r3; rejected r1, r2) | IMPL-APPROVED | IMPL-APPROVED |
+| reviewer-codex | PLAN-APPROVED (r3; rejected r1, r2) | IMPL-REJECTED (6 defects) | IMPL-APPROVED |
+| planner (claude) | PLANNER (claude): PLAN-APPROVED | — | PLANNER (claude): IMPL-APPROVED |
+
+**What each seat caught.** Codex: wrong test path, states some agents can
+never show, a first-run promise OpenCode/Cursor/Hermes couldn't keep,
+conservation rules that contradicted the rewrite, commands not on `PATH`,
+probes that would read real agent data, stale STATUS rows, post-gate edits;
+in code review the Usage Report coverage, the Cursor read contract, canary
+wording, unresolvable citations and a "safe to hand to another model"
+overclaim. DeepSeek: the same test path, the ROADMAP↔README VS Code
+contradiction, a states table claimed by two files; as D1 author, that no
+live Claude Code observation is recorded anywhere. Planner: the second stale
+report-card line, the undocumented Usage Report, dead Release links, the probe
+suite.
+
+**Follow-ups (not in this diff):** record a live Claude Code observation;
+DeepSeek nit — `docs/features.md` should say OpenCode/Hermes store per-session
+*token* totals without timestamps (Hermes messages do have timestamps); the
+`make test` toolchain failure (Swift 6.4 CLT, `TestingMacros` plugin missing).
+
+### Appendix: R edits (old → new)
+
+| Base README | New text | Where |
+|---|---|---|
+| 3–5 intro, 7 "Open source…" | Headline "Know when your coding agents need you." + subtitle + one-liner | `README.md` top |
+| 30–39 source table | Per-state compatibility table; each path verbatim in its guide's "What Vibra reads" | `README.md`, `docs/agents/*.md` |
+| 136–141 `--query` block | Full-path block from rule R, verbatim | `docs/features.md` |
+| 485–486 "See the testing note above" | "See the `[testing note](development.md#testing-note)`" | `docs/troubleshooting.md` |
+| 657–659 Status paragraph | "…Not yet done: Developer ID signing." | `docs/development.md` |
+| 538 "No weekly report card." | deleted (class D) | — |
+
+No other cross-file "above/below" wording needed changing ("see below" in the
+notifications limitation still points within `troubleshooting.md`).
+
+### C5: README privacy bullet → source
+
+| README bullet | Source |
+|---|---|
+| "Vibra reads local files and sends nothing anywhere — a passive reader of the session files…" | base README 394 ("Vibra reads local files and sends nothing anywhere."), 41–42 ("a passive reader of files that already exist") |
+| No network egress at all… | base README 396, verbatim |
+| It installs nothing into your agents… | base README 95–96, verbatim |
+| OpenCode's and Cursor's databases hold auth tokens; read-only, one hard-coded `SELECT`, token tables never queried | base README 397–400, 404–406 |
+| Machine-readable outputs never contain message text; History in memory only, writes nothing | base README 418–422 |
+| Never approves an agent's permission prompt | `docs/ROADMAP.md` "Explicitly not doing: Approving agent permission prompts from the menu bar" |
+| Canary tests: absent from returned sessions, their JSON, `--query` output or errors, per adapter; `make test` fails if the OpenCode token canary did not run | base README 401–403 (OpenCode: sessions, JSON, errors; "`make test` fails if that test did not run"), 409–411 (VS Code: sessions), 416–417 (Hermes: session, `--query`, error), 422 (`--history-stats`); `Makefile` greps only `canaryTokenNeverLeaks` |
+
+### Probe results (review revision)
+
+- C1 149 lines · C2 no missing block (mutation check: deleting one moved
+  bullet is caught) · C3 all links/anchors resolve · C4 no stale claim ·
+  C6 six guides, headings, kinds, every cited test function exists, every
+  live row cited · C8 table "—" cells match the matrix; first-success names
+  only Claude Code / Codex.
+- C7: flags in `main.swift`, kinds = `AgentKind` raw values, make targets
+  exist; install path = `/Applications/$(APP_NAME).app`, `APP_NAME := Vibra`;
+  `build/Vibra.app/Contents/MacOS/Vibra --query` with `--attention` and each
+  of the six `--agent` kinds, under an empty `VIBRA_HOME`: all exit 0 with
+  valid JSON (0 sessions).
+- C9: `git diff --stat $BASE -- Sources Tests Makefile Package.swift` empty.
+  **`make test` does not pass on this machine — at `BASE` too** (clean
+  worktree of `d40c4fb`, same result): Swift 6.4 Command Line Tools cannot find
+  the `TestingMacros` plugin, so the test target does not compile. Pre-existing
+  toolchain issue, unrelated to this docs-only diff; not fixed here.
+
+### Code round-1 objections → changes
+
+| # | Defect (who) | Change |
+|---|---|---|
+| 1 | features.md: "safe to hand to another model" overclaims; JSON has cwd, branch, id (Codex) | Removed; now lists the metadata it does carry and says to treat it like those paths and names |
+| 2 | cursor.md: wrong join (`composerData` table) and understated column list (Codex) | Rewritten from `CursorAdapter.sessionSelectSQL`: `cursorDiskKV` row keyed `composerData:<id>`, full metadata allowlist |
+| 3 | Usage Report coverage overstated (Codex) | features.md: per-agent coverage — dated only for Claude Code / Codex; OpenCode / Hermes undated, all-time, excluded from total; Cursor / VS Code absent. README: "dated for Claude Code and Codex" |
+| 4 | Canary paragraph broader than tests and `make test` (Codex) | README narrowed to the tested surfaces and the one canary `make test` checks; C5 row corrected |
+| 5 | `README:NNN` / STATUS line citations unresolvable after the move; wrong suite name `SettingsAndPipelineTests` (Codex) | All citations are permalinks to `d40c4fb` lines; `LivePipelineTests…` / `EditorOrphanTests…` with their files; C6 now checks suite↔function and prints each cited base line (reviewed: each supports its claim) |
+| 6 | Codex guide and README jump wording (Codex; DeepSeek non-blocking) | Codex guide adds the hosting app; README: hosting app for Claude Code / Codex, VS Code window, Cursor brought forward |
+
+### Deviations from v3, for the reviewers
+
+1. Compatibility table uses per-state columns (`live` / `✓` / `—`) with one
+   legend instead of numbered footnotes: it carries the same distinction
+   (never / can show / observed live) per cell.
+2. D1 found no recorded live observation of any Claude Code state, so
+   Claude Code shows `✓` everywhere, not `live`. Follow-up in `plan/STATUS.md`.
+3. `docs/STATUS.md` "Repo is private" gap row also contradicted reality
+   (`gh repo view`: PUBLIC) and was marked resolved, beyond the rows P6 named.
+4. Planner patched two D1 files after D1 finished: Claude Code guide
+   (jump also brings the hosting app forward; History reads typed questions)
+   and Codex guide (History note).
