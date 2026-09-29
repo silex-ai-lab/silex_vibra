@@ -7,6 +7,27 @@ import Testing
 /// worse than not jumping at all.
 struct ProcessLocatorTests {
 
+    @Test func sharedCodexWriterIsNotMistakenForTerminalClient() {
+        #expect(ProcessInspector.isSharedCodexServer(command:
+            "/Users/demo/.codex/packages/app-server-daemon/releases/0.158/bin/codex app-server --listen unix:// --managed-daemon"))
+        for command in [
+            "codex", "codex exec task", "codex app-server --listen stdio://",
+            "codex app-server daemon pid-update-loop", "other app-server --managed-daemon",
+            "codex exec echo app-server --managed-daemon", "", "codex app-server --managed-daemon=false",
+        ] {
+            #expect(!ProcessInspector.isSharedCodexServer(command: command))
+        }
+    }
+
+    @Test func codexThreadLinksAreExactAndRejectInjectedRoutes() {
+        let id = "12345678-1234-7123-8123-123456789abc"
+        #expect(CodexSessionLink.url(sessionID: id)?.absoluteString == "codex://threads/\(id)")
+        #expect(CodexSessionLink.url(sessionID: id.uppercased()) == CodexSessionLink.url(sessionID: id))
+        for invalid in ["", "new", "../settings", id + "?q=hello", id + "/other", "https://example.com"] {
+            #expect(CodexSessionLink.url(sessionID: invalid) == nil)
+        }
+    }
+
     private func makeTree(
         claude: [String: String] = [:],
         codexLocks: [String] = []

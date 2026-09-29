@@ -27,6 +27,9 @@ enum TerminalJumper {
         case notLocatable
         /// The process exists but has no controlling terminal.
         case noControllingTerminal
+        /// The writer serves multiple clients; its ancestry cannot identify
+        /// which terminal (if any) is displaying this thread.
+        case sharedCodexServer
         /// No terminal claims this tty. `owner` says what the process ancestry
         /// actually shows, so the explanation can be true rather than likely.
         case noTerminalOwnsTTY(tty: String, owner: ProcessInspector.TTYOwner)
@@ -46,7 +49,7 @@ enum TerminalJumper {
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
         }
-        if found.desktopSessionID != nil { return nil }
+        if found.desktopSessionID != nil || found.isSharedCodexServer { return nil }
         if found.tty == nil, hostApp(of: found.pid) == nil { return .noControllingTerminal }
         return nil
     }
@@ -71,6 +74,13 @@ enum TerminalJumper {
         }
         guard let found = locator.locate(sessionID: session.id, agent: session.agent) else {
             return .notLocatable
+        }
+        // A daemon's lock proves that a thread is loaded, not that the daemon
+        // is its UI. Do not guess among same-directory terminal clients or
+        // activate an unrelated Codex desktop window. The desktop's thread
+        // link names the exact conversation, even if it started in the CLI.
+        if found.isSharedCodexServer {
+            return openInCodexApp(session.id) ? .jumped(app: "Codex") : .sharedCodexServer
         }
         // Started by the Claude desktop app (a scheduled task or a Code tab):
         // there is no terminal to find, but the app can open the session
@@ -117,7 +127,15 @@ enum TerminalJumper {
         case notRunning
     }
 
-    // MARK: - Claude desktop app
+    // MARK: - Desktop thread links
+
+    private static func openInCodexApp(_ sessionID: String) -> Bool {
+        guard let url = CodexSessionLink.url(sessionID: sessionID),
+              let appURL = NSWorkspace.shared.urlForApplication(toOpen: url),
+              Bundle(url: appURL)?.bundleIdentifier == "com.openai.codex"
+        else { return false }
+        return NSWorkspace.shared.open(url)
+    }
 
     /// Opens the session through the desktop app's own deep link, the one it
     /// registers for "Continue Last Claude Code Session". Needs no Automation

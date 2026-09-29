@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## 2026-09-28.1 — Codex session navigation
+
+- **Codex shared-server navigation.** A managed Codex background server can
+  hold several session locks without owning any terminal. Those sessions now
+  open their exact thread in the Codex desktop app instead of reporting
+  "That session has no terminal." If the desktop link cannot be opened, or
+  a session's process or controlling terminal cannot be found, the menu shows
+  the selected session's history without a blocking alert. History navigation
+  failures no longer overwrite the clipboard or claim the session has exited.
+
+  Release notes: [2026-09-28.1](docs/releases/2026-09-28.1.md).
+
+## 2026-09-28 — Documentation update
 
 - **Docs: README restructured** around an outcome headline, a per-state
   compatibility table (observed live / can show / never) and a two-minute
@@ -13,6 +25,8 @@
   `docs/ROADMAP.md` (VS Code live-tested) and `docs/STATUS.md` (herdr jump,
   public repo). Record:
   [plan/PLAN-2026-09-28-oss-growth-day1.md](plan/PLAN-2026-09-28-oss-growth-day1.md).
+
+## 2026-09-27 — History and editor support
 
 - **History window** (⌘Y): the questions you asked in Claude Code, Codex and
   Hermes, by day, searchable, with a detail pane to read a question in place

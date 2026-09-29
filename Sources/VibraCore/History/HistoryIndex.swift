@@ -34,7 +34,8 @@ public struct HistoryIndex: Sendable {
         calendar: Calendar = .current,
         keyword: String = "",
         agent: AgentKind? = nil,
-        project: String? = nil
+        project: String? = nil,
+        sessionID: String? = nil
     ) -> HistoryIndex {
         let start = windowStart(windowDays: windowDays, now: now, calendar: calendar)
         let needle = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -43,6 +44,7 @@ public struct HistoryIndex: Sendable {
             guard day >= start, record.timestamp <= now else { return false }
             if let agent, record.agent != agent { return false }
             if let project, record.project != project { return false }
+            if let sessionID, record.sessionID != sessionID { return false }
             if !needle.isEmpty,
                record.text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) == nil,
                record.project.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) == nil {

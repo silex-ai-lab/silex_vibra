@@ -40,6 +40,16 @@ Vibra will not guess at one. The row still reports the session's state and
 tokens, and its tooltip says why there is no jump. Clicking a "waiting for
 you" notification for such a session just clears the notification.
 
+**Codex sessions used to say "That session has no terminal," even while open.**
+Newer Codex terminal clients can share a managed background server. That server
+holds the thread-writer locks but has no terminal; its PID cannot identify the
+client's tab. Vibra now opens the exact thread through the Codex desktop app's
+`codex://threads/<session-id>` link. This opens the conversation in the desktop
+app, rather than focusing its original CLI tab. If the desktop app is unavailable,
+Vibra shows that session's history instead. Missing-process and missing-window
+clicks also show history without a modal alert. `--locate` reports shared-server
+ownership, and `--jump` accepts a session ID to distinguish same-project sessions.
+
 **herdr panes are jumpable.** A session in a herdr pane is traced up its
 process ancestry to the herdr server; the ancestor directly below the server is
 the pane's shell, which herdr reports per pane as `shell_pid`, so the pane

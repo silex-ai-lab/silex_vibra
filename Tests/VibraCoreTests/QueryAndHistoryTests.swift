@@ -284,6 +284,17 @@ struct HistoryExtractionTests {
 }
 
 struct HistoryIndexTests {
+    @Test func navigationFallbackKeepsOnlyTheExactSessionInTheSameProject() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let records = ["first", "second"].map {
+            QuestionRecord(agent: .codex, sessionID: $0, timestamp: now.addingTimeInterval(-60),
+                           cwd: "/Users/demo/same-project", text: "Question for \($0)")
+        }
+        let selected = HistoryIndex.build(records, windowDays: 1, now: now, sessionID: "second")
+        #expect(selected.days.flatMap(\.questions).map(\.sessionID) == ["second"])
+        #expect(HistoryIndex.build(records, windowDays: 1, now: now, sessionID: "missing").count == 0)
+        #expect(HistoryIndex.build(records, windowDays: 1, now: now).count == 2)
+    }
     private var utcPlus8: Calendar {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!

@@ -5,26 +5,30 @@ public struct SessionProcess: Equatable, Sendable {
     public let sessionID: String
     public let pid: Int32
     /// Controlling terminal device, e.g. "ttys001". Nil for a process with no
-    /// controlling tty, which cannot be jumped to.
+    /// controlling tty; a desktop thread link may still be available.
     public let tty: String?
     public let cwd: String?
     /// The Claude desktop app's own id for this session (`local_...`), when
     /// the desktop app started it - a scheduled task or a Code tab. Such a
     /// session has no terminal at all; the desktop app is where it lives.
     public let desktopSessionID: String?
+    /// The lock holder is a shared writer, not the interactive terminal client.
+    public let isSharedCodexServer: Bool
 
     public init(
         sessionID: String,
         pid: Int32,
         tty: String?,
         cwd: String? = nil,
-        desktopSessionID: String? = nil
+        desktopSessionID: String? = nil,
+        isSharedCodexServer: Bool = false
     ) {
         self.sessionID = sessionID
         self.pid = pid
         self.tty = tty
         self.cwd = cwd
         self.desktopSessionID = desktopSessionID
+        self.isSharedCodexServer = isSharedCodexServer
     }
 }
 
@@ -40,7 +44,8 @@ public struct SessionProcess: Equatable, Sendable {
 ///   pid and its sessionId.
 /// - Codex holds an open lock at
 ///   `~/.codex/thread-writer-locks/<sessionId>.lock`, so the holder's pid is
-///   discoverable.
+///   discoverable. With a managed server that is the shared writer's PID,
+///   not the terminal client's; `isSharedCodexServer` distinguishes it.
 ///
 /// OpenCode publishes no such link, so it is simply not locatable in v1 —
 /// which is correct behaviour: no jump beats a wrong jump.
@@ -170,11 +175,13 @@ public struct ProcessLocator: Sendable {
         let lock = codexLocksDir.appendingPathComponent("\(sessionID).lock")
         guard FileManager.default.fileExists(atPath: lock.path) else { return nil }
         guard let pid = ProcessInspector.holderOfOpenFile(lock) else { return nil }
+        let tty = ProcessInspector.tty(of: pid)
         return SessionProcess(
             sessionID: sessionID,
             pid: pid,
-            tty: ProcessInspector.tty(of: pid),
-            cwd: nil
+            tty: tty,
+            cwd: nil,
+            isSharedCodexServer: tty == nil && ProcessInspector.isSharedCodexServer(pid)
         )
     }
 }

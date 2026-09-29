@@ -192,7 +192,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
     for adapter in AdapterRegistry.all() {
         for s in adapter.discoverSessionsSafely()
             where now.timeIntervalSince(s.lastActivity) <= 12 * 3600
-            && s.projectName == wanted {
+            && (s.projectName == wanted || s.id == wanted) {
             var s2 = s
             s2.state = engine.classify(lastEvent: s.lastEvent, lastActivity: s.lastActivity, now: now)
             if matched == nil { matched = s2 }
@@ -207,6 +207,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
     case .jumped(let app):            print("OK: focused in \(app)")
     case .notLocatable:               print("FAIL: no published session->process link, or process exited")
     case .noControllingTerminal:      print("FAIL: process has no controlling terminal")
+    case .sharedCodexServer:          print("HISTORY: shared Codex server; no exact terminal-client mapping")
     case .notPermitted(let app):
         print("FAIL: macOS refused the Apple Event - Vibra has no Automation permission for \(app)")
         print("      System Settings > Privacy & Security > Automation > Vibra > enable \(app)")
@@ -313,6 +314,9 @@ if CommandLine.arguments.contains("--locate") {
             if let found {
                 print("\(s.agent.displayName) \(s.projectName) [\(state.rawValue)]")
                 print("   pid=\(found.pid) tty=\(found.tty ?? "none") cwd=\(found.cwd ?? "?")")
+                if found.isSharedCodexServer {
+                    print("   navigation: shared Codex server; opens exact Codex thread, with history fallback")
+                }
                 // Who holds the tty, from the process ancestry. This is the
                 // question a failed jump turns on, so printing it here means it
                 // can be answered without clicking anything.

@@ -51,6 +51,9 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
     private let daysPopup = NSPopUpButton()
     private let copyRowsButton = NSButton()
     private let status = NSTextField(labelWithString: "")
+    private let navigationNotice = NSTextField(wrappingLabelWithString: "")
+    private let allSessionsButton = NSButton(title: "All sessions", target: nil, action: nil)
+    private var focusedSessionID: String?
     private let emptyLabel = NSTextField(labelWithString: "No questions match.")
     private let detailMeta = NSTextField(labelWithString: "")
     private let detailText = NSTextView()
@@ -116,8 +119,26 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         snapshotContent(of: window, to: url)
     }
 
-    func show() {
+    func show() { show(sessionID: nil, notice: nil) }
+
+    func show(sessionID: String?, notice: String?) {
         ensureWindow()
+        focusedSessionID = sessionID
+        navigationNotice.stringValue = notice ?? ""
+        navigationNotice.isHidden = notice == nil
+        allSessionsButton.isHidden = sessionID == nil
+        if let sessionID {
+            window?.title = "Vibra — session \(sessionID.prefix(8))"
+            search.stringValue = ""
+            agentPopup.selectItem(at: 0)
+            daysPopup.selectItem(at: HistoryIndex.allowedDays.count - 1)
+        } else {
+            window?.title = "Vibra — history"
+        }
+        // Do not leave the previous session's questions visible while the
+        // asynchronous reload is running after a second session click.
+        table.deselectAll(nil)
+        applyFilters()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         load()
@@ -156,7 +177,8 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         // popup counts and for the rows, which are its questions narrowed to
         // the selected agent. Counts therefore never depend on the selection.
         let base = HistoryIndex.build(
-            records, windowDays: loadedDays, now: Date(), keyword: search.stringValue)
+            records, windowDays: loadedDays, now: Date(), keyword: search.stringValue,
+            sessionID: focusedSessionID)
         var perAgent: [AgentKind: Int] = [:]
         for day in base.days {
             for question in day.questions { perAgent[question.agent, default: 0] += 1 }
@@ -178,6 +200,10 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
             rows.append(contentsOf: questions.map(Row.question))
         }
         table.reloadData()
+        if focusedSessionID != nil,
+           let first = rows.firstIndex(where: { if case .question = $0 { return true }; return false }) {
+            table.selectRowIndexes(IndexSet(integer: first), byExtendingSelection: false)
+        }
         emptyLabel.isHidden = displayed > 0
         updateDetail()
         let names = Self.covered.map(\.displayName).joined(separator: ", ")
@@ -221,7 +247,12 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         copyRowsButton.target = self
         copyRowsButton.action = #selector(copyRows)
 
-        let bar = NSStackView(views: [search, agentPopup, daysPopup, copyRowsButton])
+        allSessionsButton.target = self
+        allSessionsButton.action = #selector(showAllSessions)
+        allSessionsButton.isHidden = true
+        navigationNotice.isHidden = true
+        navigationNotice.textColor = .secondaryLabelColor
+        let bar = NSStackView(views: [search, agentPopup, daysPopup, copyRowsButton, allSessionsButton])
         bar.orientation = .horizontal
         bar.spacing = 8
 
@@ -446,12 +477,12 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         status.lineBreakMode = .byTruncatingTail
 
-        let stack = NSStackView(views: [bar, split, status])
+        let stack = NSStackView(views: [bar, navigationNotice, split, status])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 10, right: 12)
-        for view in [bar, split, status] {
+        for view in [bar, navigationNotice, split, status] {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
         }
@@ -474,6 +505,8 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
     @objc private func filtersChanged() {
         applyFilters()
     }
+
+    @objc private func showAllSessions() { show() }
 
     @objc private func daysChanged() {
         load()
@@ -629,8 +662,7 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
         updateDetail()
     }
 
-    /// Copy button: the selected question's text, exactly what double-click
-    /// copies when the session is not live.
+    /// Copy button: the selected question's text.
     @objc private func copyDetail() {
         guard let question = selectedQuestion else { return }
         NSPasteboard.general.clearContents()
@@ -711,15 +743,13 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
     }
 
     /// One path for double-click and ⌘J: jump if the session is still live,
-    /// otherwise put the full question on the pasteboard.
+    /// otherwise keep the question visible without changing the clipboard.
     private func activate(row index: Int) {
         guard rows.indices.contains(index), case .question(let q) = rows[index] else { return }
         if let session = liveSession(q.sessionID), case .jumped = TerminalJumper.jump(to: session) {
             return
         }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(q.text, forType: .string)
-        status.stringValue = "Copied the question to the clipboard (its session is not live)."
+        status.stringValue = "Couldn't open this session's window. You can read the question here or use Copy."
     }
 
     // MARK: - Table

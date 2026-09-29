@@ -167,7 +167,7 @@ final class MenuBarController {
         if session.desktopSessionID != nil {
             action = "Click to open it in Claude."
         } else if jumpable {
-            action = "Click to focus its terminal tab."
+            action = "Click to open its window, or view its history if the window can't be found."
         } else {
             action = "\(session.agent.displayName) publishes no link between its "
                 + "session and its process, so there is no tab to focus."
@@ -223,17 +223,9 @@ final class MenuBarController {
             // By key, not by session: the clicked notification is removed even
             // when it was left behind by an earlier run and never tracked here.
             notifier.dismiss(key: key)
-            let others = dismissDeadEndNotifications()
-            // Withdrawn before the alert: it is modal, and the sweep should not
-            // wait on the user reading it.
-            explainFailure(
-                outcome, for: session,
-                footnote: others > 0
-                    ? "\n\nCleared this notification and \(others) other"
-                      + (others == 1 ? "" : "s") + " that can't be reached either."
-                    : "\n\nCleared this notification."
-            )
-        case .notPermitted, .noTerminalOwnsTTY:
+            _ = dismissDeadEndNotifications()
+            explainFailure(outcome, for: session)
+        case .sharedCodexServer, .notPermitted, .noTerminalOwnsTTY:
             // Clicked, so it goes too. Only the sweep is withheld: a
             // permission can be granted, so the others may still work.
             notifier.dismiss(key: key)
@@ -261,24 +253,21 @@ final class MenuBarController {
     /// Tells the user why a jump failed. Does nothing for a jump that worked.
     private func explainFailure(
         _ outcome: TerminalJumper.Outcome,
-        for session: Session,
-        footnote: String = ""
+        for session: Session
     ) {
         switch outcome {
         case .jumped:
             return
         case .notLocatable:
-            explain(
-                "Can't find that session's process",
-                "\(session.agent.displayName) doesn't publish a link between its "
-                + "session and its process, or the process has exited." + footnote
-            )
+            historyWindow.show(sessionID: session.id, notice:
+                "This session's window is no longer reachable. Its available history is shown below.")
+            Task { await store.requestRefresh() }
         case .noControllingTerminal:
-            explain(
-                "That session has no terminal",
-                "Its process is running without a controlling terminal, so there "
-                + "is no tab to focus." + footnote
-            )
+            historyWindow.show(sessionID: session.id, notice:
+                "Vibra couldn't find a window for this session. Its available history is shown below.")
+        case .sharedCodexServer:
+            historyWindow.show(sessionID: session.id, notice:
+                "This session couldn't be opened in the Codex desktop app. Its available history is shown below.")
         case .notPermitted(let app):
             explain(
                 "Vibra isn't allowed to control \(app)",

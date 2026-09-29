@@ -27,6 +27,22 @@ public enum ProcessInspector {
         return normalizeTTY(value)
     }
 
+    /// A managed Codex server can hold many thread locks on behalf of
+    /// unrelated terminal clients. Its PID identifies the writer, not a tab.
+    public static func isSharedCodexServer(_ pid: Int32) -> Bool {
+        guard let command = run("/bin/ps", ["-o", "args=", "-p", "\(pid)"]) else { return false }
+        return isSharedCodexServer(command: command)
+    }
+
+    public static func isSharedCodexServer(command: String) -> Bool {
+        let tokens = command.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard tokens.count >= 3,
+              (tokens[0] as NSString).lastPathComponent == "codex",
+              tokens[1] == "app-server"
+        else { return false }
+        return tokens.dropFirst(2).contains("--managed-daemon")
+    }
+
     /// What is sitting between a session's process and the window server.
     ///
     /// Answers "is this tty really inside a multiplexer?" instead of assuming
