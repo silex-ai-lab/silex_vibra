@@ -182,6 +182,24 @@ session files and databases the agents already write (paths in each guide).
 from returned sessions, their JSON, `--query` output or errors (per adapter); `make test` fails if
 the OpenCode token canary did not run. Detail: [docs/privacy.md](docs/privacy.md).
 
+## ⭐ Why star Vibra
+
+I use Vibra every day to keep track of my own agents, so I keep maintaining it.
+
+- When people ask for a new agent, or a new state for one we already support, I add it.
+- I keep every agent **free, local and working**: no account, no paid tier, nothing sent anywhere.
+- Agents keep changing the session files Vibra reads. When an update breaks one, I fix the adapter so you don't have to watch for it.
+
+More reasons:
+
+- 🔒 **Privacy is tested, not promised.** Canary tests plant fake secrets and message text, then fail the build if any of it leaks into Vibra's output.
+- 🧾 **Honest about what works.** The compatibility table marks what has been seen in a real session (**live**) separately from what the code can show but nobody has seen yet (**✓**). As more states are seen live, the table gets updated.
+- 🧩 **Leaves your setup alone.** It adds no hooks, plugins or wrappers to your agents, and `make uninstall` removes the app.
+- 🌏 **Readable in four languages:** English, 简体中文, 日本語 and 한국어.
+- 📣 **Helps other people find it.** A star makes Vibra easier to find for anyone else running several agents at once.
+
+Star it so you can find it the next time an agent has been waiting on you without you noticing. ⭐
+
 ## More and contributing
 
 [Features](docs/features.md) · [Troubleshooting & limitations](docs/troubleshooting.md) ·
