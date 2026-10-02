@@ -214,9 +214,59 @@ owner's go-ahead** (plan/STATUS.md: show the README diff to the owner first).
 
 ## Claim table
 
-(filled in during F1: new sentence → source file:line)
+New or changed English README text (outside verbatim blocks) → source. Line numbers are `git show 6840769:README.md`.
+
+| New sentence | Source |
+|---|---|
+| 📳 Vibra | Product name (base README:1); emoji is decoration, no claim |
+| Know when your coding agents need you. | base README:3 (verbatim, bold in base) |
+| License: Apache 2.0 | base README:7 "Open source (Apache 2.0)"; LICENSE |
+| macOS 14+ | base README:67 "Requires **macOS 14+**" |
+| Swift 6 | base README:67 "a Swift 6 toolchain" |
+| Network: none | base README:7 "no network"; docs/privacy.md:11 "No network egress at all." |
+| GitHub stars | live counter from GitHub; no claim |
+| Quick start · Supported agents · Privacy · Design principles | navigation only |
+| English · 简体中文 · 日本語 · 한국어 | navigation only; the three files are added by D1 |
+| A macOS menu-bar app that shows which of your Claude Code, Codex, Cursor, VS Code (Copilot Chat), OpenCode and Hermes sessions are working, waiting for your turn, or need an approval — for the agents that can report it; see Supported agents. | base README:3-7, link target renamed from Compatibility to Supported agents |
+| 🟠 An agent finished its turn → for the agents that can report it, the row turns 🟠 your turn and you get a notification, withdrawn once no longer true. | base README:5-6 "for the agents that can report it"; base README:115 "the row turns 🟠 your turn"; base README:33 "A notification when one needs you (🟠 or 🔴), withdrawn once no longer true." |
+| 🔴 An agent is sitting on a permission prompt → for the agents that can report it, the row turns 🔴 needs approval; Vibra only shows it and never approves it for you. | base README:5-6 "for the agents that can report it"; base README:47 "🔴 needs approval" row, "Sitting on a permission prompt."; base README:133 "It never approves an agent's permission prompt for you; it only shows it." |
+| 🖱️ You want to get back to it → a click jumps to it, where the agent allows; see What it does. | narrower than base README:34-36 "A click jumps to it … OpenCode and Hermes sessions cannot be jumped to." |
+| 🧾 You want to know what the work used → Usage Report… (⌘U) shows 7 days of tokens and API-equivalent value. | base README:37-38 |
+| Before you install | heading only |
+| 💰 Free and open source | base README:7 "Open source (Apache 2.0)" |
+| Apache License 2.0. | base README:149; LICENSE |
+| 🔒 Local-only | base README:7 "Local-only" |
+| No network egress at all. | base README:125 (verbatim) |
+| No account, no telemetry, no update ping. | base README:125 (verbatim) |
+| 🧩 Installs nothing into your agents | base README:126 (verbatim, capitalised) |
+| No hooks, no plugins, no statusline, no wrapper binaries. | base README:126-127 |
+| 🤖 Six agents | count of rows in base compatibility table (base README:55-60) |
+| Not every agent can report every state; see Supported agents. | narrower than base README:5 "for the agents that can report it" and the — cells |
+| 🩺 Self-check | heading for the next sentence |
+| make probe in the cloned repo prints sessions and states, never message content. | base README:117-118 (verbatim, minus the exit-code clause) |
+| ⚠️ Build from source | base README:106 "There is no downloadable app yet"; install is source build (base README:76-81) |
+| There is no downloadable app yet: Vibra is ad-hoc signed and not notarized, so notifications need one manual System Settings step. | base README:106-108 (verbatim, minus the link) |
+| Hermes Agent | alt text of the Hermes icon: the mark's upstream title (`<title>Hermes Agent</title>` in hermesagent.svg); names the product, no claim |
+| Supported agents | heading; replaces "Compatibility" (base README:51) |
+| Quick start | heading; groups base Install / First launch / Your first two minutes |
+| Design principles | heading |
+| A passive reader. | docs/privacy.md:3-4 |
+| Vibra never asks these tools to change what they write. It is a passive reader of files that already exist. | docs/privacy.md:3-4 (verbatim) |
+| Shows, never acts. | heading for the next sentence |
+| It never approves an agent's permission prompt for you; it only shows it. | base README:133 (verbatim) |
+| Says what it has seen. | heading for the next sentence |
+| The table above keeps states observed in a recorded live session (live) apart from states the code can show with no live record yet (✓). | narrower restatement of base README:62 legend |
+| Agent marks in the compatibility table: see docs/assets/agents/ATTRIBUTION.md. | decision 5 (new file in this change) |
 
 ## Round objections → changes
+
+### Code gate round 1 (diff revision `4a289c67`)
+
+| Defect (who) | Change |
+|---|---|
+| "Why Vibra?" 🟠/🔴 bullets promise those states for every agent; OpenCode never shows 🟠, Codex/Hermes never show 🔴 (codex 1) | Both bullets now say "for the agents that can report it" (verbatim base README:5-6) in all four READMEs; Claim table rows updated |
+| Non-blocking: render translations / verify CJK anchors (deepseek) | Checked every in-page `#` link in all four READMEs with `github-slugger@2`: 36 links, 0 missing |
+| Non-blocking: record the badge-anchor deviation (deepseek) | Recorded here: translations keep each badge `<img>` byte-identical but rewrite the enclosing `<a href="#install">` / `#privacy` to the translated heading slug, per the contract's fragment rule |
 
 ### Round 2 (v2 → v3): both seats PLAN-APPROVED v2; non-blocking notes folded in, so v3 needs a confirmation round
 
@@ -245,4 +295,38 @@ owner's go-ahead** (plan/STATUS.md: show the README diff to the owner first).
 
 ## Outcome
 
-(filled in after the code gate)
+**Plan gate:** 3 rounds (v1 rejected by both reviewers, v2 approved by both,
+v3 confirmation approved by both).
+**Code gate:** 2 rounds on `git diff 6840769` (round 1: DeepSeek approved,
+Codex rejected; round 2: both approved).
+
+**Final verdicts on diff revision `21200f2e15da2826b43301352a39a62642f944b1`
+(base `6840769`):** coder-deepseek `IMPL-APPROVED` · reviewer-codex
+`IMPL-APPROVED` · PLANNER (claude): IMPL-APPROVED
+
+**What each seat caught**
+
+- **Codex:** in the plan, that the scratch licence file was a 404 body, that
+  the foundation gate depended on translations not yet written, that token
+  multisets would let a swapped compatibility cell pass (→ cell-by-cell C7 +
+  N1), and that cross-file fragments were resolved against the wrong file; in
+  the code, that the 🟠/🔴 "Why Vibra?" bullets promised states some agents
+  cannot report. Also built the probe runner (C1–C8, N1–N6, 10 self-tests),
+  which on its first run caught claim-table rows missing their emoji and an
+  untraced `Hermes Agent` alt text.
+- **DeepSeek:** in the plan, that C4 was unsatisfiable with a Markdown file in
+  the icon directory, that external badge URLs would false-fail C3, and the MIT
+  notice requirement; most of v3 came from its notes. Wrote the three
+  translations (all probes green on the first run) and re-verified every icon
+  sha256 against upstream.
+- **Planner (Claude):** wrote the plan, icons, English README and claim table;
+  rendered the README through GitHub's Markdown API in light and dark mode;
+  checked all 36 in-page anchors in four READMEs with `github-slugger@2`;
+  confirmed the translations' "only Claude Code and Codex are dated" against
+  `docs/features.md:16-18`.
+
+**Evidence:** probes C1–C8 PASS in full mode; negative controls N1–N6 each
+rejected by the expected check. The probe runner lives outside the repo
+(session scratch), as the plan specified.
+
+**Not done here (owner decisions):** merge/push to `origin/main`.

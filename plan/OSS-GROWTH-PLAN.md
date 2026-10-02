@@ -73,7 +73,9 @@ Found while executing Day 1 (checked at `d40c4fb`, recorded in
 3. **After distribution is ready:** #10, #11, then launch posts (Show HN etc.)
    built on the "stop watching five terminals" scene and the "local-only,
    no network" differentiator.
-4. **Not doing:** promotion while install is source-only; translated READMEs;
+4. **Not doing:** promotion while install is source-only; ~~translated READMEs~~
+   (reversed 2026-10-01 at the owner's request: zh-CN, ja, ko added — see
+   [PLAN-2026-10-01-readme-restyle-i18n.md](PLAN-2026-10-01-readme-restyle-i18n.md));
    a plugin marketplace of our own.
 
 ## Differences from the internal checklist

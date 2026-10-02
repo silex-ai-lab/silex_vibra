@@ -3,7 +3,7 @@
 Resume point for [OSS-GROWTH-PLAN.md](OSS-GROWTH-PLAN.md). Update this file at
 the end of every session.
 
-**Last updated:** 2026-09-28 · **Baseline commit:** `7d8ae07` · **Repo stats:**
+**Last updated:** 2026-10-01 · **Baseline commit:** `6840769` · **Repo stats:**
 1 star, 0 forks, 0 open issues, no topics, no homepage, Release 2026-09-27 has
 no assets.
 
@@ -43,3 +43,9 @@ no assets.
 - 2026-09-28 — Day 1 executed on branch `oss-growth-day1` (base `d40c4fb`)
   with the three-seat Herdr fleet: #3–#6, #8, #10 example, #7 except the
   Release body. Record: [PLAN-2026-09-28-oss-growth-day1.md](PLAN-2026-09-28-oss-growth-day1.md).
+- 2026-10-01 — README restyled on the Agent Reach template (centred header,
+  badges, "Why Vibra?", "Before you install", agent icons from Lobe Icons,
+  design principles) and translated into zh-CN, ja and ko at the owner's
+  request, reversing the growth plan's "no translated READMEs". Branch
+  `readme-agent-reach-style`, base `6840769`. Record:
+  [PLAN-2026-10-01-readme-restyle-i18n.md](PLAN-2026-10-01-readme-restyle-i18n.md).

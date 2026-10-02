@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Docs: README restyled and translated.** The front page follows the
+  layout of the Agent Reach README: centred header with badges, "Why
+  Vibra?", a "Before you install" summary, agent icons in the compatibility
+  table (from [Lobe Icons](https://github.com/lobehub/lobe-icons), MIT; see
+  [docs/assets/agents/ATTRIBUTION.md](docs/assets/agents/ATTRIBUTION.md)) and
+  design principles. The compatibility, session-state, install and privacy
+  text is unchanged. New translations:
+  [简体中文](README.zh-CN.md), [日本語](README.ja.md), [한국어](README.ko.md);
+  the English README stays authoritative. Record:
+  [plan/PLAN-2026-10-01-readme-restyle-i18n.md](plan/PLAN-2026-10-01-readme-restyle-i18n.md).
+
 ## 2026-09-28.1 — Codex session navigation
 
 - **Codex shared-server navigation.** A managed Codex background server can
