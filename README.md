@@ -40,6 +40,8 @@ VS Code · 1
   🔴 Fix the login flow · needs approval · 3k tok
 ```
 
+> ⭐ **Star this repo** to keep up with new agents and fixes. When an agent changes its session files, I update Vibra so you don't have to. [Why star it →](#-why-star-vibra)
+
 ## Why Vibra?
 
 Agents work for minutes at a time. The expensive failure isn't a crash — it's an

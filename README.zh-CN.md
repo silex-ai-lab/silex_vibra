@@ -42,6 +42,8 @@ VS Code · 1
   🔴 Fix the login flow · needs approval · 3k tok
 ```
 
+> ⭐ **Star 这个项目**，新 Agent 和修复不会错过。Agent 改了会话文件，我来改 Vibra，你不用自己盯。[为什么值得 Star →](#-为什么值得-star)
+
 ## 为什么选择 Vibra
 
 Agent 往往要连续工作好几分钟。代价最高的失败不是崩溃——而是
