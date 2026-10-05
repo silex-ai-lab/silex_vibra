@@ -144,4 +144,23 @@ struct OpenCodeAdapterTests {
         #expect(after != before)
         #expect(after.size > before.size)
     }
+
+    @Test func touchingSHMLeavesDescriptorUnchanged() throws {
+        let dir = testScratchDirectory().appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let dbURL = dir.appendingPathComponent("opencode.db")
+        try Data("main db bytes".utf8).write(to: dbURL)
+
+        let adapter = OpenCodeAdapter(dbURL: dbURL)
+        let before = try #require(adapter.sources().first)
+
+        // Readers write the -shm wal-index too, Vibra's own queries included.
+        // If that moved the descriptor, every refresh would trigger the next.
+        let shmURL = dir.appendingPathComponent("opencode.db-shm")
+        try Data(count: 32768).write(to: shmURL)
+
+        let after = try #require(adapter.sources().first)
+        #expect(after == before)
+    }
 }

@@ -83,13 +83,14 @@ final class SessionStore {
                 VibraPaths.claudeProjects,
                 VibraPaths.codexSessions,
                 VibraPaths.home.appendingPathComponent(".claude/sessions"),
-                // Cursor writes its agent state into this directory's database.
-                VibraPaths.cursorStateDB.deletingLastPathComponent(),
                 // Archiving or renaming in the Claude UI only touches this.
                 VibraPaths.home.appendingPathComponent(
                     "Library/Application Support/Claude/claude-code-sessions"),
             ] + vsCodeChatDirectories,
-            pollURLs: [VibraPaths.openCodeDB, VibraPaths.hermesStateDB]
+            // Cursor's database is polled rather than its directory watched:
+            // that directory also holds cursor-agent-worker logs, which change
+            // constantly and say nothing about sessions.
+            pollURLs: [VibraPaths.openCodeDB, VibraPaths.hermesStateDB, VibraPaths.cursorStateDB]
         ) { [weak self] _ in
             Task { @MainActor in await self?.requestRefresh() }
         }

@@ -63,4 +63,33 @@ struct FileWatcherTests {
         #expect(records.count == 1)
         #expect(String(decoding: records[0], as: UTF8.self) == "fresh")
     }
+
+    @Test func pollIgnoresSHMButSeesWAL() throws {
+        let dir = testScratchDirectory().appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let dbURL = dir.appendingPathComponent("state.db")
+        try Data("main".utf8).write(to: dbURL)
+
+        let before = try #require(FileWatcher.pollSignature(of: dbURL))
+        try Data(count: 32768).write(to: dir.appendingPathComponent("state.db-shm"))
+        #expect(FileWatcher.pollSignature(of: dbURL) == before)
+
+        try Data("wal".utf8).write(to: dir.appendingPathComponent("state.db-wal"))
+        #expect(FileWatcher.pollSignature(of: dbURL) != before)
+    }
+
+    @Test func shmOnlyEventsDoNotFire() {
+        final class Box: @unchecked Sendable { var calls: [[URL]] = [] }
+        let box = Box()
+        let watcher = FileWatcher(watchedDirectories: []) { box.calls.append($0) }
+
+        let shm = URL(fileURLWithPath: "/tmp/x/state.vscdb-shm")
+        let wal = URL(fileURLWithPath: "/tmp/x/state.vscdb-wal")
+        watcher.handleEvents(paths: [shm], mustRescan: false)
+        #expect(box.calls.isEmpty)
+
+        watcher.handleEvents(paths: [shm, wal], mustRescan: false)
+        #expect(box.calls == [[wal]])
+    }
 }

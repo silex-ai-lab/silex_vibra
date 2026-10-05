@@ -178,9 +178,11 @@ public final class FileWatcher: @unchecked Sendable {
         var size: UInt64
     }
 
-    /// The database and its `-wal` / `-shm` sidecars. In WAL mode a write can
-    /// land only in `-wal` while the main file's size and mtime sit still, so
-    /// watching the main file alone can miss it until a checkpoint.
+    /// The database and its `-wal` sidecar. In WAL mode a write can land only
+    /// in `-wal` while the main file's size and mtime sit still, so watching
+    /// the main file alone can miss it until a checkpoint. `-shm` is not
+    /// watched: readers write to it too, so our own refresh would re-trigger
+    /// the poll.
     static func pollSignature(of url: URL) -> [PollStamp]? {
         func stamp(_ path: String) -> PollStamp? {
             guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return nil }
@@ -190,8 +192,7 @@ public final class FileWatcher: @unchecked Sendable {
             )
         }
         guard let main = stamp(url.path) else { return nil }
-        let sidecars = [url.path + "-wal", url.path + "-shm"].map { stamp($0) ?? PollStamp(mtime: 0, size: 0) }
-        return [main] + sidecars
+        return [main, stamp(url.path + "-wal") ?? PollStamp(mtime: 0, size: 0)]
     }
 
     /// Fires `onChange` when the signature differs from the previous poll.
@@ -206,12 +207,23 @@ public final class FileWatcher: @unchecked Sendable {
 
     /// Called from the C callback. If FSEvents dropped events, we cannot know
     /// which files changed, so we signal a full rescan of every watched root.
+    ///
+    /// A SQLite `-shm` change is dropped: readers write the wal-index too, so
+    /// it says nothing about new data, and acting on it lets Vibra's own reads
+    /// keep re-triggering refreshes.
     func handleEvents(paths: [URL], mustRescan: Bool) {
         if mustRescan {
             onChange(watchedDirectories)
-        } else if !paths.isEmpty {
-            onChange(paths)
+            return
         }
+        let relevant = paths.filter { !Self.isReaderSideEffect($0) }
+        if !relevant.isEmpty {
+            onChange(relevant)
+        }
+    }
+
+    static func isReaderSideEffect(_ url: URL) -> Bool {
+        url.lastPathComponent.hasSuffix("-shm")
     }
 }
 
