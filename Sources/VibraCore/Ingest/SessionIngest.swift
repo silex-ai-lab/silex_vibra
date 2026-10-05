@@ -135,7 +135,7 @@ public actor SessionIngest {
                 } else {
                     produced = try? adapter.update(
                         source: source,
-                        input: .databaseSnapshot,
+                        input: .databaseSnapshot(since: horizon.map { now.addingTimeInterval(-$0) }),
                         previous: carried
                     )
                 }

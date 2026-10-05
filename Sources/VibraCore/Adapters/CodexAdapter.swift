@@ -15,6 +15,8 @@ public struct CodexAdapter: AgentAdapter {
 
     private let sessionsRoot: URL?
     private let file: URL?
+    /// Keeps the per-directory listing between refreshes.
+    private let scanner = JSONLTreeScanner()
 
     /// Production entry point: read the whole sessions tree.
     public init(sessionsRoot: URL = VibraPaths.codexSessions) {
@@ -45,7 +47,7 @@ public struct CodexAdapter: AgentAdapter {
         if let file {
             files = [file]
         } else if let sessionsRoot {
-            files = try jsonlFiles(under: sessionsRoot)
+            files = scanner.files(under: sessionsRoot)
                 .filter { $0.lastPathComponent.hasPrefix("rollout-") }
         } else {
             files = []

@@ -52,6 +52,22 @@ struct CursorAdapterTests {
         #expect(byID["gen"]?.agent == .cursor)
     }
 
+    @Test func refreshLeavesSessionsOlderThanTheHorizonOutOfTheQuery() throws {
+        let (dir, db) = try makeCursorDB(canary: "VIBRA_CURSOR_CANARY")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let adapter = CursorAdapter(dbURL: db)
+        let source = try #require(adapter.sources().first)
+        let written = Date(timeIntervalSince1970: 1_790_000_000)
+
+        func ids(since: Date?) throws -> Set<String> {
+            let state = try adapter.update(source: source, input: .databaseSnapshot(since: since), previous: nil)
+            return Set(state.sessions.map(\.id))
+        }
+        #expect(try ids(since: nil) == ["gen", "approve", "done"])
+        #expect(try ids(since: written.addingTimeInterval(-1)) == ["gen", "approve", "done"])
+        #expect(try ids(since: written.addingTimeInterval(1)).isEmpty)
+    }
+
     @Test func tokenTableAndRecordBodiesNeverSurface() throws {
         let canary = "VIBRA_CURSOR_CANARY_MUST_NOT_LEAK"
         let (dir, db) = try makeCursorDB(canary: canary)

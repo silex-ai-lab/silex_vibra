@@ -25,22 +25,27 @@ public struct SourceDescriptor: Hashable, Sendable {
 
     /// Stats a path without reading it. Returns nil if it cannot be stat'd,
     /// which is normal: agents delete and rotate their own files.
+    ///
+    /// A bare `lstat`, the same call `attributesOfItem` makes, without the
+    /// extended-attribute and owner-name lookups it adds on top - those were
+    /// 25x the cost of the stat itself, paid for every transcript every refresh.
     public static func describing(_ url: URL) -> SourceDescriptor? {
-        guard let a = try? FileManager.default.attributesOfItem(atPath: url.path) else {
-            return nil
-        }
-        // systemFileNumber is the inode and systemNumber the device; together
-        // they identify the file itself rather than the name pointing at it.
-        let fileID = (a[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
-        let deviceID = (a[.systemNumber] as? NSNumber)?.uint64Value ?? 0
-        let size = (a[.size] as? NSNumber)?.int64Value ?? 0
-        let modified = (a[.modificationDate] as? Date) ?? .distantPast
+        var info = stat()
+        guard lstat(url.path, &info) == 0 else { return nil }
+        let mtime = info.st_mtimespec
         return SourceDescriptor(
             url: url,
-            deviceID: deviceID,
-            fileID: fileID,
-            size: size,
-            modified: modified
+            // The device and inode together identify the file itself rather
+            // than the name pointing at it.
+            deviceID: UInt64(UInt32(bitPattern: info.st_dev)),
+            fileID: UInt64(info.st_ino),
+            size: Int64(info.st_size),
+            // Built the way Foundation builds it, from the reference date, so
+            // it equals `contentModificationDate` bit for bit. Going through
+            // 1970 rounds differently for about half of all files.
+            modified: Date(timeIntervalSinceReferenceDate:
+                (TimeInterval(mtime.tv_sec) - Date.timeIntervalBetween1970AndReferenceDate)
+                + 1.0e-9 * TimeInterval(mtime.tv_nsec))
         )
     }
 

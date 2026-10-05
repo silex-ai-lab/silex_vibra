@@ -17,6 +17,8 @@ public struct ClaudeCodeAdapter: AgentAdapter {
 
     private let projectsRoot: URL?
     private let file: URL?
+    /// Keeps the per-directory listing between refreshes.
+    private let scanner = JSONLTreeScanner()
 
     /// Production entry point: read the whole projects tree.
     public init(projectsRoot: URL = VibraPaths.claudeProjects) {
@@ -47,7 +49,7 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         if let file {
             files = [file]
         } else if let projectsRoot {
-            files = try jsonlFiles(under: projectsRoot)
+            files = scanner.files(under: projectsRoot)
         } else {
             files = []
         }

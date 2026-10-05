@@ -55,7 +55,7 @@ public struct CursorAdapter: AgentAdapter {
         json_extract(CAST(d.value AS TEXT), '$.conversationCheckpointLastUpdatedAt') \
         FROM composerHeaders h \
         LEFT JOIN cursorDiskKV d ON d.key = 'composerData:' || h.composerId \
-        WHERE h.isSubagent = 0 \
+        WHERE h.isSubagent = 0 AND (?1 IS NULL OR h.lastUpdatedAt >= ?1) \
         ORDER BY h.lastUpdatedAt DESC
         """
 
@@ -67,6 +67,30 @@ public struct CursorAdapter: AgentAdapter {
     // MARK: - Discovery
 
     public func discoverSessions() throws -> [Session] {
+        try discoverSessions(since: nil)
+    }
+
+    /// Refreshes query only sessions whose header moved inside the horizon.
+    /// The join and the `json_extract` over each session's `composerData`
+    /// record are the cost, and an unfiltered query parsed all of them - 298
+    /// sessions and 19 MB of JSON on a real profile, 32 ms - each time Cursor
+    /// wrote anything.
+    public func update(
+        source: SourceDescriptor,
+        input: SourceInput,
+        previous: ParsedState?
+    ) throws -> ParsedState {
+        guard case .databaseSnapshot(let since) = input else {
+            return ParsedState(sessions: try discoverSessions(), checkpoint: nil)
+        }
+        return ParsedState(sessions: try discoverSessions(since: since), checkpoint: nil)
+    }
+
+    /// `since` filters on the header's `lastUpdatedAt`, which lags a turn on
+    /// a long-idle session by its first few seconds (see `Row.isMidTurn`):
+    /// such a session appears once Cursor updates the header, and that write
+    /// triggers the refresh that picks it up.
+    public func discoverSessions(since: Date?) throws -> [Session] {
         guard isAvailable else { return [] }
 
         let uri = "file:\(dbURL.path)?mode=ro"
@@ -89,6 +113,11 @@ public struct CursorAdapter: AgentAdapter {
             throw CursorError.unavailable
         }
         defer { sqlite3_finalize(statement) }
+        if let since {
+            sqlite3_bind_int64(statement, 1, Int64(since.timeIntervalSince1970 * 1000))
+        } else {
+            sqlite3_bind_null(statement, 1)
+        }
 
         var sessions: [Session] = []
         while sqlite3_step(statement) == SQLITE_ROW {

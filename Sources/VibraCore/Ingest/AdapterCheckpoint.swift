@@ -19,8 +19,10 @@ public enum SourceInput: Sendable {
     case records([String], reset: Bool)
 
     /// The adapter should re-run its own query. Used for SQLite-backed
-    /// sources, where reading a byte range is meaningless.
-    case databaseSnapshot
+    /// sources, where reading a byte range is meaningless. `since` is the
+    /// ingest horizon: sessions last active before it will not be shown, so
+    /// an adapter may leave them out of the query. nil means read everything.
+    case databaseSnapshot(since: Date?)
 }
 
 /// Result of an incremental update: what to display, plus what to remember.
