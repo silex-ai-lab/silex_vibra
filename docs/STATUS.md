@@ -1,5 +1,18 @@
 # Vibra — current status
 
+**2026-10-05 — Idle CPU 27% → <1%.** A self-sustaining refresh loop: Vibra's
+own read-only Cursor query wrote SQLite's `-shm` wal-index, FSEvents reported
+it, and the `-shm` mtime in the database fingerprint made every refresh look
+like a change to the next — about 4 full refreshes a second with Cursor
+closed. `-shm` is no longer watched, polled or fingerprinted, and Cursor's
+database is polled instead of its whole directory watched. Each refresh is
+also cheaper: the Cursor query is limited to the activity horizon, the
+Claude/Codex trees are re-listed only where a directory's mtime moved, and
+descriptors use a bare `lstat`. Verified **2026-10-05**: `make test` 172
+tests (7 new); `--bench` warm refresh 33 ms → 2.5 ms; `--dump-sessions`
+identical old vs new; installed app used 0.2 s CPU in 60 s. Record:
+[FIX-2026-10-05-cpu.md](FIX-2026-10-05-cpu.md).
+
 **2026-09-27 — SF Symbols icons on the History controls.** Every History
 button keeps its text label and gains an SF Symbol beside it (Copy
 `doc.on.doc` in both places, Copy Path `link`, Open `arrow.up.forward`); the
