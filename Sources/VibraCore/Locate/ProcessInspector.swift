@@ -43,6 +43,25 @@ public enum ProcessInspector {
         return tokens.dropFirst(2).contains("--managed-daemon")
     }
 
+    /// The Orca terminal handle a process inherited, or nil outside an Orca pane.
+    /// Same-user processes expose their environment through `ps -E`.
+    public static func orcaTerminalHandle(of pid: Int32) -> String? {
+        guard let out = run("/bin/ps", ["-wwE", "-o", "command=", "-p", "\(pid)"]) else { return nil }
+        return orcaTerminalHandle(psCommandWithEnvironment: out)
+    }
+
+    /// Parses `ps -wwE -o command=` output: the command line followed by
+    /// space-separated `NAME=value` assignments. The environment comes last,
+    /// so the last match wins over a lookalike argument.
+    public static func orcaTerminalHandle(psCommandWithEnvironment line: String) -> String? {
+        let prefix = "ORCA_TERMINAL_HANDLE="
+        let value = line.split(whereSeparator: \.isWhitespace)
+            .last { $0.hasPrefix(prefix) }
+            .map { $0.dropFirst(prefix.count) }
+        guard let value, !value.isEmpty else { return nil }
+        return String(value)
+    }
+
     /// What is sitting between a session's process and the window server.
     ///
     /// Answers "is this tty really inside a multiplexer?" instead of assuming
@@ -52,7 +71,7 @@ public enum ProcessInspector {
     public enum TTYOwner: Equatable, Sendable {
         /// A terminal emulator holds it; a failed jump is Vibra's problem.
         case emulator(String)
-        /// tmux, screen or herdr holds it; its panes are invisible to the emulator.
+        /// tmux, screen, herdr or Orca holds it; its panes are invisible to the emulator.
         case multiplexer(String)
         /// Nothing recognisable in the ancestry.
         case unknown
@@ -103,6 +122,7 @@ public enum ProcessInspector {
     }
 
     private static let ownerRules: [OwnerRule] = [
+        OwnerRule(needle: "orca", isPrefix: true, owner: .multiplexer("orca")),
         OwnerRule(needle: "tmux", isPrefix: false, owner: .multiplexer("tmux")),
         OwnerRule(needle: "screen", isPrefix: false, owner: .multiplexer("screen")),
         OwnerRule(needle: "herdr", isPrefix: false, owner: .multiplexer("herdr")),

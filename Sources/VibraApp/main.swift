@@ -109,6 +109,20 @@ if let i = CommandLine.arguments.firstIndex(of: "--herdr-jump"),
     exit(1)
 }
 
+// `Vibra --orca-jump <pid>` switches Orca to the terminal tab running <pid> and
+// brings Orca forward, then reports what it focused. The Orca counterpart of
+// --herdr-jump.
+if let i = CommandLine.arguments.firstIndex(of: "--orca-jump"),
+   i + 1 < CommandLine.arguments.count,
+   let pid = Int32(CommandLine.arguments[i + 1]) {
+    if let app = TerminalJumper.focusOrca(pid: pid) {
+        print("OK: focused in \(app)")
+        exit(0)
+    }
+    print("FAIL: \(pid) is not in an Orca terminal pane, or Orca's CLI could not switch to it")
+    exit(1)
+}
+
 // `Vibra --notifications` prints Vibra's notification authorization and every
 // notification of its own that macOS still reports as delivered - ids only,
 // never bodies. Answers "why is Notification Center still full?" directly.
@@ -324,6 +338,7 @@ if CommandLine.arguments.contains("--locate") {
                 switch ProcessInspector.ttyOwner(of: found.pid) {
                 case .emulator(let name):    owner = "emulator \(name) - jumpable"
                 case .multiplexer("herdr"):  owner = "multiplexer herdr - jumpable via herdr's CLI"
+                case .multiplexer("orca"):   owner = "Orca - jumpable via orca's CLI"
                 case .multiplexer(let name): owner = "multiplexer \(name) - not jumpable"
                 case .unknown:               owner = "unknown"
                 }

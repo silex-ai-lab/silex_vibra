@@ -95,7 +95,7 @@ VS Code · 1
 
 - **메뉴 막대에서 모든 세션의 상태 표시**, 프로젝트와 토큰 포함.
 - **필요할 때 알림**(🟠 또는 🔴), 더 이상 사실이 아니면 철회됩니다.
-  클릭하면 해당 세션으로 이동합니다. Claude Code와 Codex는 터미널 탭(iTerm2, Terminal, herdr) 또는 호스트 앱,
+  클릭하면 해당 세션으로 이동합니다. Claude Code와 Codex는 터미널 탭(iTerm2, Terminal, herdr, Orca) 또는 호스트 앱,
   VS Code는 창, Cursor는 앞으로 가져옵니다.
   OpenCode와 Hermes 세션은 이동할 수 없습니다.
 - **작업이 무엇을 사용하고 무엇을 물었는지.** **Usage Report…**(⌘U): 7일간의 토큰과

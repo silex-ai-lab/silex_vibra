@@ -180,7 +180,7 @@ final class MenuBarController {
     ///
     /// When that is not possible the reason is shown rather than silently
     /// doing nothing — most often the session lives in a multiplexer pane
-    /// (tmux, screen, herdr), whose pty the terminal emulator never sees.
+    /// (tmux, screen, herdr, Orca), whose pty the terminal emulator never sees.
     @objc private func jumpToSession(_ sender: NSMenuItem) {
         guard let session = sender.representedObject as? Session else { return }
         explainFailure(TerminalJumper.jump(to: session), for: session)

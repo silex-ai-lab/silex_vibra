@@ -95,7 +95,7 @@ VS Code · 1
 
 - **メニューバーに各セッションの状態を表示**、プロジェクトとトークン付き。
 - **必要なときに通知**（🟠 または 🔴）。当てはまらなくなると取り下げられます。
-  クリックするとジャンプします。Claude Code と Codex はターミナルタブ（iTerm2、Terminal、herdr）またはホストアプリ、
+  クリックするとジャンプします。Claude Code と Codex はターミナルタブ（iTerm2、Terminal、herdr、Orca）またはホストアプリ、
   VS Code はウィンドウ、Cursor は前面に表示されます。
   OpenCode と Hermes のセッションにはジャンプできません。
 - **作業が何を使い、何を尋ねたか。** **Usage Report…**（⌘U）：7 日分のトークンと

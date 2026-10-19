@@ -62,6 +62,17 @@ to look at, and the jump is reported as failed. To try it on any process:
 /Applications/Vibra.app/Contents/MacOS/Vibra --herdr-jump <pid>
 ```
 
+**Orca panes are jumpable.** Orca's terminal daemon owns each pane's pty, so no
+emulator tab reports it. Vibra recognises an Orca pane from the process
+ancestry, reads the `ORCA_TERMINAL_HANDLE` that every process in the pane
+inherits, runs `orca terminal switch --terminal <handle>` and brings Orca to
+the front. The `orca` CLI is taken from the installed Orca app, else from
+`/opt/homebrew/bin` or `/usr/local/bin`. To try it on any process:
+
+```sh
+/Applications/Vibra.app/Contents/MacOS/Vibra --orca-jump <pid>
+```
+
 **`make probe` says `total sessions: 0`.** Nothing has run in the last 12 hours.
 The window is `activityWindow` in `Sources/VibraApp/SessionStore.swift`.
 

@@ -26,3 +26,16 @@ struct TTYOwnerTests {
         #expect(ProcessInspector.ttyOwner(executable: "claude") == nil)
     }
 }
+
+struct OrcaTerminalHandleTests {
+
+    @Test func readsHandleFromPsEnvironmentTail() {
+        let line = "claude --dangerously-skip-permissions TERM_PROGRAM=Orca ORCA_TAB_ID=abc ORCA_TERMINAL_HANDLE=term_1111 HOME=/Users/x"
+        #expect(ProcessInspector.orcaTerminalHandle(psCommandWithEnvironment: line) == "term_1111")
+    }
+
+    @Test func absentOrEmptyHandleIsNil() {
+        #expect(ProcessInspector.orcaTerminalHandle(psCommandWithEnvironment: "claude TERM_PROGRAM=iTerm.app HOME=/Users/x") == nil)
+        #expect(ProcessInspector.orcaTerminalHandle(psCommandWithEnvironment: "claude ORCA_TERMINAL_HANDLE= HOME=/Users/x") == nil)
+    }
+}
