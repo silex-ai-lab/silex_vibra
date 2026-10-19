@@ -73,26 +73,46 @@ public enum ProcessInspector {
                 .split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
             guard parts.count == 2, let ppid = Int32(parts[0]) else { return .unknown }
 
-            // Match on the executable's basename: `ps -o comm=` prints a full
-            // path for a bundled app ("/Applications/iTerm.app/.../iTerm2").
-            let name = (String(parts[1]) as NSString).lastPathComponent.lowercased()
-
-            if let mux = ["tmux", "tmux: server", "screen", "herdr"]
-                .first(where: { name.contains($0) }) {
-                return .multiplexer(mux)
-            }
-            if name.contains("iterm") { return .emulator("iTerm2") }
-            if name.contains("terminal") { return .emulator("Terminal") }
-            if name.contains("ghostty") { return .emulator("Ghostty") }
-            if name.contains("alacritty") { return .emulator("Alacritty") }
-            if name.contains("wezterm") { return .emulator("WezTerm") }
-            if name.contains("kitty") { return .emulator("kitty") }
+            if let owner = ttyOwner(executable: String(parts[1])) { return owner }
 
             guard ppid > 1 else { return .unknown }
             current = ppid
         }
         return .unknown
     }
+
+    /// Classifies one process by its executable, or nil when it says nothing
+    /// about who owns the terminal.
+    ///
+    /// Matches on the basename: `ps -o comm=` prints a full path for a bundled
+    /// app ("/Applications/iTerm.app/.../iTerm2"). Order is precedence. Orca's
+    /// daemon is "orca-terminal-host", which the "terminal" rule would claim.
+    public static func ttyOwner(executable name: String) -> TTYOwner? {
+        let base = (name as NSString).lastPathComponent.lowercased()
+        return ownerRules.first { $0.matches(base) }?.owner
+    }
+
+    private struct OwnerRule {
+        let needle: String
+        let isPrefix: Bool
+        let owner: TTYOwner
+
+        func matches(_ base: String) -> Bool {
+            isPrefix ? base.hasPrefix(needle) : base.contains(needle)
+        }
+    }
+
+    private static let ownerRules: [OwnerRule] = [
+        OwnerRule(needle: "tmux", isPrefix: false, owner: .multiplexer("tmux")),
+        OwnerRule(needle: "screen", isPrefix: false, owner: .multiplexer("screen")),
+        OwnerRule(needle: "herdr", isPrefix: false, owner: .multiplexer("herdr")),
+        OwnerRule(needle: "iterm", isPrefix: false, owner: .emulator("iTerm2")),
+        OwnerRule(needle: "terminal", isPrefix: false, owner: .emulator("Terminal")),
+        OwnerRule(needle: "ghostty", isPrefix: false, owner: .emulator("Ghostty")),
+        OwnerRule(needle: "alacritty", isPrefix: false, owner: .emulator("Alacritty")),
+        OwnerRule(needle: "wezterm", isPrefix: false, owner: .emulator("WezTerm")),
+        OwnerRule(needle: "kitty", isPrefix: false, owner: .emulator("kitty")),
+    ]
 
     /// Pid holding `url` open. Used for Codex, which keeps an open lock named
     /// after its session id.
