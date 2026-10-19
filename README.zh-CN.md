@@ -95,7 +95,7 @@ Agent 本来就会写入的会话文件，把需要你的那一个呈现出来�
 
 - **在菜单栏显示每个会话的状态**，以及它的项目和 token。
 - **当某个会话需要你时发出通知**（🟠 或 🔴），一旦不再成立即撤回。
-  点击即可跳转过去：Claude Code 和 Codex 会跳到终端标签页（iTerm2、Terminal、herdr）或宿主应用，
+  点击即可跳转过去：Claude Code 和 Codex 会跳到终端标签页（iTerm2、Terminal、herdr、Orca）或宿主应用，
   VS Code 会聚焦窗口，Cursor 会被带到前台。
   OpenCode 和 Hermes 会话无法跳转。
 - **这些工作用了什么、问了什么。** **Usage Report…**（⌘U）：7 天的 token 和

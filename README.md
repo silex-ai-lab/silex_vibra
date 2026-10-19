@@ -93,7 +93,7 @@ says if a fixture test covers it). **—**: never shown (e.g. no approval state 
 
 - **Every session's state in the menu bar**, with its project and tokens.
 - **A notification when one needs you** (🟠 or 🔴), withdrawn once no longer true.
-  A click jumps to it: the terminal tab (iTerm2, Terminal, herdr) or hosting app
+  A click jumps to it: the terminal tab (iTerm2, Terminal, herdr, Orca) or hosting app
   for Claude Code and Codex, the VS Code window, or Cursor brought forward.
   OpenCode and Hermes sessions cannot be jumped to.
 - **What the work used and asked.** **Usage Report…** (⌘U): 7 days of tokens and

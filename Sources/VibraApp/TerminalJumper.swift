@@ -10,8 +10,8 @@ import VibraCore
 /// not identify a session — two agents routinely share one.
 ///
 /// A tty that no terminal claims is **not** jumpable, and that is reported
-/// rather than guessed at. The common cause is a multiplexer: tmux, screen or
-/// herdr own their panes' ptys, so the emulator never sees them — but that is
+/// rather than guessed at. The common cause is a multiplexer: tmux, screen,
+/// herdr or Orca own their panes' ptys, so the emulator never sees them — but that is
 /// now established from the process ancestry instead of assumed. It was
 /// assumed, and on a plain iTerm2 tab the assumption was simply wrong.
 ///
@@ -110,6 +110,9 @@ enum TerminalJumper {
         }
         let owner = ProcessInspector.ttyOwner(of: found.pid)
         if owner == .multiplexer("herdr"), let app = focusHerdr(pid: found.pid) {
+            return .jumped(app: app)
+        }
+        if owner == .multiplexer("orca"), let app = focusOrca(pid: found.pid) {
             return .jumped(app: app)
         }
         return .noTerminalOwnsTTY(tty: tty, owner: owner)
@@ -234,10 +237,10 @@ enum TerminalJumper {
         else { return nil }
         let session = route.session.map { ["--session", $0] } ?? []
 
-        guard let listing = runHerdr(herdr, session + ["pane", "list"]) else { return nil }
+        guard let listing = runCLI(herdr, session + ["pane", "list"]) else { return nil }
         var match: (paneID: String, tabID: String)?
         for pane in HerdrLocator.parsePaneList(listing) {
-            guard let info = runHerdr(herdr, session + ["pane", "process-info", "--pane", pane.paneID])
+            guard let info = runCLI(herdr, session + ["pane", "process-info", "--pane", pane.paneID])
             else { continue }
             if HerdrLocator.parseShellPID(info) == route.paneShellPID {
                 match = pane
@@ -249,8 +252,8 @@ enum TerminalJumper {
         // `agent focus` lands on the pane itself, splits included, and marks
         // it seen; it only accepts panes herdr recognises an agent in, so fall
         // back to the pane's tab. Both switch workspace as needed.
-        if runHerdr(herdr, session + ["agent", "focus", pane.paneID]) == nil {
-            guard runHerdr(herdr, session + ["tab", "focus", pane.tabID]) != nil else { return nil }
+        if runCLI(herdr, session + ["agent", "focus", pane.paneID]) == nil {
+            guard runCLI(herdr, session + ["tab", "focus", pane.tabID]) != nil else { return nil }
         }
 
         for clientTTY in HerdrLocator.clientTTYs(of: route.session, in: table) {
@@ -274,10 +277,10 @@ enum TerminalJumper {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    /// Runs one herdr CLI request and returns stdout, or nil on a non-zero
-    /// exit (herdr reports errors as JSON on stderr with status 1). Bounded:
-    /// a wedged server must not hang the click.
-    private static func runHerdr(_ executable: String, _ args: [String]) -> Data? {
+    /// Runs one CLI request (herdr, Orca) and returns stdout, or nil on a
+    /// non-zero exit (herdr reports errors as JSON on stderr with status 1).
+    /// Bounded: a wedged server must not hang the click.
+    private static func runCLI(_ executable: String, _ args: [String]) -> Data? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = args
@@ -295,6 +298,35 @@ enum TerminalJumper {
         }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         return process.terminationStatus == 0 ? data : nil
+    }
+
+    // MARK: - Orca
+
+    private static let orcaBundleID = "com.stablyai.orca"
+
+    /// Switches Orca to the terminal tab running `pid`, then brings Orca to the
+    /// front. Returns "Orca", or nil when any step failed - switching a tab in
+    /// an Orca nobody is looking at is not a jump.
+    ///
+    /// Every process in an Orca pane inherits `ORCA_TERMINAL_HANDLE`, which is
+    /// exactly the handle `orca terminal switch` takes.
+    static func focusOrca(pid: Int32) -> String? {
+        guard let handle = ProcessInspector.orcaTerminalHandle(of: pid),
+              let cli = orcaExecutable(),
+              runCLI(cli, ["terminal", "switch", "--terminal", handle]) != nil,
+              let app = NSRunningApplication.runningApplications(withBundleIdentifier: orcaBundleID).first,
+              app.activate()
+        else { return nil }
+        return "Orca"
+    }
+
+    /// The CLI inside the installed app first, then the usual symlinks. A GUI
+    /// app's PATH would not resolve "orca" alone.
+    private static func orcaExecutable() -> String? {
+        let bundled = NSWorkspace.shared.urlForApplication(withBundleIdentifier: orcaBundleID)?
+            .appendingPathComponent("Contents/Resources/bin/orca").path
+        let candidates = [bundled].compactMap { $0 } + ["/opt/homebrew/bin/orca", "/usr/local/bin/orca"]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
     // MARK: - Emulators

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Jump to Orca terminal panes.** A session running in an Orca pane was
+  misreported as living in Terminal, and clicking it failed. Vibra now
+  recognises Orca's terminal daemon, switches to the pane with
+  `orca terminal switch` and brings Orca forward. Check it with
+  `--orca-jump <pid>`; `--locate` prints the owner as Orca.
 - **Docs: README restyled and translated.** The front page follows the
   layout of the Agent Reach README: centred header with badges, "Why
   Vibra?", a "Before you install" summary, agent icons in the compatibility
