@@ -45,14 +45,18 @@ final class ReportWindowController: RenderableWindow {
         render("Reading the last 7 days…")
 
         let ingest = ReportIngest(adapters: adapters)
+        let thresholds = PerfThresholds.load(from: PreferencesStore())
         Task { [weak self] in
             let started = Date()
             let window = ReportWindow(now: started, days: 7, calendar: .current)
             let input = await ingest.collect(window: window)
             let report = ReportBuilder().build(samplesByAgent: input.samplesByAgent, window: window)
+            let perf = PerfAnalyzer.report(
+                claudeSources: input.sources[.claudeCode] ?? [], window: window, thresholds: thresholds)
             await MainActor.run {
                 self?.isLoading = false
-                self?.render(Self.format(report, read: input.read, seconds: Date().timeIntervalSince(started)))
+                self?.render(ReportText.render(usage: report, perf: perf, read: input.read,
+                                               seconds: Date().timeIntervalSince(started)))
                 // Let the text view lay out before anyone snapshots it.
                 self?.textView?.layoutManager?.ensureLayout(for: self!.textView!.textContainer!)
                 self?.onRendered?()
@@ -92,71 +96,5 @@ final class ReportWindowController: RenderableWindow {
 
     private func render(_ body: String) {
         textView?.string = body
-    }
-
-    /// Wording is deliberate. The figure is an estimate of what this usage
-    /// would have cost at published API rates — on a subscription you pay a
-    /// flat fee — so it is never called a cost, a bill, or a quota. Unpriced
-    /// and undated tokens get their own lines rather than vanishing into a
-    /// total that would then look authoritative and be wrong.
-    static func format(_ r: UsageReport, read: ReadStats, seconds: TimeInterval) -> String {
-        let df = DateFormatter()
-        df.dateFormat = "EEE MMM d"
-        func tok(_ n: Int) -> String {
-            n >= 1_000_000 ? String(format: "%.1fM", Double(n) / 1e6)
-                           : (n >= 1_000 ? "\(n / 1_000)k" : "\(n)")
-        }
-        // String(format:) ignores width specifiers for %@, so columns are
-        // padded by hand. Without this the figures come out ragged and the
-        // table is much harder to scan than a table should be.
-        func padRight(_ s: String, _ width: Int) -> String {
-            s.count >= width ? s : s + String(repeating: " ", count: width - s.count)
-        }
-        func padLeft(_ s: String, _ width: Int) -> String {
-            s.count >= width ? s : String(repeating: " ", count: width - s.count) + s
-        }
-        func row(_ label: String, _ usage: TokenUsage, _ value: Double, _ unpriced: Int) -> String {
-            var line = "  " + padRight(label, 16)
-                + padLeft(tok(usage.total), 8) + " tok"
-                + padLeft(String(format: "~$%.2f", value), 12)
-            if unpriced > 0 { line += "   +\(tok(unpriced)) unpriced" }
-            return line + "\n"
-        }
-
-        var out = "USAGE — last \(r.windowDays) days (rolling)\n"
-        out += "\(df.string(from: r.windowStart)) – \(df.string(from: r.generatedAt))\n\n"
-
-        out += "BY DAY\n"
-        if r.days.isEmpty { out += "  (no dated usage in this window)\n" }
-        for d in r.days {
-            out += row(df.string(from: d.day), d.usage, d.estimatedValue, d.unpricedTokens)
-        }
-
-        out += "\nBY AGENT\n"
-        for a in r.agents {
-            out += row(a.agent.displayName, a.usage, a.estimatedValue, a.unpricedTokens)
-        }
-
-        out += "\n" + "  " + padRight("TOTAL", 16)
-            + padLeft(tok(r.total.total), 8) + " tok"
-            + padLeft(String(format: "~$%.2f", r.estimatedValue), 12) + "\n"
-
-        if r.unpricedTokens > 0 {
-            out += "  \(tok(r.unpricedTokens)) tokens have no published rate and\n"
-            out += "  are excluded from the estimate above.\n"
-        }
-        if r.undated.total > 0 {
-            out += "  \(tok(r.undated.total)) tokens could not be dated: that source\n"
-            out += "  records per-session totals with no timestamps.\n"
-        }
-
-        out += "\n———\n"
-        out += "Estimated API-equivalent value, not a bill. On a\n"
-        out += "subscription you pay a flat fee; this is what the same\n"
-        out += "usage would cost at published API rates.\n"
-        out += "Computed locally. Nothing left this machine.\n"
-        out += String(format: "\nRead %.1f MB from %d files in %.1fs.\n",
-                      Double(read.bytes) / 1_048_576, read.files, seconds)
-        return out
     }
 }

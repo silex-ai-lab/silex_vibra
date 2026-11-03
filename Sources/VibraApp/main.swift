@@ -243,66 +243,29 @@ if CommandLine.arguments.contains("--report") {
         now = Date()
     }
     let ingest = ReportIngest(adapters: AdapterRegistry.all())
+    let thresholds = PerfThresholds.load(from: PreferencesStore())
     nonisolated(unsafe) var done = false
     Task.detached {
         let t0 = Date()
         let window = ReportWindow(now: now, days: 7, calendar: .current)
         let input = await ingest.collect(window: window)
         let report = ReportBuilder().build(samplesByAgent: input.samplesByAgent, window: window)
+        let perf = PerfAnalyzer.report(
+            claudeSources: input.sources[.claudeCode] ?? [], window: window, thresholds: thresholds)
 
         if asJSON {
             do {
                 FileHandle.standardOutput.write(
-                    try ReportJSON.encode(usage: report, window: window, read: input.read, perf: nil))
+                    try ReportJSON.encode(usage: report, window: window, read: input.read, perf: perf))
                 print("")
             } catch {
                 FileHandle.standardError.write(Data("could not encode the report: \(error)\n".utf8))
                 exit(1)
             }
-            done = true
-            return
+        } else {
+            print(ReportText.render(usage: report, perf: perf, read: input.read,
+                                    seconds: Date().timeIntervalSince(t0)), terminator: "")
         }
-
-        let df = DateFormatter()
-        df.dateFormat = "EEE MMM d"
-        func fmtTok(_ n: Int) -> String {
-            n >= 1_000_000 ? String(format: "%.1fM", Double(n) / 1e6)
-                           : (n >= 1000 ? "\(n / 1000)k" : "\(n)")
-        }
-
-        print("Usage — last \(report.windowDays) days (rolling), to \(df.string(from: report.generatedAt))")
-        print("Estimated API-equivalent value. Not a bill. Computed locally; nothing left this machine.")
-        print("")
-        print("  BY DAY")
-        if report.days.isEmpty { print("    (no dated usage in window)") }
-        for d in report.days {
-            let unp = d.unpricedTokens > 0 ? "  +\(fmtTok(d.unpricedTokens)) unpriced" : ""
-            print(String(format: "    %-12s %8s tok   ~$%.2f%@",
-                         (df.string(from: d.day) as NSString).utf8String!,
-                         (fmtTok(d.usage.total) as NSString).utf8String!,
-                         d.estimatedValue, unp))
-        }
-        print("")
-        print("  BY AGENT")
-        for a in report.agents {
-            let unp = a.unpricedTokens > 0 ? "  +\(fmtTok(a.unpricedTokens)) unpriced" : ""
-            print(String(format: "    %-14s %8s tok   ~$%.2f%@",
-                         (a.agent.displayName as NSString).utf8String!,
-                         (fmtTok(a.usage.total) as NSString).utf8String!,
-                         a.estimatedValue, unp))
-        }
-        print("")
-        print(String(format: "  TOTAL          %8s tok   ~$%.2f",
-                     (fmtTok(report.total.total) as NSString).utf8String!, report.estimatedValue))
-        if report.unpricedTokens > 0 {
-            print("    \(fmtTok(report.unpricedTokens)) tokens had no published rate and are excluded from the estimate.")
-        }
-        if report.undated.total > 0 {
-            print("    \(fmtTok(report.undated.total)) tokens could not be dated (source has no per-record timestamps).")
-        }
-        print("")
-        print(String(format: "  read %.1f MB from %d files in %.2fs",
-                     Double(input.read.bytes) / 1_048_576, input.read.files, Date().timeIntervalSince(t0)))
         done = true
     }
     let deadline = Date().addingTimeInterval(120)
