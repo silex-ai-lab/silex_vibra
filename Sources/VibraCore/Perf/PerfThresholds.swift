@@ -39,4 +39,31 @@ public struct PerfThresholds: Sendable, Equatable, Codable {
         leadMinUSD: 0.25,
         leadMinShare: 0.10
     )
+
+    /// Reads the `perf.*` keys, clamping each to its range and replacing
+    /// anything non-numeric with the default, so a bad `defaults write` cannot
+    /// break the report. Integer keys are clamped, then rounded to the nearest
+    /// integer.
+    public static func load(from store: any SettingsStore = PreferencesStore()) -> PerfThresholds {
+        func int(_ key: String, _ defaultValue: Int, _ range: ClosedRange<Int>) -> Int {
+            let value = clampedSetting(
+                store.value(forKey: key),
+                default: Double(defaultValue),
+                range: Double(range.lowerBound)...Double(range.upperBound)
+            )
+            return Int(value.rounded())
+        }
+        func double(_ key: String, _ defaultValue: Double, _ range: ClosedRange<Double>) -> Double {
+            clampedSetting(store.value(forKey: key), default: defaultValue, range: range)
+        }
+        return PerfThresholds(
+            minTurns: int("perf.minTurns", 10, 3...1000),
+            d1MinTurnsAboveFloor: int("perf.d1MinTurnsAboveFloor", 50, 5...5000),
+            d1CarryFloorTokens: int("perf.d1CarryFloorTokens", 200_000, 20_000...2_000_000),
+            d2MinRewriteTokens: int("perf.d2MinRewriteTokens", 30_000, 5_000...2_000_000),
+            d3MinBurstTurns: int("perf.d3MinBurstTurns", 3, 2...50),
+            leadMinUSD: double("perf.leadMinUSD", 0.25, 0...100),
+            leadMinShare: double("perf.leadMinShare", 0.10, 0...1)
+        )
+    }
 }

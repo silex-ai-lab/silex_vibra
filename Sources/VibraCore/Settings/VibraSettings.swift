@@ -96,8 +96,7 @@ public struct VibraSettings: Sendable, Equatable, Codable {
     /// `defaults write` cannot break classification.
     public static func load(from store: any SettingsStore = PreferencesStore()) -> VibraSettings {
         func read(_ limit: Limit) -> TimeInterval {
-            guard let number = numeric(store.value(forKey: limit.key)) else { return limit.defaultValue }
-            return min(max(number, limit.range.lowerBound), limit.range.upperBound)
+            clampedSetting(store.value(forKey: limit.key), default: limit.defaultValue, range: limit.range)
         }
         return VibraSettings(
             stallThresholdSeconds: read(stallThreshold),
@@ -128,17 +127,28 @@ public struct VibraSettings: Sendable, Equatable, Codable {
             attentionDecay: attentionDecaySeconds
         )
     }
+}
 
-    /// A finite number, from whatever `defaults write` put there. A string is
-    /// accepted only when it parses completely ("600", not "600s").
-    private static func numeric(_ value: Any?) -> TimeInterval? {
-        let number: Double?
-        switch value {
-        case let n as NSNumber where CFGetTypeID(n) != CFBooleanGetTypeID(): number = n.doubleValue
-        case let s as String: number = Double(s.trimmingCharacters(in: .whitespaces))
-        default: number = nil
-        }
-        guard let number, number.isFinite else { return nil }
-        return number
+/// One clamped numeric setting from the preferences domain.
+///
+/// Shared with the perf thresholds, whose keys are clamped the same way: a
+/// value `defaults write` put there out of range is pinned to the range, and
+/// anything that is not a finite number falls back to the default. A bad
+/// preference must degrade one reading, never break a reader.
+func clampedSetting(_ value: Any?, default defaultValue: Double, range: ClosedRange<Double>) -> Double {
+    guard let number = numericSetting(value) else { return defaultValue }
+    return min(max(number, range.lowerBound), range.upperBound)
+}
+
+/// A finite number, from whatever `defaults write` put there. A string is
+/// accepted only when it parses completely ("600", not "600s").
+private func numericSetting(_ value: Any?) -> Double? {
+    let number: Double?
+    switch value {
+    case let n as NSNumber where CFGetTypeID(n) != CFBooleanGetTypeID(): number = n.doubleValue
+    case let s as String: number = Double(s.trimmingCharacters(in: .whitespaces))
+    default: number = nil
     }
+    guard let number, number.isFinite else { return nil }
+    return number
 }
