@@ -1,6 +1,6 @@
 # Plan: performance suggestions for Claude Code sessions (MVP)
 
-Status: draft v0.5, 2026-11-03. Source proposal: `Vibra_Perf_Optimization_Proposal_2026-11-03.md`
+Status: draft v0.6, 2026-11-03. Source proposal: `Vibra_Perf_Optimization_Proposal_2026-11-03.md`
 (copied to `$SCRATCH/proposal.md`). This plan replaces the proposal's section 4.1 and its section 6
 MVP row where they disagree. "Changes from the proposal" says why. Each review round's objections and
 their resolutions are in the tables at the end.
@@ -31,8 +31,9 @@ All figures come from scripts in `$SCRATCH/probe/` or `tools/perf-oracle/`. They
 snapshot of this machine's `~/.claude/projects`, taken at `2026-11-03T21:55:32Z` (176 files, 463 MB,
 files modified in the last 9 days). Outputs: `evidence-frozen.txt`, `calib-v05.txt`,
 `d1-sensitivity.txt`, `cache-tiers.txt`, `drop-recovery.txt`. Sessions are keyed by file stem. No output
-names a project. `calib-v05.txt` starts with the blob hashes of the oracle files and the command that
-produced it, and `d1-sensitivity.txt` calls the committed oracle's own `report()`.
+names a project. `calib-v05.txt` and `d1-sensitivity.txt` start with the blob hashes of the oracle files
+and `dirty: False`, and were produced on the clean committed tree. `d1-sensitivity.txt` calls the
+committed oracle's own `report()`.
 
 The oracle tooling is committed to the branch under `tools/perf-oracle/`: `perf_oracle.py` (the
 oracle), `oracle_selftest.py`, `compare.py` (the comparator), `compare_selftest.py` and
@@ -66,10 +67,12 @@ Scopes are stated per figure. "7-day files" means files modified in the 7 days b
 - **File shape** (whole snapshot): 0 symlinks, 0 transcripts under a hidden directory, 0 lines that are
   not valid UTF-8, 0 files without a trailing newline.
 - **Zero-usage records** (whole snapshot): 18, all with model `<synthetic>`, 12 in main-thread files.
-- **Compaction** (whole snapshot, main-thread files, turns as defined below, `drop-recovery.txt`): 23
-  `system/compact_boundary` markers have a following turn. All 23 coincide with a context drop to at most
-  0.361 of the previous context. 0 drops have no marker, and 0 markers have no drop. An earlier probe
-  counted 9 unmarked drops; those were the zero-usage `<synthetic>` records, which are not turns.
+- **Compaction** (whole snapshot, main-thread files, turns as defined below, `drop_recovery.py` and its
+  output `drop-recovery.txt`): 23 `system/compact_boundary` markers have a following turn, and all 23
+  coincide with a context drop. 0 markers have no drop, and 0 drops have no marker, a file's last turn
+  included. An earlier 7-day probe (`compact_agreement.py`, which counted zero-usage records as turns)
+  found 9 unmarked drops; those were the zero-usage `<synthetic>` records. All 23 markers drop to at
+  most 0.361 of the previous context (that probe).
 - **Subagents** (7-day files): 133 of 158 files are under a `subagents` directory. 0 `isSidechain`
   records sit in main-thread files.
 - **Models** (whole snapshot): `claude-opus-5-5` 17,214 records, `claude-fable-5-1` 2,893,
@@ -135,6 +138,9 @@ public protocol UsageSampler: Sendable {
 // returns `ClaudeUsageSampler`. OpenCode, Hermes, Cursor and VS Code use the default, which returns no
 // samples (OpenCode and Hermes keep `reportsUndatedTotals`). `ReportIngest` calls only
 // `makeUsageSampler(for:)`.
+// The Codex sampler is stateful too: it keeps the model it last saw (from `session_meta` or
+// `turn_context`, as `CodexCheckpoint` does) across `add` calls. Today's per-batch parse forgets it, so
+// Codex tokens after line 2,000 of a rollout are reported as unpriced. Task 1 fixes that.
 ```
 
 `ClaudeUsageSampler` holds the one fold for "one response, several records". It lives in
@@ -162,7 +168,7 @@ still merges. `ClaudeCheckpoint.fold` already parses each record and its timesta
 
 The full-parse path (`discoverSessions`, for Claude Code and Codex) stops calling `readLines`, which
 returns only the first 2,000 lines (`maxLinesPerRead`). A helper reads batch after batch to the end of
-the file and folds each batch, so memory stays per batch.
+the file and folds each batch, so memory stays per batch. `readLines` is then unused and is deleted.
 
 ```swift
 // Report/ReportWindow.swift: the window, the file cutoff and the calendar of the report and the analyzer.
@@ -210,7 +216,7 @@ public struct Suggestion: Sendable, Equatable, Codable {
     }
     public let sessionID: String        // transcript file name without extension
     public let project: String          // first non-nil `project` among the session's turns, else ""
-    public let startedAt: Date?         // timestamp of the session's first in-window turn
+    public let startedAt: Date?         // timestamp of the session's first in-window turn (not in the oracle; unit-tested)
     public let turns: Int               // in-window turns
     public let finding: Finding
     public let exposureUSD: Double?     // nil when the session is unpriced
@@ -228,8 +234,12 @@ public struct PerfReport: Sendable, Equatable, Codable {
 
 - `PerfAnalyzer.report(claudeSources: [SourceSamples], window: ReportWindow, thresholds: PerfThresholds)
   -> PerfReport` is pure. Callers pass `ReportInput.sources[.claudeCode]` only.
-- `PerfThresholds` is `Codable`, with the key names of the table below. `load(from: SettingsStore)` reads
-  the keys through one free internal function,
+- `PerfThresholds` (in `Perf/PerfThresholds.swift`) has seven stored properties named as in the table
+  below without the `perf.` prefix (`minTurns`, `d1MinTurnsAboveFloor`, `d1CarryFloorTokens`,
+  `d2MinRewriteTokens`, `d3MinBurstTurns`, `leadMinUSD`, `leadMinShare`). It is `Codable` with exactly
+  those bare names as keys, which are the oracle's keys. The `perf.` prefix belongs only to the
+  `defaults write` keys. Task 1 writes the type, its defaults and its internal memberwise initializer.
+  Task 2 adds `load(from: SettingsStore)`, which reads the keys through one free internal function,
   `clampedSetting(_ value: Any?, default: Double, range: ClosedRange<Double>) -> Double`, extracted from
   `VibraSettings` and built on its existing `numeric` rule. Integer keys are clamped, then rounded to the
   nearest integer. `VibraSettings.Limit` stays as it is, because `SettingsWindowController` uses it.
@@ -311,8 +321,10 @@ is the first block's generation time.
    analyze."
 3. Whenever an unpriced session matched a detector, whether or not there are leads: "K sessions use a
    model with no published rate. M of them matched a pattern, shown without a dollar figure." Then one
-   line per detector matched in an unpriced session: the action and its evidence line with "no published
-   rate" in place of the figure.
+   line per detector matched in an unpriced session, in the fixed order D1, D2, D3: the action and the
+   evidence line of the matching unpriced session with the most in-window turns (ties broken by
+   `sessionID`), with "no published rate" in place of the figure, plus "also in N other unpriced
+   sessions" when there are more. For D2 the action follows that session's dominant cause.
 4. The block ends with "Estimated API-equivalent value at Vibra's table rates (last verified
    2026-09-19); 1-hour cache writes use the single write rate. Not a bill."
 
@@ -355,9 +367,9 @@ format. The third keeps D2 about rewrites rather than partial misses.
 
 | # | Owner | Depends on | Files (literal; touch nothing else) | Acceptance |
 |---|---|---|---|---|
-| 1 | planner | none | `Sources/VibraCore/Report/UsageSample.swift`, `Sources/VibraCore/Report/UsageSampler.swift` (new), `Sources/VibraCore/Report/ReportWindow.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift` (new), `Sources/VibraCore/Report/ReportIngest.swift`, `Sources/VibraCore/Report/ReportBuilder.swift`, `Sources/VibraCore/Adapters/AgentAdapter.swift`, `Sources/VibraCore/Adapters/ClaudeCodeAdapter.swift`, `Sources/VibraCore/Adapters/CodexAdapter.swift`, `Sources/VibraCore/Adapters/OpenCodeAdapter.swift`, `Sources/VibraCore/Perf/Suggestion.swift` (new), `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/ClaudeUsageSamplerTests.swift` (new), `Tests/VibraCoreTests/UsageSampleTests.swift`, `Tests/VibraCoreTests/ReportBuilderTests.swift`, `Tests/VibraCoreTests/QueryAndHistoryTests.swift` (the `ReportBuilder.build` call site only) | `make test` green, every existing test included or migrated. `usageSamples(from:)` no longer exists. New tests, each run against both `Session.usage` (through `SessionIngest`) and `ReportIngest` output: three records with one ID and growing output give the last usage; the same pair split across batches (`maxLinesPerRead: 1`) still merges; the same pair split across two `SessionIngest.refresh()` calls, the second record appended in between, still merges; `recordsWithoutIDNeverMerge` (two adjacent records with no ID stay two); a user record between two records of one ID does not split them; a first record with no timestamp takes the second's; a zero-usage record contributes 0; an inline sidechain record counts in totals and has `isSidechain`; a property test over seeded random batch splits gives equal live and report totals. A 2,500-line transcript gives the same usage through `discoverSessions` as through `ReportIngest`, for Claude Code and for Codex. A `cwd` of `/a/SECRET/b/proj` yields `project == "proj"` and no sample field contains `SECRET`; a `cwd` of `/` yields nil. `isSubagent` is true for `<root>/<project>/<session>/subagents/<agent>.jsonl`, false for `<root>/<project>/<session>.jsonl` and for the single-file entry point, and a `subagents` component above `<root>` does not count. `ReportWindow` tests cover the DST change on 2026-11-01 in `America/Los_Angeles`. `ReportJSON` tests check the schema keys and ISO 8601 dates. `Vibra --report --json` on the synthetic home (probe 3a, any seat) and on the snapshot (probe 3b, planner only) passes `compare.py --total-only` against the committed oracle. |
-| 2 | deepseek | 1 | `Sources/VibraCore/Perf/PerfThresholds.swift` (new), `Sources/VibraCore/Perf/PerfAnalyzer.swift` (new), `Sources/VibraCore/Settings/VibraSettings.swift` (extract `clampedSetting` only; `Limit` unchanged), `Tests/VibraCoreTests/PerfAnalyzerTests.swift` (new) | `make test` green, existing `VibraSettings` tests included. Synthetic samples only: Task 2 never reads the snapshot. It may run the committed oracle and `make_synthetic_home.py` on synthetic data. For each detector, a positive case whose expected values are written in the test as arithmetic from the rules above. Required cases, mirroring `oracle_selftest.py`: new content is not D2; no cache writes means no D2; a first cache fill after uncached turns is not D2; an expired cache after 3 h is one `idleOver1h` event with exposure `100000 x (3.75 - 0.30) / 1e6`; a D2 turn with `input > 0` uses the `cacheCreation` cap; an unpriced D2 picks its dominant cause by tokens then by the fixed order; a missing timestamp with matching models gives `other`; `compactionIsNotARewrite` (12 turns at 229k, then a turn with `cacheCreation = 60000` and no reads, then turns at 60k: no D2); a burst with no later turns has exposure 0; a 3-turn Read burst followed by 7 turns at +90k gives `90000 x 6 x 0.30 / 1e6`; growth that drops before a later burst is not charged again (`7 x 50000 x 0.30 / 1e6`); an earlier burst's growth still in context is charged (`(5 x 20000 + 7 x 70000) x 0.30 / 1e6`); D3 exposure never exceeds session value; an output-only record is not a turn; an inline sidechain record is not a turn and does not split a segment; `burstTurns` counts in-window turns only; D1 with 60 turns at 250k gives `60 x 50000 x 0.30 / 1e6` and is a lead; D1 over a 150k read prefix, 60k writes and 40k input gives `60 x (10000 x 3.75 + 40000 x 3.0) / 1e6`; `leadNeedsShareOfSessionValue` (a priced D1 of $0.75 in a $26.55 session is not a lead); a priced suggestion with exposure 0 is never a lead, even with `leadMinUSD` 0; one unpriced in-window turn gives nil figures and no lead, while an unpriced turn outside the window does not; a zero-usage `<synthetic>` sample is neither a boundary nor a model switch; `project` comes from turns; `startedAt` is the first in-window turn's timestamp; repeated Bash is not D3; a session below `minTurns` counts as skipped; a subagent source is neither analyzed nor counted as skipped (counts asserted). A mixed-model D3 case prices later turns at their own rates. A threshold-loading test covers clamping, rounding of integer keys and a non-numeric value. |
-| 3 | planner | 1, 2 | `Sources/VibraCore/Report/ReportText.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift`, `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/PerfPrivacyTests.swift` (new), `Tests/VibraCoreTests/ReportTextTests.swift` (new), `Makefile`, `tools/gate/mutate.sh` (new), `tools/gate/perf-bench.sh` (new), `tools/gate/baseline-vibra-now.patch` (new) | `make test` green. The Makefile checks each canary by its exact test name, so `canaryTokenNeverLeaks` and the new `perfPrivacySentinelsNeverLeak` each fail the run when absent. The canary fixture is raw JSONL lines with one sentinel each in message text, a thinking block, `tool_use.input`, a `tool_result` content block, `wireToolInputs`, and a parent component of `cwd`. Run with in-range small thresholds (`minTurns` 3, `d1MinTurnsAboveFloor` 5, `d1CarryFloorTokens` 20000, `d3MinBurstTurns` 2), it must produce a lead for each of D1, D2 and D3 (asserted) before asserting that no sentinel appears in any `UsageSample` field, in `ReportJSON.encode` output, in `ReportText.render` output, or in `evidenceLine(for:)` for every fired suggestion, and that `toolNames` equals the exact `name` values. Task 3 deletes `ReportWindowController.format` and the `--report` print block. `ReportText` tests cover both empty states, the unpriced block alone and alongside leads, the one-line-per-detector rule with its ordering and tie-break, "also in N other sessions", the local date, "unknown project", and a D1 line with a non-default floor. The three `tools/gate/` files are reviewed in the code gate and pinned by its diff hash. |
+| 1 | planner | none | `Sources/VibraCore/Report/UsageSample.swift`, `Sources/VibraCore/Report/UsageSampler.swift` (new), `Sources/VibraCore/Report/ReportWindow.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift` (new), `Sources/VibraCore/Report/ReportIngest.swift`, `Sources/VibraCore/Report/ReportBuilder.swift`, `Sources/VibraCore/Adapters/AgentAdapter.swift`, `Sources/VibraCore/Adapters/ClaudeCodeAdapter.swift`, `Sources/VibraCore/Adapters/CodexAdapter.swift`, `Sources/VibraCore/Adapters/OpenCodeAdapter.swift`, `Sources/VibraCore/Perf/Suggestion.swift` (new), `Sources/VibraCore/Perf/PerfThresholds.swift` (new: the type, defaults, `Codable`, memberwise initializer), `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/ClaudeUsageSamplerTests.swift` (new), `Tests/VibraCoreTests/UsageSampleTests.swift`, `Tests/VibraCoreTests/ReportBuilderTests.swift`, `Tests/VibraCoreTests/QueryAndHistoryTests.swift` (the `ReportBuilder.build` call site only) | `make test` green, every existing test included or migrated. `usageSamples(from:)` no longer exists. New tests, each run against both `Session.usage` (through `SessionIngest`) and `ReportIngest` output: three records with one ID and growing output give the last usage; the same pair split across batches (`maxLinesPerRead: 1`) still merges; the same pair split across two `SessionIngest.refresh()` calls, the second record appended in between, still merges; `recordsWithoutIDNeverMerge` (two adjacent records with no ID stay two); a user record between two records of one ID does not split them; a first record with no timestamp takes the second's; a zero-usage record contributes 0; an inline sidechain record counts in totals and has `isSidechain`; a property test over seeded random batch splits gives equal live and report totals. A 2,500-line transcript gives the same usage through `discoverSessions` as through `ReportIngest`, for Claude Code and for Codex. For the 2,500-line Codex rollout, a sample after line 2,000 carries the session's model, and the report's Codex line has `unpricedTokens == 0` and the `estimatedValue` written as arithmetic in the test. A `cwd` of `/a/SECRET/b/proj` yields `project == "proj"` and no sample field contains `SECRET`; a `cwd` of `/` yields nil. `isSubagent` is true for `<root>/<project>/<session>/subagents/<agent>.jsonl`, false for `<root>/<project>/<session>.jsonl` and for the single-file entry point, and a `subagents` component above `<root>` does not count. `ReportWindow` tests cover the DST change on 2026-11-01 in `America/Los_Angeles`. `ReportJSON` tests check the schema keys, ISO 8601 dates, and that the encoded `PerfThresholds` keys are exactly the oracle's seven bare names. `Vibra --report --json` on the synthetic home (probe 3a, any seat) and on the snapshot (probe 3b, planner only) passes `compare.py --total-only` against the committed oracle. |
+| 2 | deepseek | 1 | `Sources/VibraCore/Perf/PerfThresholds.swift` (add `load(from:)` to the Task 1 type), `Sources/VibraCore/Perf/PerfAnalyzer.swift` (new), `Sources/VibraCore/Settings/VibraSettings.swift` (extract `clampedSetting` only; `Limit` unchanged), `Tests/VibraCoreTests/PerfAnalyzerTests.swift` (new) | `make test` green, existing `VibraSettings` tests included. Synthetic samples only: Task 2 never reads the snapshot. It may run the committed oracle and `make_synthetic_home.py` on synthetic data. For each detector, a positive case whose expected values are written in the test as arithmetic from the rules above. Required cases, mirroring `oracle_selftest.py`: new content is not D2; no cache writes means no D2; a first cache fill after uncached turns is not D2; an expired cache after 3 h is one `idleOver1h` event with exposure `100000 x (3.75 - 0.30) / 1e6`; a D2 turn with `input > 0` uses the `cacheCreation` cap; an unpriced D2 picks its dominant cause by tokens then by the fixed order; a missing timestamp with matching models gives `other`; `compactionIsNotARewrite` (12 turns at 229k, then a turn with `cacheCreation = 60000` and no reads, then turns at 60k: no D2); a burst with no later turns has exposure 0; a 3-turn Read burst followed by 7 turns at +90k gives `90000 x 6 x 0.30 / 1e6`; growth that drops before a later burst is not charged again (`7 x 50000 x 0.30 / 1e6`); an earlier burst's growth still in context is charged (`(5 x 20000 + 7 x 70000) x 0.30 / 1e6`); D3 exposure never exceeds session value; an output-only record is not a turn; an inline sidechain record is not a turn and does not split a segment; `burstTurns` counts in-window turns only; D1 with 60 turns at 250k gives `60 x 50000 x 0.30 / 1e6` and is a lead; D1 over a 150k read prefix, 60k writes and 40k input gives `60 x (10000 x 3.75 + 40000 x 3.0) / 1e6`; `leadNeedsShareOfSessionValue` (a priced D1 of $0.75 in a $26.55 session is not a lead); a priced suggestion with exposure 0 is never a lead, even with `leadMinUSD` 0; one unpriced in-window turn gives nil figures and no lead, while an unpriced turn outside the window does not; a zero-usage `<synthetic>` sample is neither a boundary nor a model switch; `project` comes from turns; `startedAt` is the first in-window turn's timestamp; repeated Bash is not D3; a session below `minTurns` counts as skipped; a subagent source is neither analyzed nor counted as skipped (counts asserted); a source whose samples are all sidechain samples has no turns and counts as skipped (counts asserted). A mixed-model D3 case prices later turns at their own rates. A threshold-loading test covers clamping, rounding of integer keys and a non-numeric value. |
+| 3 | planner | 1, 2 | `Sources/VibraCore/Report/ReportText.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift`, `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/PerfPrivacyTests.swift` (new), `Tests/VibraCoreTests/ReportTextTests.swift` (new), `Makefile`, `tools/gate/mutate.sh` (new), `tools/gate/perf-bench.sh` (new), `tools/gate/baseline-vibra-now.patch` (new) | `make test` green. The Makefile checks each canary by its exact test name, so `canaryTokenNeverLeaks` and the new `perfPrivacySentinelsNeverLeak` each fail the run when absent. The canary fixture is raw JSONL lines with one sentinel each in message text, a thinking block, `tool_use.input`, a `tool_result` content block, `wireToolInputs`, and a parent component of `cwd`. Run with in-range small thresholds (`minTurns` 3, `d1MinTurnsAboveFloor` 5, `d1CarryFloorTokens` 20000, `d3MinBurstTurns` 2), it must produce a lead for each of D1, D2 and D3 (asserted) before asserting that no sentinel appears in any `UsageSample` field, in `ReportJSON.encode` output, in `ReportText.render` output, or in `evidenceLine(for:)` for every fired suggestion, and that `toolNames` equals the exact `name` values. Task 3 deletes `ReportWindowController.format` and the `--report` print block. `ReportText` tests cover both empty states, the unpriced block alone and alongside leads (including which unpriced session supplies each line and "also in N other unpriced sessions"), the one-line-per-detector rule with its ordering and tie-break, "also in N other sessions", the local date, "unknown project", and a D1 line with a non-default floor. The three `tools/gate/` files are reviewed in the code gate and pinned by its diff hash. |
 | 4 | planner | 3 | `docs/features.md`, `docs/privacy.md`, `docs/ROADMAP.md`, `CHANGELOG.md`, this plan file | Docs say what each detector measures; that figures are estimated exposures at Vibra's table rates (last verified 2026-09-19), with 1-hour cache writes at the single write rate, and not savings; the `defaults write` keys; `--report --json` with its `schema` field and `VIBRA_NOW`; that `tool_use.name`, `message.id`, `isSidechain` and the last component of `cwd` are now read for the report (never tool inputs or results); that Claude Code totals drop by about half because of the Task 1 fix; that Fable has no published rate in `CostTable`; and that D3 has not yet been observed as a lead on real sessions. Before the merge, the plan's Run info keeps no local paths. |
 
 Task 1 is the shared foundation. It is built and committed alone before Task 2 is dispatched. Task 3
@@ -382,11 +394,12 @@ starts after Task 2 is done.
      `project` exactly, dollar figures strictly within half a cent. It rejects duplicate keys. It prints
      counts and mismatches by file stem only, and withholds project values.
 4. `tools/gate/perf-bench.sh`. The baseline is a throwaway worktree of `60a61b8` with
-   `tools/gate/baseline-vibra-now.patch` applied, which adds only `VIBRA_NOW` to `--report`. Baseline and
+   `tools/gate/baseline-vibra-now.patch` applied. The patch adds two things to `--report` and nothing
+   else: `VIBRA_NOW`, and a final line with the exact byte count and the number of files read. Baseline and
    branch run 3 times each, interleaved, on the same snapshot copy and `VIBRA_NOW`. It records `--report`
    wall time, bytes read and peak resident memory (`/usr/bin/time -l`), and `make bench`'s cold refresh
-   time, with min, median and max. The comparison counts only when both sides report the same bytes
-   read. It fails when the branch median exceeds the baseline's by more than 15% in time, or by more
+   time, with min, median and max. The comparison counts only when both sides report the same exact bytes
+   read and the same number of files. It fails when the branch median exceeds the baseline's by more than 15% in time, or by more
    than 50 MB in peak memory.
 5. `tools/gate/mutate.sh`, in a throwaway `git worktree`, never in the shared checkout. It applies each
    mutation, runs `make test`, and checks that the named test fails:
@@ -505,7 +518,7 @@ Seats: `codex` (C1 to C4), `deepseek` (D1, D2). Planner's own review via `pstack
 | The canary cannot reach the CLI's JSON (P-B7) | `ReportJSON.encode` lives in core. `main.swift` only prints it, and the canary checks its output. |
 | Subagent exclusion keyed on a directory name only (P-B8, P-C9) | Two reviewers asked. A source is a subagent source by path or when an assistant record carries `isSidechain: true`. It costs nothing on the existing parse. The oracle does the same. Tested in Task 1 and in the oracle's end-to-end test. |
 | Unterminated tail and non-object lines (P-B9) | The oracle ignores an unterminated last line and skips non-object lines, as Swift does. Self-test included. Measured: 0 snapshot files lack a trailing newline. |
-| D3 per-burst caps (P-B10) | Carry is also capped jointly at `c[j]` minus the lowest burst base. With the running minimum, the reviewer's case is already bounded. A self-test pins the expected value (`(5 x 20000 + 7 x 70000) x 0.30 / 1e6`). |
+| D3 per-burst caps (P-B10) | Superseded in round 4: the joint cap was shown to be a no-op and deleted. The running minimum bounds exposure. The self-test value `(5 x 20000 + 7 x 70000) x 0.30 / 1e6` stands. |
 | `last + 1` reasoning (P-B11) | Reworded: skipping it is conservative. |
 | `responseID` has no consumer after the fold (P-B12) | Removed from `UsageSample` (see P-A6). |
 | Small spec holes: N in "also in", ordering, zero-exposure lead, file entry point, who loads thresholds, total-only comparison, who deletes the formatters (P-B13) | N counts other sessions with a lead from the same detector. Suggestions are ordered by `Finding` case name. A lead needs exposure above 0. `isSubagentSource` is false for the file entry point. The window controller and `--report` load thresholds. `compare.py --total-only` serves Task 1, tested. Task 3 deletes the formatters. |
@@ -543,3 +556,24 @@ review via `pstack:interrogate` on v0.4 (P-A opus @high, P-B fable @high, P-C so
 | Plan carries local paths into a public repo (P-B9) | `$SCRATCH` is named without its path, and Task 4 strips any local path before the merge. The data-incident row stays, as the record of what happened. |
 | Smaller notes from deepseek: ISO 8601 dates, half-cent wording, `--now` invocation, subagent counts, joint-cap case, stale round-3 row, oracle docstring | Dates encode as ISO 8601. "Strictly within half a cent". The probe pins `--now <value>`. Task 2 asserts subagent counts. The running-minimum case with an earlier burst's remaining growth is listed. The round-3 row is marked superseded. The docstring no longer names a plan version. |
 | `Suggestion` repeats per-session fields (P-B10) | Kept. The flat list is what the comparator keys on. |
+
+## Round-5 objections → changes
+
+Seats: `codex` (C1) and `deepseek` (D1) both rejected, each with one objection. Planner's own review via
+`pstack:interrogate` on v0.5 (P-A opus @high, P-B fable @high, P-C sonnet @medium), briefed to report
+blocking defects only.
+
+| Objection (who) | Change |
+|---|---|
+| Task 1 cannot compile: `PerfReport.thresholds` needs `PerfThresholds`, a Task 2 type (D1, P-A1, P-B1) | Task 1 writes `Perf/PerfThresholds.swift` with the type, its defaults, `Codable` and the memberwise initializer. Task 2 adds only `load(from:)` and the `clampedSetting` extraction, in the same file, after Task 1. |
+| `PerfThresholds` JSON keys ambiguous; the gate compares them exactly (C1, P-A1, P-B2, P-C2, D note) | The keys are the seven bare names, which the plan lists. `perf.` belongs only to `defaults write`. A `ReportJSON` test asserts the exact encoded keys. |
+| The Codex sampler keeps today's per-batch model loss (P-A2, P-C1) | A real defect: Codex tokens after line 2,000 of a rollout are unpriced in today's report. The Codex sampler keeps the last model across batches, following `session_meta` and `turn_context` as `CodexCheckpoint` does. The 2,500-line Codex test asserts the model, `unpricedTokens == 0` and the value. |
+| Unpriced block: which session supplies each line is unspecified (P-B3) | The matching unpriced session with the most in-window turns, ties by `sessionID`, in the fixed order D1, D2, D3, plus "also in N other unpriced sessions". Tested. |
+| The marker-agreement figure has no producing script; last turn skipped (P-A3, P-B4) | `drop_recovery.py` now computes the agreement itself, includes a file's last turn and skips sidechain records. Regenerated: 23 markers with a drop, 0 without, 0 unmarked drops. |
+| `calib-v05.txt` and `d1-sensitivity.txt` ran before the commit (P-A3, P-C note, D note) | Both re-run on the clean committed tree. Each starts with the blob hashes and `dirty: False`, with identical numbers. |
+| Probe 4 cannot check exact bytes against the baseline (P-B5) | The baseline patch prints the exact byte count and the file count. The plan says the patch adds those two things and `VIBRA_NOW`, nothing else. The comparison requires both to match. |
+| `startedAt` is not in the oracle (D note) | Stated on the field. It is covered by the Task 2 and Task 3 unit tests only. |
+| All-sidechain file count not covered by the Swift acceptance (D note) | Task 2 asserts that such a source counts as skipped. |
+| Round-3 P-B10 row still describes the joint cap (D note) | Marked superseded. |
+| `readLines` left behind (D note) | Deleted in Task 1 once both full-parse paths fold per batch. |
+| `--now` invocation (D note) | Already pinned in probe 3a as `--now <value>`. |
