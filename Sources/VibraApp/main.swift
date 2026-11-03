@@ -227,15 +227,41 @@ if let i = CommandLine.arguments.firstIndex(of: "--jump"),
     exit(0)
 }
 
-// `Vibra --report` prints the rolling-window usage report.
+// `Vibra --report [--json]` prints the rolling-window usage report, as text
+// or as the `ReportJSON` object. `VIBRA_NOW` (ISO 8601) pins the window's
+// clock so a run over a fixture tree is reproducible.
 if CommandLine.arguments.contains("--report") {
+    let asJSON = CommandLine.arguments.contains("--json")
+    let now: Date
+    if let pinned = ProcessInfo.processInfo.environment["VIBRA_NOW"], !pinned.isEmpty {
+        guard let date = ISO8601DateFormatter().date(from: pinned) else {
+            FileHandle.standardError.write(Data("VIBRA_NOW must be an ISO 8601 date-time, got \(pinned)\n".utf8))
+            exit(2)
+        }
+        now = date
+    } else {
+        now = Date()
+    }
     let ingest = ReportIngest(adapters: AdapterRegistry.all())
     nonisolated(unsafe) var done = false
     Task.detached {
         let t0 = Date()
-        let window = ReportWindow(now: t0, days: 7, calendar: .current)
+        let window = ReportWindow(now: now, days: 7, calendar: .current)
         let input = await ingest.collect(window: window)
         let report = ReportBuilder().build(samplesByAgent: input.samplesByAgent, window: window)
+
+        if asJSON {
+            do {
+                FileHandle.standardOutput.write(
+                    try ReportJSON.encode(usage: report, window: window, read: input.read, perf: nil))
+                print("")
+            } catch {
+                FileHandle.standardError.write(Data("could not encode the report: \(error)\n".utf8))
+                exit(1)
+            }
+            done = true
+            return
+        }
 
         let df = DateFormatter()
         df.dateFormat = "EEE MMM d"

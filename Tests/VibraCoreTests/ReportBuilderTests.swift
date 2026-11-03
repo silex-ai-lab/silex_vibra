@@ -209,3 +209,101 @@ struct PerfThresholdsTests {
         #expect(decoded == custom)
     }
 }
+
+/// What `--report --json` prints, from a fixture tree through `collect` and
+/// `encode`, so the comparator's input is pinned end to end.
+struct ReportJSONTests {
+    private var losAngeles: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        return c
+    }
+
+    private let main = """
+    {"type":"assistant","timestamp":"2026-11-03T10:00:00.000Z","cwd":"/Users/demo/proj","message":{"id":"a","model":"claude-opus-5","usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":100}}}
+    {"type":"assistant","timestamp":"2026-11-03T10:00:01.000Z","cwd":"/Users/demo/proj","message":{"id":"a","model":"claude-opus-5","usage":{"input_tokens":10,"output_tokens":9,"cache_creation_input_tokens":0,"cache_read_input_tokens":100}}}
+    {"type":"assistant","timestamp":"2026-11-03T10:00:02.000Z","cwd":"/Users/demo/proj","message":{"model":"claude-opus-5","usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":100}}}
+
+    """
+    private let subagent = """
+    {"type":"assistant","timestamp":"2026-11-03T10:00:03.000Z","cwd":"/Users/demo/proj","message":{"id":"b","model":"claude-opus-5","usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":100}}}
+
+    """
+
+    private func encodedFixtureTree() async throws -> (object: [String: Any], bytes: Int) {
+        let root = testScratchDirectory().appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let files = [
+            (root.appendingPathComponent("proj/s1.jsonl"), Data(main.utf8)),
+            (root.appendingPathComponent("proj/s1/subagents/agent-a1.jsonl"), Data(subagent.utf8)),
+        ]
+        for (url, data) in files {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url)
+        }
+
+        let window = ReportWindow(now: ISO8601DateFormatter().date(from: "2026-11-03T21:00:00Z")!,
+                                  days: 7, calendar: losAngeles)
+        let input = await ReportIngest(adapters: [ClaudeCodeAdapter(projectsRoot: root)]).collect(window: window)
+        let usage = ReportBuilder().build(samplesByAgent: input.samplesByAgent, window: window)
+        let data = try ReportJSON.encode(usage: usage, window: window, read: input.read, perf: nil)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return (object, files.map(\.1.count).reduce(0, +))
+    }
+
+    @Test func schemaWindowReadAndAgentsFromAFixtureTree() async throws {
+        let (object, bytes) = try await encodedFixtureTree()
+
+        #expect(Set(object.keys) == ["schema", "window", "read", "agents", "perf"])
+        #expect(object["schema"] as? Int == 1)
+        #expect(object["perf"] is NSNull, "Task 1 writes perf as an explicit null")
+
+        let window = try #require(object["window"] as? [String: Any])
+        #expect(Set(window.keys) == ["days", "start", "now"])
+        #expect(window["days"] as? Int == 7)
+        #expect(window["now"] as? String == "2026-11-03T21:00:00Z")
+        #expect(window["start"] as? String == "2026-10-28T07:00:00Z", "local midnight PDT, as ISO 8601")
+
+        let read = try #require(object["read"] as? [String: Any])
+        #expect(read["bytes"] as? Int == bytes, "every byte of both files, main and subagent")
+        #expect(read["files"] as? Int == 2)
+
+        // Main file: "a" folds to its last record (10/9/0/100) plus the
+        // no-ID record (10/5/0/100); subagent: one response (10/5/0/100).
+        let agents = try #require(object["agents"] as? [[String: Any]])
+        #expect(agents.count == 1)
+        let claude = try #require(agents.first)
+        #expect(claude["agent"] as? String == "claudeCode")
+        #expect(claude["usage"] as? [String: Int] == ["input": 30, "output": 19, "cacheCreation": 0, "cacheRead": 300])
+        #expect(claude["unpricedTokens"] as? Int == 0)
+        // claude-opus-5: $15 input, $75 output, $1.50 cache read, per million.
+        let value = (30.0 * 15.0 + 19.0 * 75.0 + 300.0 * 1.50) / 1e6
+        #expect(abs((claude["estimatedValue"] as? Double ?? -1) - value) < 1e-12)
+    }
+
+    @Test func perfEncodesThresholdsAndFindingsByCaseName() throws {
+        let window = ReportWindow(now: ISO8601DateFormatter().date(from: "2026-11-03T21:00:00Z")!,
+                                  days: 7, calendar: losAngeles)
+        let usage = ReportBuilder().build(samplesByAgent: [:], window: window)
+        let perf = PerfReport(
+            thresholds: .defaults, analyzedSessions: 1, unpricedSessions: 0, skippedSmallSessions: 2,
+            suggestions: [Suggestion(
+                sessionID: "s1", project: "proj", startedAt: window.now, turns: 60,
+                finding: .contextCarry(segments: 1, turnsAboveFloor: 60, peakContext: 250_000, floorTokens: 200_000),
+                exposureUSD: 0.9, sessionValueUSD: 4.5, isLead: true)])
+        let data = try ReportJSON.encode(usage: usage, window: window, read: ReadStats(bytes: 0, files: 0), perf: perf)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        let encoded = try #require(object["perf"] as? [String: Any])
+        let thresholds = try #require(encoded["thresholds"] as? [String: Any])
+        #expect(Set(thresholds.keys) == [
+            "minTurns", "d1MinTurnsAboveFloor", "d1CarryFloorTokens", "d2MinRewriteTokens",
+            "d3MinBurstTurns", "leadMinUSD", "leadMinShare",
+        ])
+        let suggestion = try #require((encoded["suggestions"] as? [[String: Any]])?.first)
+        #expect(suggestion["finding"] as? [String: [String: Int]] ==
+                ["contextCarry": ["segments": 1, "turnsAboveFloor": 60, "peakContext": 250_000, "floorTokens": 200_000]])
+        #expect(suggestion["startedAt"] as? String == "2026-11-03T21:00:00Z")
+        #expect(suggestion["isLead"] as? Bool == true)
+    }
+}
