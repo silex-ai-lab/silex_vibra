@@ -2,9 +2,10 @@
 import json, os, subprocess, sys, tempfile
 here = os.path.dirname(os.path.abspath(__file__))
 sug = {"sessionID": "abcdef0123", "project": "SYNTHETIC_PRIVATE_PROJECT", "turns": 12, "exposureUSD": 1.0, "sessionValueUSD": 5.0, "isLead": True}
-oracle = {"claudeTotal": {"input": 1, "output": 2, "cacheCreation": 3, "cacheRead": 4}, "analyzedSessions": 1, "unpricedSessions": 0, "skippedSmallSessions": 0,
+TH = json.loads('{"minTurns": 10, "d1MinTurnsAboveFloor": 50, "d1CarryFloorTokens": 200000, "d2MinRewriteTokens": 30000, "d3MinBurstTurns": 3, "leadMinUSD": 0.25, "leadMinShare": 0.1}')
+oracle = {"claudeTotal": {"input": 1, "output": 2, "cacheCreation": 3, "cacheRead": 4}, "analyzedSessions": 1, "unpricedSessions": 0, "skippedSmallSessions": 0, "thresholds": TH,
           "suggestions": [dict(sug, detector="explorationBurst", finding={"bursts": 1, "burstTurns": 3})]}
-def vibra(sugs): return {"agents": [{"agent": "claudeCode", "usage": oracle["claudeTotal"]}], "perf": {"analyzedSessions": 1, "unpricedSessions": 0, "skippedSmallSessions": 0, "suggestions": sugs}}
+def vibra(sugs): return {"agents": [{"agent": "claudeCode", "usage": oracle["claudeTotal"]}], "perf": {"analyzedSessions": 1, "unpricedSessions": 0, "skippedSmallSessions": 0, "thresholds": TH, "suggestions": sugs}}
 vs = dict(sug, finding={"explorationBurst": {"bursts": 1, "burstTurns": 3}})
 def run(v):
     d = tempfile.mkdtemp(); a, b = os.path.join(d, "v.json"), os.path.join(d, "o.json")
@@ -17,6 +18,8 @@ def check(name, cond, out=""):
 rc, out = run(vibra([vs])); check("identical inputs match", rc == 0 and "RESULT MATCH" in out, out)
 rc, out = run(vibra([dict(vs, project="review")])); check("project mismatch fails without printing values", rc == 1 and "SYNTHETIC_PRIVATE_PROJECT" not in out and "review" not in out, out)
 rc, out = run(vibra([vs, vs])); check("duplicate key fails", rc == 1 and "DUPLICATE IN VIBRA" in out, out)
+v = vibra([vs]); v["perf"]["thresholds"] = dict(TH, leadMinShare=0.2)
+rc, out = run(v); check("a thresholds mismatch fails", rc == 1 and "THRESHOLDS MISMATCH" in out, out)
 rc, out = run(vibra([dict(vs, exposureUSD=1.004)])); check("dollars within half a cent match", rc == 0, out)
 rc, out = run(vibra([dict(vs, exposureUSD=1.006)])); check("dollars beyond half a cent fail", rc == 1, out)
 def run_total(v):

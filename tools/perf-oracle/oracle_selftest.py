@@ -2,6 +2,8 @@
 import json, os, sys, tempfile
 from datetime import datetime, timedelta, timezone
 
+os.environ["TZ"] = "America/Los_Angeles"
+import time; time.tzset()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import perf_oracle as o
 
@@ -26,7 +28,7 @@ def run(records, now=NOW):
     with open(p, "w") as f:
         for r in records: f.write(json.dumps(r) + "\n")
     _, _, inw = o.make_window(now, 7)
-    samples, _ = o.samples_of(p)
+    samples = o.samples_of(p)
     return samples, o.analyze("s", samples, inw, o.DEFAULTS)
 
 
@@ -136,8 +138,22 @@ check("D3 keeps only the part of an earlier burst's growth still in context", d3
 d = tempfile.mkdtemp(); pth = os.path.join(d, "t.jsonl")
 with open(pth, "w") as f:
     f.write(json.dumps(rec(0, cr=10)) + "\n" + "[1, 2]\n" + json.dumps(rec(1, cr=20)) + "\n" + json.dumps(rec(2, cr=30)))
-s_, side = o.samples_of(pth)
-check("unterminated last line is ignored and a non-object line is skipped", [t["u"][3] for t in s_] == [10, 20] and side is False, str([t["u"][3] for t in s_]))
+s_ = o.samples_of(pth)
+check("unterminated last line is ignored and a non-object line is skipped", [t["u"][3] for t in s_] == [10, 20], str([t["u"][3] for t in s_]))
+
+recs = [rec(i, cr=250_000) for i in range(60)] + [dict(rec(60, cr=5_000), isSidechain=True)] + [rec(i, cr=250_000) for i in range(61, 62)]
+_, r = run(recs)
+d1 = find(r, "contextCarry")
+check("an inline sidechain record is not a turn and does not split the segment", d1 is not None and d1["finding"]["turnsAboveFloor"] == 61 and d1["turns"] == 61, str(d1 and (d1["finding"], d1["turns"])))
+
+s_, _ = run([dict(rec(0, cr=10), timestamp="2026-11-02T21:00:00")])
+check("a timestamp without a zone is undated", s_[0]["at"] is None, str(s_[0]["at"]))
+s_, _ = run([rec(0, cr=10) | {"message": dict(rec(0)["message"], usage={"input_tokens": "abc", "output_tokens": "12", "cache_creation_input_tokens": 3.9, "cache_read_input_tokens": True})}])
+check("usage values parse like jsonInt", s_[0]["u"] == [0, 12, 3, 1], str(s_[0]["u"]))
+
+recs = [rec(i, cr=229_000) for i in range(12)] + [rec(12, cc=60_000)] + [rec(i, cr=60_000) for i in range(13, 20)]
+_, r = run(recs)
+check("compactionIsNotARewrite: a post-compaction write above both D2 bars is not D2", r is not None and find(r, "cacheRewrite") is None, str(r and r["found"]))
 
 home = tempfile.mkdtemp(); proj = os.path.join(home, ".claude", "projects", "-p")
 os.makedirs(os.path.join(proj, "sess", "subagents"))
@@ -156,10 +172,11 @@ write(os.path.join(proj, "stale.jsonl"), [rec(0, cr=7)], NOW.timestamp() - 9 * 8
 write(os.path.join(proj, "agent-old.jsonl"), [dict(rec(i, cr=250_000, tools=("Read",)), isSidechain=True) for i in range(60)], NOW.timestamp())
 rep_ = o.report(home, NOW)
 tot = rep_["claudeTotal"]
-check("report(): window starts at local midnight across the DST change", rep_["window"]["start"].startswith("2026-10-28T00:00:00"), rep_["window"]["start"])
+check("report(): window starts at local midnight across the DST change", rep_["window"]["start"] == "2026-10-28T00:00:00-07:00", rep_["window"]["start"])
 check("report(): totals include subagents, fold duplicates, drop out-of-window and stale files",
       tot == dict(input=0, output=7, cacheCreation=0, cacheRead=10 + 100 + 10 * 1000 + 2 * 60 * 250_000), str(tot))
-check("report(): subagent files (by path or by isSidechain) are not analyzed", rep_["analyzedSessions"] == 1 and rep_["skippedSmallSessions"] == 0 and all(x["sessionID"] == "main" for x in rep_["suggestions"]), str((rep_["analyzedSessions"], rep_["skippedSmallSessions"])))
+check("report(): a subagents/ file is not a session; an all-sidechain file has no turns and counts as skipped", rep_["analyzedSessions"] == 1 and rep_["skippedSmallSessions"] == 1 and all(x["sessionID"] == "main" for x in rep_["suggestions"]), str((rep_["analyzedSessions"], rep_["skippedSmallSessions"])))
+check("report(): emits the thresholds it used", rep_["thresholds"] == o.DEFAULTS)
 
 print("RESULT", "PASS" if not failures else f"{len(failures)} FAILED")
 sys.exit(1 if failures else 0)

@@ -1,6 +1,6 @@
 # Plan: performance suggestions for Claude Code sessions (MVP)
 
-Status: draft v0.4, 2026-11-03. Source proposal: `Vibra_Perf_Optimization_Proposal_2026-11-03.md`
+Status: draft v0.5, 2026-11-03. Source proposal: `Vibra_Perf_Optimization_Proposal_2026-11-03.md`
 (copied to `$SCRATCH/proposal.md`). This plan replaces the proposal's section 4.1 and its section 6
 MVP row where they disagree. "Changes from the proposal" says why. Each review round's objections and
 their resolutions are in the tables at the end.
@@ -13,8 +13,8 @@ their resolutions are in the tables at the end.
 | Gates | Plan gate and code gate are unanimous across all three seats. |
 | Branch | `feat/perf-suggestions`, cut from `main` at `60a61b8`. |
 | Review base | `BASE` is recorded here when Step 5 starts. |
-| Scratch | `$SCRATCH` = `/private/tmp/claude-501/-Users-jianwang/ed4a9617-ddf5-401a-85cd-bde5b7fa7ab3/scratchpad/fleet-lRT3pJ`. |
-| Checkout | One shared working tree. Owners write disjoint files. Task 3 starts only after Task 2 is done, so no half-written file breaks another owner's build. |
+| Scratch | `$SCRATCH`, a session scratch directory outside the repo (verdicts, ledger, probes). |
+| Checkout | One shared working tree. Owners write disjoint files. Task 3 starts only after Task 2 is done, so no half-written file breaks another owner's build. Nothing under `tools/perf-oracle/` changes while a review round is open. |
 | Data rule | The repo is public. Seats read the repo, `$SCRATCH` and synthetic fixtures only. They never read `~/.claude` or the frozen snapshot. The snapshot of real transcripts lives in a planner-only directory outside `$SCRATCH`. Seats see aggregate counts with no project names. |
 | Data incident, round 1 | In round 1 the snapshot sat inside `$SCRATCH`, and `coder-deepseek` ran six read-only Python scripts over it. Its session export shows that every script printed aggregates only (file, record, model and marker counts, sizes). No message text, tool input or path reached the model. The snapshot was then moved out of `$SCRATCH`. `reviewer-codex` ran no command on it (checked in its rollout). |
 
@@ -27,60 +27,66 @@ their resolutions are in the tables at the end.
 
 ## Evidence
 
-All figures come from scripts in `$SCRATCH/probe/`. They ran on a frozen snapshot of this machine's
-`~/.claude/projects`, taken at `2026-11-03T21:55:32Z` (176 files, 463 MB, files modified in the last 9
-days, no symlinks, no transcript under a hidden directory, no line that is not valid UTF-8, no file
-without a trailing newline). Outputs are
-saved as `evidence-frozen.txt`, `oracle-freeze.txt`, `d1-sensitivity.txt` and `cache-tiers.txt`.
-Sessions are keyed by file stem. No output names a project.
+All figures come from scripts in `$SCRATCH/probe/` or `tools/perf-oracle/`. They ran on a frozen
+snapshot of this machine's `~/.claude/projects`, taken at `2026-11-03T21:55:32Z` (176 files, 463 MB,
+files modified in the last 9 days). Outputs: `evidence-frozen.txt`, `calib-v05.txt`,
+`d1-sensitivity.txt`, `cache-tiers.txt`, `drop-recovery.txt`. Sessions are keyed by file stem. No output
+names a project. `calib-v05.txt` starts with the blob hashes of the oracle files and the command that
+produced it, and `d1-sensitivity.txt` calls the committed oracle's own `report()`.
 
-The oracle tooling is committed to the branch under `tools/perf-oracle/`, so the freeze is a git fact,
-not a file mode: `perf_oracle.py` (the oracle), `oracle_selftest.py`, `compare.py` (the comparator),
-`compare_selftest.py` and `make_synthetic_home.py` (a synthetic `VIBRA_HOME`). It reads synthetic data
-or a path given on the command line, and holds no real data. Probe 3 checks these git blob hashes
-before it runs:
+The oracle tooling is committed to the branch under `tools/perf-oracle/`: `perf_oracle.py` (the
+oracle), `oracle_selftest.py`, `compare.py` (the comparator), `compare_selftest.py` and
+`make_synthetic_home.py` (a synthetic `VIBRA_HOME`). It reads synthetic data or a path given on the
+command line, and holds no real data. Probe 3 checks that `git diff --quiet HEAD -- tools/perf-oracle`
+holds and that the blobs equal these hashes:
 
 ```
-ac18496dd2a230b4013d84d0932faa341ad8d75c  tools/perf-oracle/perf_oracle.py
-8a30ea8309e05b347e6326bd67e8b520bfc36669  tools/perf-oracle/oracle_selftest.py
-5acb4381ccfa9407cc927e7e0f66ac119a9ba562  tools/perf-oracle/compare.py
-698612e14dceff7b6a22a6d26c21736a9272f5ce  tools/perf-oracle/compare_selftest.py
-36329e889e3dae3f4f710ab7e2c8dffa4ba1ee00  tools/perf-oracle/make_synthetic_home.py
+0780d7e914959218fbd07509d96a52e1c1bfa332  tools/perf-oracle/perf_oracle.py
+d57478bd2803133c0e36baecdb01a5f9491ad492  tools/perf-oracle/oracle_selftest.py
+1b42b26c456921889c7eaadb3bf2a282c95d7328  tools/perf-oracle/compare.py
+8040e20064c3f4713cc438ba48fc0b02b44ceb4c  tools/perf-oracle/compare_selftest.py
+ef48fe56b3503f73f86c8de157c2f3c52e9ec05e  tools/perf-oracle/make_synthetic_home.py
 ```
 
-Every oracle-derived number below comes from those blobs (`calib-v04.txt`, `d1-sensitivity.txt`).
-`oracle_selftest.py` checks 27 synthetic cases with hand-computed results, including every
-counterexample from rounds 1 to 3 and an end-to-end run of the oracle's entry point on a synthetic tree
-that crosses the 2026-11-01 DST change. `compare_selftest.py` checks 7 comparator cases, including its
-failure paths. Changing any of these files after this plan is approved needs a new plan round.
+`oracle_selftest.py` checks 32 synthetic cases with hand-computed results, including every
+counterexample from rounds 1 to 4 and an end-to-end run of the oracle's entry point, pinned to
+`TZ=America/Los_Angeles`, on a tree that crosses the 2026-11-01 DST change. `compare_selftest.py` checks 8
+comparator cases, including its failure paths. Changing any of these files after this plan is approved
+needs a new plan round. The tools run with `python3 -I -B`, so they leave no bytecode in the tree.
 
 Scopes are stated per figure. "7-day files" means files modified in the 7 days before the snapshot.
 "Whole snapshot" means all 176 files.
 
 - **Duplicate response records** (7-day files, `evidence-frozen.txt`): 19,162 assistant records with
-  usage, 9,373 distinct `message.id`s, 9,789 duplicates, all adjacent to the first record of their ID among
-  assistant records with usage. 0 IDs appear in more than one file. Summing every record gives
+  usage, 9,373 distinct `message.id`s, 9,789 duplicates, all adjacent to the first record of their ID
+  among assistant records with usage. 0 IDs appear in more than one file. Summing every record gives
   4,544,516,386 tokens. Keeping the last record per ID gives 2,137,062,638 (ratio 2.13). Both
-  `Session.usage` and the Usage Report sum every record today. Whole snapshot (`record_shapes.py`): all
-  121 duplicate pairs whose usage differs differ only in `output_tokens`, and output never decreases.
+  `Session.usage` and the Usage Report sum every record today. Whole snapshot: all 121 duplicate pairs
+  whose usage differs differ only in `output_tokens`, and output never decreases.
+- **File shape** (whole snapshot): 0 symlinks, 0 transcripts under a hidden directory, 0 lines that are
+  not valid UTF-8, 0 files without a trailing newline.
 - **Zero-usage records** (whole snapshot): 18, all with model `<synthetic>`, 12 in main-thread files.
-- **Compaction** (7-day files): 25 `system/compact_boundary` markers. All 23 markers with a following
-  assistant turn coincide with a context drop to at most 0.361 of the previous context. 9 further drops
-  below half have no marker. 0 markers come without a drop.
-- **Subagents** (7-day files): 133 of 158 files are under a `subagents` directory. 0 `isSidechain` records
-  in main-thread files.
+- **Compaction** (whole snapshot, main-thread files, turns as defined below, `drop-recovery.txt`): 23
+  `system/compact_boundary` markers have a following turn. All 23 coincide with a context drop to at most
+  0.361 of the previous context. 0 drops have no marker, and 0 markers have no drop. An earlier probe
+  counted 9 unmarked drops; those were the zero-usage `<synthetic>` records, which are not turns.
+- **Subagents** (7-day files): 133 of 158 files are under a `subagents` directory. 0 `isSidechain`
+  records sit in main-thread files.
 - **Models** (whole snapshot): `claude-opus-5-5` 17,214 records, `claude-fable-5-1` 2,893,
   `claude-sonnet-5-5` 500, `claude-opus-4-8` 16, `<synthetic>` 18. `CostTable` has no rate for Fable.
+  It prices every model whose name contains "opus" at one rate. Its rates were last verified on
+  2026-09-19, and this run did not verify them again. Every dollar figure here inherits them.
 - **Cache tiers** (whole snapshot, raw records, `cache-tiers.txt`): every usage carries a
   `cache_creation` object. 5-minute writes total 46,985,629 tokens and 1-hour writes 64,753,155. Both
-  tiers are in use. `CostTable` has one cache-write rate, so D2's premium is understated for 1-hour writes.
-- **Calibration** (committed oracle, `now` pinned to the snapshot time, `calib-v04.txt`): Claude Code
+  tiers are in use. `CostTable` has one cache-write rate, so every figure that includes cache writes is
+  understated for 1-hour writes.
+- **Calibration** (committed oracle, `now` pinned to the snapshot time, `calib-v05.txt`): Claude Code
   total in the window 1,931,896,094 tokens after folding. 17 sessions analyzed, 2 unpriced, 11 skipped as
   too small. D1 fired in 8 and was a lead in 7. D2 fired in 10 and was a lead in 4, every one dominated
   by `idleOver1h`. D3 fired in 1 and was a lead in 0. Both unpriced sessions matched a detector. No
   exposure exceeds 0.536 of its session's value. These numbers come from the data that chose the
   defaults. They are not an accuracy claim. D3 is expected to stay silent on this machine, because broad
-  exploration here already runs in subagents.
+  exploration here already runs in subagents. It has not been observed as a lead on real sessions.
 - **D1 sensitivity** (`d1-sensitivity.txt`): a 100k floor with 20 turns above it gives 13 leads of 17. A
   200k floor with 50 turns gives 7. A 300k floor with 100 turns still gives 6. Long sessions here run
   above 200k for most turns, so D1 fires often. The report shows it once.
@@ -90,65 +96,76 @@ Scopes are stated per figure. "7-day files" means files modified in the 7 days b
 1. **Vibra double-counts Claude Code tokens today, and Task 1 fixes it first.** Claude Code writes one
    API response as several `assistant` records, one per content block, each repeating `message.id` and
    `usage`. The fix also changes the Usage Report: on the snapshot, Claude Code tokens drop by about half.
+   Task 1 also fixes a second, separate defect it found on the way: the full-parse path
+   (`discoverSessions`) reads only the first 2,000 lines of a transcript, for Claude Code and Codex.
 2. **The proposal's D2 ratio uses the wrong denominator.** `cacheRead / (input + cacheRead)` leaves out
    `cacheCreation`, and `input_tokens` is near zero in Claude Code (50,939 of 2,137,062,638 tokens).
 3. **The proposal's D1 and D3 thresholds fire on almost every session.** D1 and D3 are redefined and calibrated.
 4. **Subagent transcripts are excluded from the detectors and still counted in the report.**
 5. **One read serves the report and the suggestions.**
-6. **Figures are exposures, not savings.** D1 is the exact cost of the prompt tokens above the floor. D2
-   is the write premium on context the previous turn held in cache. D3 is a conditional estimate whose
-   assumptions are shown with it. None promises what an alternative would have cost, because the
-   alternative (`/compact`, a subagent) has its own cost that the transcript cannot show.
+6. **Figures are estimated exposures, not savings.** D1 estimates what the prompt tokens above the floor
+   cost. D2 estimates the write premium on context the previous turn held in cache. D3 is a conditional
+   estimate whose assumptions are shown with it. All are at Vibra's `CostTable` rates, with 1-hour cache
+   writes priced at its single write rate. None promises what an alternative would have cost, because
+   the alternative (`/compact`, a subagent) has its own cost that the transcript cannot show.
 7. **Thresholds are tunable through `defaults write`. The MVP has no Settings window controls.**
 
 ## Data shape
 
 ```swift
-// Report/UsageSample.swift: two new fields, both defaulted, so Codex/OpenCode/Hermes are unchanged.
+// Report/UsageSample.swift: three new fields, all defaulted.
 public struct UsageSample: Sendable, Equatable {
     public let timestamp: Date?
     public let model: String?
     public let usage: TokenUsage
     public let toolNames: [String]   // `tool_use.name` values only; never `input`, never results
     public let project: String?      // last non-empty path component of `cwd`, cut at the adapter; nil for "/" or no cwd
+    public let isSidechain: Bool     // any record of the response had `isSidechain: true`
 }
 
 // Report/UsageSampler.swift: how an adapter turns one source's records into additive samples.
 public protocol UsageSampler: Sendable {
+    var isSubagent: Bool { get }                            // the source is a subagent transcript
     mutating func add(_ lines: [String]) -> [UsageSample]   // samples that are final
     mutating func finish() -> [UsageSample]                 // at end of file
 }
-// AgentAdapter gains `func makeUsageSampler() -> any UsageSampler`. The default wraps the existing
-// stateless `usageSamples(from:)`, so Codex is unchanged. Claude Code returns `ClaudeUsageSampler`, and
-// it no longer implements `usageSamples(from:)`: its raw per-record samples are not additive, so they
-// never leave `ClaudeCodeAdapter.swift`. `ReportIngest` calls only `makeUsageSampler()`.
-// AgentAdapter also gains `func isSubagentSource(_ url: URL) -> Bool`, default false. Claude Code returns
-// true when a path component below its projects root is named `subagents`, and false for the
-// single-file test entry point, which has no root.
-// UsageSampler also has `var sawSidechain: Bool { get }`, default false. ClaudeUsageSampler sets it when
-// an assistant record has `isSidechain == true`. A source is a subagent source when either signal holds.
+// AgentAdapter.usageSamples(from:) is deleted, and AgentAdapter gains
+// `func makeUsageSampler(for source: URL) -> any UsageSampler`, so every old caller fails to compile
+// until migrated. Codex returns a stateless sampler around its existing per-record parse. Claude Code
+// returns `ClaudeUsageSampler`. OpenCode, Hermes, Cursor and VS Code use the default, which returns no
+// samples (OpenCode and Hermes keep `reportsUndatedTotals`). `ReportIngest` calls only
+// `makeUsageSampler(for:)`.
 ```
 
 `ClaudeUsageSampler` holds the one fold for "one response, several records". It lives in
 `ClaudeCodeAdapter.swift`. Its rules:
 
+- `isSubagent` is true when a path component below the adapter's projects root is named `subagents`.
+  It is false for the single-file test entry point, which has no root.
 - Only `assistant` records with a `message.usage` object become records for the fold. Other records
   never make the pending response final early and never clear it.
 - A record whose non-nil `message.id` equals the pending response's ID merges into it. The merge keeps
   the pending timestamp, or takes the new one when the pending one is nil. It takes the new usage, takes
-  the new model and project when they are non-nil, and appends the new tool names.
+  the new model and project when they are non-nil, appends the new tool names, and keeps `isSidechain`
+  true once any record set it.
 - A record with another ID makes the pending response final and becomes pending itself.
 - A record with no ID makes the pending response final, and is final itself. Records with no ID never merge.
+- `add(_ lines:)` parses each line and calls `add(record:timestamp:detail:)`. That second entry point is
+  the fold. `detail: false` skips tool names and project, and is what the live path uses. There is one
+  fold, and the only difference between the callers is whether those two fields are filled.
 
 `ClaudeCheckpoint` (live polling) holds a `ClaudeUsageSampler` and `committed: TokenUsage`. It adds the
 usage of every sample the sampler makes final to `committed`. `Session.usage` is `committed` plus the
 pending usage. The checkpoint persists between polls, so a response split across two reads or two polls
-still merges. `ClaudeCheckpoint.fold` already parses each record and its timestamp. It hands the parsed
-record to the sampler (`add(record:timestamp:)`) instead of the line, and the live path skips tool names
-and project, which it never uses. So the live path parses each line once, as today.
+still merges. `ClaudeCheckpoint.fold` already parses each record and its timestamp, and hands them to
+`add(record:timestamp:detail: false)`. So the live path parses each line once, as today.
+
+The full-parse path (`discoverSessions`, for Claude Code and Codex) stops calling `readLines`, which
+returns only the first 2,000 lines (`maxLinesPerRead`). A helper reads batch after batch to the end of
+the file and folds each batch, so memory stays per batch.
 
 ```swift
-// Report/ReportWindow.swift: the one definition of the window, and the one calendar.
+// Report/ReportWindow.swift: the window, the file cutoff and the calendar of the report and the analyzer.
 public struct ReportWindow: Sendable, Equatable {
     public let days: Int
     public let calendar: Calendar
@@ -166,8 +183,8 @@ public struct ReportWindow: Sendable, Equatable {
 // Report/ReportIngest.swift
 public struct SourceSamples: Sendable {
     public let url: URL
-    public let isSubagent: Bool
-    public let samples: [UsageSample]   // final samples; empty when the file holds no usage
+    public let isSubagent: Bool          // sampler.isSubagent
+    public let samples: [UsageSample]    // final samples; empty when the file holds no usage
 }
 public struct ReportInput: Sendable {
     public let sources: [AgentKind: [SourceSamples]]   // one entry per JSONL file read, empty or not
@@ -180,7 +197,7 @@ public struct ReportInput: Sendable {
 
 Memory: `ReportInput` holds every final sample of the window until the report is built, as today's
 `[AgentKind: [UsageSample]]` does. Folding roughly halves the sample count. Each sample now also holds
-its tool names and a project string. Probe 4 measures peak resident memory against `main`.
+its tool names and a project string. Probe 4 measures peak resident memory against the baseline.
 
 ```swift
 // Perf/Suggestion.swift: typed evidence only. Every string the user reads is built in ReportText.
@@ -193,6 +210,7 @@ public struct Suggestion: Sendable, Equatable, Codable {
     }
     public let sessionID: String        // transcript file name without extension
     public let project: String          // first non-nil `project` among the session's turns, else ""
+    public let startedAt: Date?         // timestamp of the session's first in-window turn
     public let turns: Int               // in-window turns
     public let finding: Finding
     public let exposureUSD: Double?     // nil when the session is unpriced
@@ -200,111 +218,120 @@ public struct Suggestion: Sendable, Equatable, Codable {
     public let isLead: Bool
 }
 public struct PerfReport: Sendable, Equatable, Codable {
+    public let thresholds: PerfThresholds   // the values the analyzer used
     public let analyzedSessions: Int
     public let unpricedSessions: Int
     public let skippedSmallSessions: Int
-    public let suggestions: [Suggestion]   // every fired suggestion, ordered by Finding case name, then sessionID
+    public let suggestions: [Suggestion]    // every fired suggestion, ordered by Finding case name, then sessionID
 }
 ```
 
 - `PerfAnalyzer.report(claudeSources: [SourceSamples], window: ReportWindow, thresholds: PerfThresholds)
   -> PerfReport` is pure. Callers pass `ReportInput.sources[.claudeCode]` only.
-- `PerfThresholds.load(from: SettingsStore)` reads the keys below through one free internal function,
+- `PerfThresholds` is `Codable`, with the key names of the table below. `load(from: SettingsStore)` reads
+  the keys through one free internal function,
   `clampedSetting(_ value: Any?, default: Double, range: ClosedRange<Double>) -> Double`, extracted from
   `VibraSettings` and built on its existing `numeric` rule. Integer keys are clamped, then rounded to the
   nearest integer. `VibraSettings.Limit` stays as it is, because `SettingsWindowController` uses it.
-  `ReportWindowController` and `--report` call `load` when the report opens.
+  `ReportWindowController` and `--report` call `load` when the report opens. The memberwise initializer
+  is internal and used by tests.
 - `ReportText` in `Report/ReportText.swift` is the one text renderer:
   `render(usage: UsageReport, perf: PerfReport, bytes: Int, seconds: Double) -> String` and
-  `evidenceLine(for: Suggestion) -> String`. The window and `--report` both call it. Task 3 deletes the
-  existing `ReportWindowController.format` and the `--report` print block.
+  `evidenceLine(for: Suggestion) -> String`. The window and `--report` both call it.
 - `ReportJSON.encode(usage: UsageReport, window: ReportWindow, perf: PerfReport?) -> Data` in
   `Report/ReportJSON.swift` builds the `--report --json` object, so tests encode exactly what the CLI
-  prints. `main.swift` only writes its output.
-- `Vibra --report --json` prints one JSON object, so the gate can compare exact values. `VIBRA_NOW`
-  (ISO 8601) pins `now` for `--report`. Neither prints message text. The schema:
+  prints. `main.swift` only writes its output. Dates encode as ISO 8601. `VIBRA_NOW` (ISO 8601) pins
+  `now` for `--report`. Neither prints message text. The schema:
 
   ```json
   {
+    "schema": 1,
     "window": {"days": 7, "start": "<ISO 8601>", "now": "<ISO 8601>"},
     "agents": [{"agent": "claudeCode",
                 "usage": {"input": 0, "output": 0, "cacheCreation": 0, "cacheRead": 0},
                 "estimatedValue": 0.0, "unpricedTokens": 0}],
-    "perf": "<PerfReport, encoded by its synthesized Codable conformance>"
+    "perf": "<PerfReport, encoded by its synthesized Codable conformance, or null>"
   }
   ```
 
-  Task 1 writes `window` and `agents` (with `perf` nil). Task 3 passes the `PerfReport`. A `Finding` encodes as
+  Task 1 writes `schema`, `window` and `agents`, with `perf` null. Task 3 passes the `PerfReport`. A
+  `Finding` encodes as
   `{"contextCarry": {"segments": 1, "turnsAboveFloor": 60, "peakContext": 250000, "floorTokens": 200000}}`.
 
 ## Detector rules
 
 **Terms.** A *transcript* is a Claude Code source with `isSubagent == false`. A *turn* is a final sample
-with `input + cacheCreation + cacheRead > 0`. That drops the zero-usage `<synthetic>` records and
-output-only records. Context `c = input + cacheCreation + cacheRead`. A turn is *in window* when
+with `isSidechain == false` and `input + cacheCreation + cacheRead > 0`. That drops the zero-usage
+`<synthetic>` records, output-only records and inline sidechain records. Those records still count in
+the Usage Report's totals. Context `c = input + cacheCreation + cacheRead`. A turn is *in window* when
 `ReportWindow.contains` its timestamp. Detection runs over every turn of the transcript. Counts and
 dollar figures use in-window turns only. A session is analyzed when it has at least `minTurns` in-window
 turns. Otherwise it counts as skipped.
 
 **Segments.** A turn starts a new segment when the previous turn's context is at least 50,000 and its
-own context is below half of it. This is a heuristic, not a format guarantee. On the snapshot it matches
-all 23 compaction markers that have a following turn, and it adds 9 drops that have no marker. Those are
-context reductions too. A compaction that keeps more than half the context would be missed, and its
-rewrite could then count as a D2 event.
+own context is below half of it. On the snapshot this matches the 23 compaction markers exactly, with 0
+extra drops and 0 missed markers (see Evidence). It is still a heuristic. A compaction that keeps more
+than half the context would be missed, and its rewrite could then count as a D2 event.
 
 **Pricing.** Each turn is priced at its own model's `CostTable` rate. Rates are dollars per million
 tokens, so every product below is divided by 1,000,000. A session is *priced* when every in-window turn
 has a rate. An unpriced session still runs the detectors, but `exposureUSD` and `sessionValueUSD` are
 nil, and it is never a lead. `sessionValueUSD` is the sum of the in-window turns' API-equivalent value.
 This all-or-nothing rule is deliberate: a partial figure would compare a priced exposure with a partly
-priced session. On the snapshot it affects 2 of 17 analyzed sessions, and both are reported (see Empty
-states).
+priced session. On the snapshot it affects 2 of 17 analyzed sessions, and both are shown (see "What the
+report shows").
 
-| # | Fires when | Finding fields | Exposure (dollars) |
+| # | Fires when | Finding fields | Exposure (dollars, estimated) |
 |---|---|---|---|
-| D1 context carry | A segment has at least `d1MinTurnsAboveFloor` in-window turns with `c > d1CarryFloorTokens`. One suggestion per session covers every qualifying segment. | `segments`: qualifying segments. `turnsAboveFloor`: their in-window turns with `c > floor`. `peakContext`: max `c` over in-window turns of qualifying segments. `floorTokens`: the floor used. | Over those turns, the exact price of the prompt tokens at positions `floor...c`. The API lays a prompt out as the cache-read prefix, then the new cache writes, then uncached input, so the overlap with each band is priced at its rate. This is what the context above the floor cost, and so an upper bound on what dropping it could have saved. |
+| D1 context carry | A segment has at least `d1MinTurnsAboveFloor` in-window turns with `c > d1CarryFloorTokens`. One suggestion per session covers every qualifying segment. | `segments`: qualifying segments. `turnsAboveFloor`: their in-window turns with `c > floor`. `peakContext`: max `c` over in-window turns of qualifying segments. `floorTokens`: the floor used. | Over those turns, the prompt tokens at positions `floor...c`, each priced by the band it falls in. The API lays a prompt out as the cache-read prefix, then the new cache writes, then uncached input, so the overlap with each band is priced at that band's rate. This estimates what the context above the floor cost, at Vibra's table rates. |
 | D2 cache rewrite | A turn `i` in window, in the same segment as turn `i - 1`, with `held = cacheRead[i-1] + cacheCreation[i-1]` (what turn `i - 1` left in cache), `base = min(held, c[i])`, `missed = min(cacheCreation[i], max(0, base - cacheRead[i]))`, `missed >= d2MinRewriteTokens` and `missed >= 0.5 x base`. Each such turn is one event. | `events`. `rewrittenTokens`: sum of `missed`. `dominantCause`: the cause with the most rewritten tokens, ties broken by the fixed order modelSwitch, idleOver1h, idleOver5m, other. | Over events: `missed x (cacheCreationRate - cacheReadRate)` at turn `i`'s rate. This is the inferred write premium on context that the previous turn had in cache. Token identity is not proven by the usage fields, so the label says "inferred". |
-| D3 exploration burst | A burst is a maximal run of at least `d3MinBurstTurns` consecutive turns in one segment, `first...last`, each with at least one tool call and every tool name in {Read, Grep, Glob}, with at least one burst turn in window. | `bursts`. `burstTurns`: in-window burst turns. | Per burst: `top = last + 1` when that turn exists in the same segment, else `last`. `growth = max(0, c[top] - c[first])`. Walking `j` from `top + 1` to the end of the segment, `still = max(0, min(still, c[j] - c[first]))`, starting from `growth`. For each `j >= last + 2` in window, `carried[j] += still`. Then `carried[j]` is capped at `c[j]` minus the lowest `c[first]` among the bursts that added to it, and exposure is the sum of `carried[j] x cacheReadRate` at turn `j`'s rate. Turn `last + 1` is skipped. Only the last burst turn's results are a write there, so skipping the whole turn is a conservative choice. Growth may be measured on turns outside the window. Only in-window turns are priced. It assumes the growth came from the burst's tool results, and that once context falls back toward `c[first]`, that growth is gone for good. |
+| D3 exploration burst | A burst is a maximal run of at least `d3MinBurstTurns` consecutive turns in one segment, `first...last`, each with at least one tool call and every tool name in {Read, Grep, Glob}, with at least one burst turn in window. | `bursts`. `burstTurns`: in-window burst turns. | Per burst: `top = last + 1` when that turn exists in the same segment, else `last`. `growth = max(0, c[top] - c[first])`. Walking `j` from `top + 1` to the end of the segment, `still = max(0, min(still, c[j] - c[first]))`, starting from `growth`. For each `j >= last + 2` in window, `carried[j] += still`. Exposure is the sum of `carried[j] x cacheReadRate` at turn `j`'s rate. The running minimum alone keeps exposure at or below session value (tested). Turn `last + 1` is skipped. Only the last burst turn's results are a write there, so skipping the whole turn is a conservative choice. Growth may be measured on turns outside the window. Only in-window turns are priced. It assumes the growth came from the burst's tool results, and that once context falls back toward `c[first]`, that growth is gone for good. |
 
 **D2 cause.** It is a correlation, never a proven cause. Models are compared as strings, a missing model
-counting as a value. `modelSwitch` when turn `i`'s model differs from turn `i - 1`'s, else `idleOver1h`
-when the gap between the two turns' timestamps exceeds 3,600 s, else `idleOver5m` above 300 s, else
-`other`. A missing timestamp gives `other`. The timestamp of a folded turn is that of its first record,
-which Claude Code writes when the first content block is done. So the gap only approximates the
-interval the cache TTL counts from (inferred, not measured). The error is the first block's
-generation time.
+counting as a value. Precedence: `modelSwitch` when turn `i`'s model differs from turn `i - 1`'s, else
+`idleOver1h` when the gap between the two turns' timestamps exceeds 3,600 s, else `idleOver5m` above
+300 s, else `other`. So a missing timestamp gives `other` only when the models match. The timestamp of a
+folded turn is that of its first record, which Claude Code writes when the first content block is done.
+So the gap only approximates the interval the cache TTL counts from (inferred, not measured). The error
+is the first block's generation time.
 
 **Lead.** A suggestion is a lead when the session is priced, `sessionValueUSD > 0`, `exposureUSD > 0`,
 `exposureUSD >= leadMinUSD`, and `exposureUSD >= leadMinShare x sessionValueUSD`.
 
-**What the report shows.** One line per detector that has at least one lead, at most 3 lines, ordered by
-the exposure of each line's evidence suggestion, largest first. That ordering is for presentation only.
-Exposures are never summed across detectors, because D1 and D3 can price the same carried tokens. Each
-line gives the action, then `evidenceLine` for that detector's lead with the largest exposure, plus
-"also in N other sessions" when other sessions have a lead from the same detector (N counts them). A project of `""` renders as "unknown project".
+**What the report shows.**
 
-- D1: "<project>, T turns above <floor>: the context above <floor> cost $X." T is `turnsAboveFloor` and
-  `<floor>` is `floorTokens` (for example "200k").
+1. One line per detector that has at least one lead, at most 3 lines, ordered by the exposure of each
+   line's evidence suggestion, largest first, ties broken by `Finding` case name. That ordering is for
+   presentation only. Exposures are never summed across detectors, because D1 and D3 can price the same
+   carried tokens. Each line gives the action, then `evidenceLine` for that detector's lead with the
+   largest exposure, plus "also in N other sessions" when other sessions have a lead from the same
+   detector (N counts them).
+2. When no detector has a lead: "No priced pattern above the thresholds in N analyzed sessions", or,
+   when no session was analyzed, "No Claude Code session in the last <days> days had enough turns to
+   analyze."
+3. Whenever an unpriced session matched a detector, whether or not there are leads: "K sessions use a
+   model with no published rate. M of them matched a pattern, shown without a dollar figure." Then one
+   line per detector matched in an unpriced session: the action and its evidence line with "no published
+   rate" in place of the figure.
+4. The block ends with "Estimated API-equivalent value at Vibra's table rates (last verified
+   2026-09-19); 1-hour cache writes use the single write rate. Not a bill."
+
+Evidence lines. `<date>` is `startedAt` as a local date ("Oct 30"). A project of `""` renders as
+"unknown project".
+
+- D1: "<project>, <date>, T turns above <floor>: the context above <floor> cost about $X." T is
+  `turnsAboveFloor` and `<floor>` is `floorTokens` (for example "200k").
 - D2 by dominant cause:
-  - `modelSwitch`: "<project>: E times, context already in cache was written again, the largest part after a model switch (inferred). Write premium $X."
+  - `modelSwitch`: "<project>, <date>: E times, context already in cache was written again, the largest part after a model switch (inferred). Write premium about $X."
   - `idleOver1h`: "... the largest part after a gap of over an hour (inferred) ..."
   - `idleOver5m`: "... the largest part after a gap of over 5 minutes (inferred) ..."
   - `other`: "... the largest part with no model switch or long gap (inferred) ..."
-- D3: "<project>: B search bursts. If what they added stayed in context, re-sending it cost about $X."
-
-The block ends with "API-equivalent value at list price, not a bill." Empty states, with the window's
-day count interpolated:
-
-- no analyzed session: "No Claude Code session in the last <days> days had enough turns to analyze."
-- analyzed sessions and no lead: "No priced pattern above the thresholds in N analyzed sessions."
-- either case with unpriced sessions adds: "K sessions use a model with no published rate. M of them
-  matched a pattern, shown without a dollar figure." Then one line per detector matched in an unpriced
-  session: the action and its evidence line with "no published rate" in place of the figure.
+- D3: "<project>, <date>: B search bursts. If what they added stayed in context, re-sending it cost about $X."
 
 **Action text** (owned by `ReportText`):
 
 - D1: "Run /compact inside long tasks and /clear between tasks. Split unrelated work into separate sessions."
-- D2 `modelSwitch`: "Pick the model and MCP servers before starting. A switch mid-session writes the cache again."
+- D2 `modelSwitch`: "Pick the model before starting. A switch mid-session writes the cache again."
 - D2 `idleOver1h` / `idleOver5m`: "Before a long break, consider /compact, or /clear if the task is done. After the cache expires, much of the context is written to cache again."
 - D2 `other`: "Large parts of an already-cached prompt were written again. Check /context for tools or files that change between turns."
 - D3: "@-mention the files you mean, or hand broad searches to a subagent so only its conclusion enters this session."
@@ -328,10 +355,10 @@ format. The third keeps D2 about rewrites rather than partial misses.
 
 | # | Owner | Depends on | Files (literal; touch nothing else) | Acceptance |
 |---|---|---|---|---|
-| 1 | planner | none | `Sources/VibraCore/Report/UsageSample.swift`, `Sources/VibraCore/Report/UsageSampler.swift` (new), `Sources/VibraCore/Report/ReportWindow.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift` (new), `Sources/VibraCore/Report/ReportIngest.swift`, `Sources/VibraCore/Report/ReportBuilder.swift`, `Sources/VibraCore/Adapters/AgentAdapter.swift` (`makeUsageSampler`, `isSubagentSource` and the protocol doc), `Sources/VibraCore/Adapters/ClaudeCodeAdapter.swift`, `Sources/VibraCore/Perf/Suggestion.swift` (new), `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/ClaudeUsageSamplerTests.swift` (new), `Tests/VibraCoreTests/UsageSampleTests.swift`, `Tests/VibraCoreTests/ReportBuilderTests.swift`, `Tests/VibraCoreTests/QueryAndHistoryTests.swift` (the `ReportBuilder.build` call site only) | `make test` green, every existing test included. New tests, each run against both `Session.usage` and `ReportIngest` output: three records with one ID and growing output give the last usage; the same pair split across batches (`maxLinesPerRead: 1`) still merges; the same pair split across two `SessionIngest.refresh()` calls, the second record appended in between, still merges; two adjacent records with no ID never merge; a user record between two records of one ID does not split them; a first record with no timestamp takes the second's; a zero-usage record contributes 0; a property test over seeded random batch splits gives equal live and report totals. A `cwd` of `/a/SECRET/b/proj` yields `project == "proj"` and no sample field contains `SECRET`; a `cwd` of `/` yields nil. `isSubagentSource` is true for `<root>/<project>/<session>/subagents/<agent>.jsonl`, false for `<root>/<project>/<session>.jsonl` and for the single-file entry point, and a `subagents` component above `<root>` does not count. A file beside the main transcript whose assistant records carry `isSidechain: true` gives `SourceSamples.isSubagent == true`. `ReportWindow` tests cover the DST change on 2026-11-01 in `America/Los_Angeles`. `Vibra --report --json` on the synthetic home (probe 3a, any seat) and on the snapshot (probe 3b, planner only) passes `compare.py --total-only` against the committed oracle. |
-| 2 | deepseek | 1 | `Sources/VibraCore/Perf/PerfThresholds.swift` (new), `Sources/VibraCore/Perf/PerfAnalyzer.swift` (new), `Sources/VibraCore/Settings/VibraSettings.swift` (extract `clampedSetting` only; `Limit` unchanged), `Tests/VibraCoreTests/PerfAnalyzerTests.swift` (new) | `make test` green, existing `VibraSettings` tests included. Synthetic samples only: Task 2 never reads the snapshot. It may run the frozen oracle and `make_synthetic_home.py` on synthetic data. For each detector, a positive case whose expected values are written in the test as arithmetic from the rules above. Required cases, mirroring `oracle_selftest.py`: new content is not D2; no cache writes means no D2; a first cache fill after uncached turns is not D2; an expired cache after 3 h is one `idleOver1h` event with exposure `100000 x (3.75 - 0.30) / 1e6`; a D2 turn with `input > 0` uses the `cacheCreation` cap; an unpriced D2 picks its dominant cause by tokens then by the fixed order; a missing timestamp gives `other`; a burst with no later turns has exposure 0; a 3-turn Read burst followed by 7 turns at +90k gives `90000 x 6 x 0.30 / 1e6`; growth that drops before a later burst is not charged again (`7 x 50000 x 0.30 / 1e6`); D3 exposure never exceeds session value; an output-only record is not a turn; `burstTurns` counts in-window turns only; D1 with 60 turns at 250k gives `60 x 50000 x 0.30 / 1e6` and is a lead; D1 over a 150k read prefix, 60k writes and 40k input gives `60 x (10000 x 3.75 + 40000 x 3.0) / 1e6`; a priced D1 of $0.75 in a $26.55 session is not a lead (named `leadNeedsShareOfSessionValue`, the test `mutate.sh` must turn red); one unpriced in-window turn gives nil figures and no lead, while an unpriced turn outside the window does not; a zero-usage `<synthetic>` sample is neither a boundary nor a model switch; `project` comes from turns; a compaction drop is neither D1 nor D2; repeated Bash is not D3; a session below `minTurns` counts as skipped; a subagent source is skipped; a priced suggestion with exposure 0 is never a lead, even with `leadMinUSD` 0. A mixed-model D3 case prices later turns at their own rates. A threshold-loading test covers clamping, rounding of integer keys and a non-numeric value. |
-| 3 | planner | 1, 2 | `Sources/VibraCore/Report/ReportText.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift`, `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/PerfPrivacyTests.swift` (new), `Tests/VibraCoreTests/ReportTextTests.swift` (new), `Makefile` | `make test` green. The Makefile checks each canary by its exact test name, so `canaryTokenNeverLeaks` and the new `perfPrivacySentinelsNeverLeak` each fail the run when absent. The canary fixture is raw JSONL lines with one sentinel each in message text, a thinking block, `tool_use.input`, a `tool_result` content block, `wireToolInputs`, and a parent component of `cwd`. Run with small `PerfThresholds` (for example a 1k floor and 2 turns), it must produce a lead for each of D1, D2 and D3 (asserted) before asserting that no sentinel appears in any `UsageSample` field, in `ReportJSON.encode` output, in `ReportText.render` output, or in `evidenceLine(for:)` for every fired suggestion, and that `toolNames` equals the exact `name` values. Task 3 deletes `ReportWindowController.format` and the `--report` print block. `ReportText` tests cover the three empty states, the unpriced lines, the one-line-per-detector rule and its ordering, "also in N other sessions", "unknown project", and a D1 line with a non-default floor. |
-| 4 | planner | 3 | `docs/features.md`, `docs/privacy.md`, `docs/ROADMAP.md`, `CHANGELOG.md`, this plan file | Docs say what each detector measures, that figures are exposures at API list price and not savings, the `defaults write` keys, that `tool_use.name`, `message.id` and the last component of `cwd` are now read for the report (never tool inputs or results), that Claude Code totals drop by about half because of the Task 1 fix, that Fable has no published rate in `CostTable`, and that 1-hour cache writes are priced at the single cache-write rate. |
+| 1 | planner | none | `Sources/VibraCore/Report/UsageSample.swift`, `Sources/VibraCore/Report/UsageSampler.swift` (new), `Sources/VibraCore/Report/ReportWindow.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift` (new), `Sources/VibraCore/Report/ReportIngest.swift`, `Sources/VibraCore/Report/ReportBuilder.swift`, `Sources/VibraCore/Adapters/AgentAdapter.swift`, `Sources/VibraCore/Adapters/ClaudeCodeAdapter.swift`, `Sources/VibraCore/Adapters/CodexAdapter.swift`, `Sources/VibraCore/Adapters/OpenCodeAdapter.swift`, `Sources/VibraCore/Perf/Suggestion.swift` (new), `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/ClaudeUsageSamplerTests.swift` (new), `Tests/VibraCoreTests/UsageSampleTests.swift`, `Tests/VibraCoreTests/ReportBuilderTests.swift`, `Tests/VibraCoreTests/QueryAndHistoryTests.swift` (the `ReportBuilder.build` call site only) | `make test` green, every existing test included or migrated. `usageSamples(from:)` no longer exists. New tests, each run against both `Session.usage` (through `SessionIngest`) and `ReportIngest` output: three records with one ID and growing output give the last usage; the same pair split across batches (`maxLinesPerRead: 1`) still merges; the same pair split across two `SessionIngest.refresh()` calls, the second record appended in between, still merges; `recordsWithoutIDNeverMerge` (two adjacent records with no ID stay two); a user record between two records of one ID does not split them; a first record with no timestamp takes the second's; a zero-usage record contributes 0; an inline sidechain record counts in totals and has `isSidechain`; a property test over seeded random batch splits gives equal live and report totals. A 2,500-line transcript gives the same usage through `discoverSessions` as through `ReportIngest`, for Claude Code and for Codex. A `cwd` of `/a/SECRET/b/proj` yields `project == "proj"` and no sample field contains `SECRET`; a `cwd` of `/` yields nil. `isSubagent` is true for `<root>/<project>/<session>/subagents/<agent>.jsonl`, false for `<root>/<project>/<session>.jsonl` and for the single-file entry point, and a `subagents` component above `<root>` does not count. `ReportWindow` tests cover the DST change on 2026-11-01 in `America/Los_Angeles`. `ReportJSON` tests check the schema keys and ISO 8601 dates. `Vibra --report --json` on the synthetic home (probe 3a, any seat) and on the snapshot (probe 3b, planner only) passes `compare.py --total-only` against the committed oracle. |
+| 2 | deepseek | 1 | `Sources/VibraCore/Perf/PerfThresholds.swift` (new), `Sources/VibraCore/Perf/PerfAnalyzer.swift` (new), `Sources/VibraCore/Settings/VibraSettings.swift` (extract `clampedSetting` only; `Limit` unchanged), `Tests/VibraCoreTests/PerfAnalyzerTests.swift` (new) | `make test` green, existing `VibraSettings` tests included. Synthetic samples only: Task 2 never reads the snapshot. It may run the committed oracle and `make_synthetic_home.py` on synthetic data. For each detector, a positive case whose expected values are written in the test as arithmetic from the rules above. Required cases, mirroring `oracle_selftest.py`: new content is not D2; no cache writes means no D2; a first cache fill after uncached turns is not D2; an expired cache after 3 h is one `idleOver1h` event with exposure `100000 x (3.75 - 0.30) / 1e6`; a D2 turn with `input > 0` uses the `cacheCreation` cap; an unpriced D2 picks its dominant cause by tokens then by the fixed order; a missing timestamp with matching models gives `other`; `compactionIsNotARewrite` (12 turns at 229k, then a turn with `cacheCreation = 60000` and no reads, then turns at 60k: no D2); a burst with no later turns has exposure 0; a 3-turn Read burst followed by 7 turns at +90k gives `90000 x 6 x 0.30 / 1e6`; growth that drops before a later burst is not charged again (`7 x 50000 x 0.30 / 1e6`); an earlier burst's growth still in context is charged (`(5 x 20000 + 7 x 70000) x 0.30 / 1e6`); D3 exposure never exceeds session value; an output-only record is not a turn; an inline sidechain record is not a turn and does not split a segment; `burstTurns` counts in-window turns only; D1 with 60 turns at 250k gives `60 x 50000 x 0.30 / 1e6` and is a lead; D1 over a 150k read prefix, 60k writes and 40k input gives `60 x (10000 x 3.75 + 40000 x 3.0) / 1e6`; `leadNeedsShareOfSessionValue` (a priced D1 of $0.75 in a $26.55 session is not a lead); a priced suggestion with exposure 0 is never a lead, even with `leadMinUSD` 0; one unpriced in-window turn gives nil figures and no lead, while an unpriced turn outside the window does not; a zero-usage `<synthetic>` sample is neither a boundary nor a model switch; `project` comes from turns; `startedAt` is the first in-window turn's timestamp; repeated Bash is not D3; a session below `minTurns` counts as skipped; a subagent source is neither analyzed nor counted as skipped (counts asserted). A mixed-model D3 case prices later turns at their own rates. A threshold-loading test covers clamping, rounding of integer keys and a non-numeric value. |
+| 3 | planner | 1, 2 | `Sources/VibraCore/Report/ReportText.swift` (new), `Sources/VibraCore/Report/ReportJSON.swift`, `Sources/VibraApp/ReportWindowController.swift`, `Sources/VibraApp/main.swift`, `Tests/VibraCoreTests/PerfPrivacyTests.swift` (new), `Tests/VibraCoreTests/ReportTextTests.swift` (new), `Makefile`, `tools/gate/mutate.sh` (new), `tools/gate/perf-bench.sh` (new), `tools/gate/baseline-vibra-now.patch` (new) | `make test` green. The Makefile checks each canary by its exact test name, so `canaryTokenNeverLeaks` and the new `perfPrivacySentinelsNeverLeak` each fail the run when absent. The canary fixture is raw JSONL lines with one sentinel each in message text, a thinking block, `tool_use.input`, a `tool_result` content block, `wireToolInputs`, and a parent component of `cwd`. Run with in-range small thresholds (`minTurns` 3, `d1MinTurnsAboveFloor` 5, `d1CarryFloorTokens` 20000, `d3MinBurstTurns` 2), it must produce a lead for each of D1, D2 and D3 (asserted) before asserting that no sentinel appears in any `UsageSample` field, in `ReportJSON.encode` output, in `ReportText.render` output, or in `evidenceLine(for:)` for every fired suggestion, and that `toolNames` equals the exact `name` values. Task 3 deletes `ReportWindowController.format` and the `--report` print block. `ReportText` tests cover both empty states, the unpriced block alone and alongside leads, the one-line-per-detector rule with its ordering and tie-break, "also in N other sessions", the local date, "unknown project", and a D1 line with a non-default floor. The three `tools/gate/` files are reviewed in the code gate and pinned by its diff hash. |
+| 4 | planner | 3 | `docs/features.md`, `docs/privacy.md`, `docs/ROADMAP.md`, `CHANGELOG.md`, this plan file | Docs say what each detector measures; that figures are estimated exposures at Vibra's table rates (last verified 2026-09-19), with 1-hour cache writes at the single write rate, and not savings; the `defaults write` keys; `--report --json` with its `schema` field and `VIBRA_NOW`; that `tool_use.name`, `message.id`, `isSidechain` and the last component of `cwd` are now read for the report (never tool inputs or results); that Claude Code totals drop by about half because of the Task 1 fix; that Fable has no published rate in `CostTable`; and that D3 has not yet been observed as a lead on real sessions. Before the merge, the plan's Run info keeps no local paths. |
 
 Task 1 is the shared foundation. It is built and committed alone before Task 2 is dispatched. Task 3
 starts after Task 2 is done.
@@ -340,32 +367,40 @@ starts after Task 2 is done.
 
 1. `make test`: the test count, `OK: tests executed`, and both canary names.
 2. `make bench`: `PASS: an unchanged refresh reads zero bytes`.
-3. Oracle comparison. First `git hash-object` of each file in `tools/perf-oracle/` must equal the blob
-   hashes in Evidence, and both self-tests must pass. `defaults read ai.silexlab.vibra` must show no `perf.*` key, so `--report` runs
-   on the defaults the oracle uses.
-   - 3a, any seat may run it: `make_synthetic_home.py` writes a synthetic `VIBRA_HOME`. `Vibra --report
-     --json` and `perf_oracle.py` run on it with `VIBRA_NOW=2026-11-03T21:00:00Z`, and `compare.py`
-     compares them. The synthetic home fires every D2 cause, a D1 lead, a D3 lead and an unpriced D1.
+3. Oracle comparison, every command under `TZ=America/Los_Angeles` and `python3 -I -B`. First
+   `git diff --quiet HEAD -- tools/perf-oracle` must hold, `git hash-object` of each file must equal the
+   blob hashes in Evidence, and both self-tests must pass.
+   - 3a, any seat may run it: `make_synthetic_home.py <dir> --now 2026-11-03T21:00:00Z` writes a
+     synthetic `VIBRA_HOME`. `Vibra --report --json` and `perf_oracle.py` run on it with that `now`, and
+     `compare.py` compares them. The synthetic home fires every D2 cause, a D1 lead, a D3 lead and an
+     unpriced D1. It also holds an inline sidechain record, a line that is not valid UTF-8, an
+     unterminated last line and the `compactionIsNotARewrite` shape.
    - 3b, planner only: the same on the frozen snapshot, with `now` at its time. Both raw JSON files stay
      in the planner-only directory.
-   - `compare.py` compares the Claude Code total exactly, the three session counts exactly, and every
-     fired suggestion by (`sessionID`, detector): finding fields, `turns`, `isLead` and `project`
-     exactly, dollar figures within half a cent. It rejects duplicate keys. It prints counts and
-     mismatches by file stem only, and withholds project values.
-4. `perf-bench.sh`, on `main` and on the branch, 3 runs each, same snapshot and `VIBRA_NOW`, with min,
-   median and max: `--report` wall time, bytes read and peak resident memory (`/usr/bin/time -l`), and
-   `make bench`'s cold refresh time. It fails when the branch median exceeds `main`'s by more than 15% in
-   time, or by more than 50 MB in peak memory.
-5. `mutate.sh`: applies each mutation, runs `make test`, checks that the named test fails, restores the
-   file. The mutations remove the lead-share comparison (`leadNeedsShareOfSessionValue`), remove the
-   segment check in D2, let records with no ID merge in `ClaudeUsageSampler`, and copy `tool_use.input`
-   into `toolNames`.
+   - `compare.py` compares the thresholds, the Claude Code total and the three session counts exactly,
+     and every fired suggestion by (`sessionID`, detector): finding fields, `turns`, `isLead` and
+     `project` exactly, dollar figures strictly within half a cent. It rejects duplicate keys. It prints
+     counts and mismatches by file stem only, and withholds project values.
+4. `tools/gate/perf-bench.sh`. The baseline is a throwaway worktree of `60a61b8` with
+   `tools/gate/baseline-vibra-now.patch` applied, which adds only `VIBRA_NOW` to `--report`. Baseline and
+   branch run 3 times each, interleaved, on the same snapshot copy and `VIBRA_NOW`. It records `--report`
+   wall time, bytes read and peak resident memory (`/usr/bin/time -l`), and `make bench`'s cold refresh
+   time, with min, median and max. The comparison counts only when both sides report the same bytes
+   read. It fails when the branch median exceeds the baseline's by more than 15% in time, or by more
+   than 50 MB in peak memory.
+5. `tools/gate/mutate.sh`, in a throwaway `git worktree`, never in the shared checkout. It applies each
+   mutation, runs `make test`, and checks that the named test fails:
+   - remove the lead-share comparison: `leadNeedsShareOfSessionValue`;
+   - remove the segment check in D2: `compactionIsNotARewrite`;
+   - let records with no ID merge in `ClaudeUsageSampler`: `recordsWithoutIDNeverMerge`;
+   - copy `tool_use.input` into `toolNames`: `perfPrivacySentinelsNeverLeak`.
 
 ## Not doing
 
 - Codex, OpenCode, Hermes, Cursor and VS Code detectors (V2). D4 to D8 (V2). D6 (deferred).
 - A separate Performance window, `--query --perf`, and Settings window controls for thresholds.
-- Adding a Fable rate or a 1-hour cache-write rate to `CostTable`. No published rate was verified in this run.
+- Adding a Fable rate or a 1-hour cache-write rate to `CostTable`, or re-verifying its rates. No
+  published rate was verified in this run.
 - Reading tool inputs, tool results, message text or file contents. No network. No hooks or plugins.
 - Changing `Session` fields. Task 1 changes how `usage` is summed, not its shape.
 
@@ -452,7 +487,7 @@ Seats: `codex` (C1 to C4), `deepseek` (D1, D2). Planner's own review via `pstack
 | No pass criterion for time; memory unmeasured (P-C6) | Probe 4 fails on more than 15% time or 50 MB peak memory over `main`. |
 | Unpriced is all-or-nothing (P-C3) | Kept, deliberately: a partial figure would compare a priced exposure with a partly priced session, and codex asked for the strict rule in round 1. The plan says so, measures it (2 of 17), and shows those sessions' patterns without a figure. |
 | 1-hour cache tier (P-C4, deepseek round-2 note) | Measured: both tiers in use (`cache-tiers.txt`). D2's premium is understated for 1-hour writes, stated in Evidence and Task 4. The gap labels stay correlations. |
-| `isSubagentSource` relies on layout; `isSidechain` exists (P-C9) | Not adopted. Measured 0 `isSidechain` records in main-thread files. A second signal would need a per-sample field for a case not seen. |
+| `isSubagentSource` relies on layout; `isSidechain` exists (P-C9) | Not adopted in round 3. Superseded in round 4: `isSidechain` is now read per record (see the round-4 table). |
 | Evidence scopes mixed (P-C8) | Each figure now names its scope. |
 | Parity edges: non-UTF-8, `/`, half-cent rounding (P-C10) | The oracle drops lines that are not valid UTF-8, as `IncrementalLineReader` does (0 such lines measured). `/` gives nil. Dollars compare within half a cent. |
 | Fixed D1/D2/D3 order is not a ranking (P-C12) | Lines are ordered by their evidence suggestion's exposure, for presentation only. |
@@ -474,3 +509,37 @@ Seats: `codex` (C1 to C4), `deepseek` (D1, D2). Planner's own review via `pstack
 | `last + 1` reasoning (P-B11) | Reworded: skipping it is conservative. |
 | `responseID` has no consumer after the fold (P-B12) | Removed from `UsageSample` (see P-A6). |
 | Small spec holes: N in "also in", ordering, zero-exposure lead, file entry point, who loads thresholds, total-only comparison, who deletes the formatters (P-B13) | N counts other sessions with a lead from the same detector. Suggestions are ordered by `Finding` case name. A lead needs exposure above 0. `isSubagentSource` is false for the file entry point. The window controller and `--report` load thresholds. `compare.py --total-only` serves Task 1, tested. Task 3 deletes the formatters. |
+
+## Round-4 objections → changes
+
+Seats: `codex` rejected (C1, C2). `deepseek` approved v0.4, with non-blocking notes (D-n). Planner's own
+review via `pstack:interrogate` on v0.4 (P-A opus @high, P-B fable @high, P-C sonnet @medium).
+
+| Objection (who) | Change |
+|---|---|
+| D1 called "exact" and an upper bound on savings, while 1-hour writes use the single write rate (C1, D-n) | D1 is now "estimated at Vibra's table rates". The display footer states the table date and the single-write-rate approximation. "Exact" and "upper bound" are gone. Changes item 6 and the Cache tiers bullet say which figures it affects. |
+| The probe 4 baseline cannot honour `VIBRA_NOW` (C2, P-A7, P-C1) | The baseline is a throwaway worktree of `60a61b8` plus `tools/gate/baseline-vibra-now.patch`, which adds only `VIBRA_NOW`. The comparison counts only when both sides read the same bytes. Runs are interleaved. |
+| The committed oracle was edited in the shared tree during the round (P-A1) | Both seats had replied before the edits (ledger times). From now on oracle changes are committed before a round is sent. Probe 3 also requires `git diff --quiet HEAD -- tools/perf-oracle`. The tools run with `-I -B`, so no bytecode appears in the tree. |
+| `isSidechain` at file grain drops a whole main session (P-B1, P-A4) | Per record now. A sidechain sample counts in totals but is never a turn. An all-sidechain file has no turns and counts as skipped. `sawSidechain` and `isSubagentSource` are gone from the protocols. The sampler's `isSubagent` is the path rule only. Oracle self-tests cover the inline record and the all-sidechain file. |
+| Mutation 2 (D2 segment check) is vacuous; scripts unowned and unpinned (P-B2, P-A6, P-C1) | `compactionIsNotARewrite` uses a post-compaction write of 60k, above both D2 bars, so only the segment rule keeps it out. The synthetic home has the same shape. Every mutation names its failing test. `mutate.sh`, `perf-bench.sh` and the baseline patch are Task 3 files under `tools/gate/`, reviewed in the code gate. `mutate.sh` runs in a throwaway worktree. |
+| One dip splits a segment; the 9 unmarked drops were unchecked (P-B3) | Measured: with turns as defined, 0 unmarked drops remain, and the 23 markers match the 23 drops exactly. The earlier 9 were zero-usage `<synthetic>` records (`drop-recovery.txt`). The rule is unchanged. |
+| Thresholds not in the JSON (P-B4) | `PerfReport.thresholds` is encoded, and `compare.py` checks it against the oracle's. The `defaults read` step is gone. |
+| D3 joint cap is a no-op (P-A2) | Deleted from the rule and the oracle. The running minimum alone bounds exposure, and the existing property test checks it. |
+| Unpriced sessions said to be shown, but hidden when leads exist; vacuous empty-state variant (P-A3, D-n) | The unpriced block shows whenever an unpriced session matched, leads or not. The impossible variant is gone. `ReportTextTests` covers it alongside leads. |
+| `usageSamples(from:)` stays and returns `[]` for Claude (P-A5, P-C7) | Deleted from the protocol. Every adapter goes through `makeUsageSampler(for:)`. Old callers fail to compile. `CodexAdapter.swift` and `OpenCodeAdapter.swift` are in Task 1's list. |
+| Three protocol additions for one adapter (P-C4, P-B8) | One: `makeUsageSampler(for:)`, with `isSubagent` on the sampler. `add(_ lines:)` is parse plus the single fold. |
+| Full-parse path truncates at 2,000 lines (P-C5) | A real defect in Claude Code and Codex `discoverSessions`. Task 1 replaces `readLines` with a per-batch helper and tests a 2,500-line transcript for both. |
+| Rates unverified (P-C6) | Stated in Evidence, in the display footer and in Task 4. Re-verifying rates stays out of scope. |
+| No date to find the session (P-C2) | `Suggestion.startedAt`, rendered as a local date in every evidence line. |
+| Synthetic home misses this round's rules (P-C3) | It now holds an inline sidechain record, a line that is not valid UTF-8, an unterminated last line and the `compactionIsNotARewrite` shape. |
+| D3 unvalidated on real data (P-C7) | Evidence and Task 4 say it has not been observed as a lead on real sessions. It stays priced. Its rules are pinned by self-tests. |
+| JSON schema version, docs for the new CLI surface (P-C8) | `"schema": 1`. Task 4 documents `--report --json` and `VIBRA_NOW`. |
+| "The one calendar" overclaims (P-C9) | Narrowed to the report and the analyzer. |
+| `modelSwitch` action names MCP servers (P-C10) | Removed. |
+| Top-3 ordering tie-break; `TZ` not pinned; naive timestamps and non-numeric usage (P-B5 to P-B7, P-A10) | Ties break by `Finding` case name. Probes and self-tests run under `TZ=America/Los_Angeles`, and the DST check compares the full offset. The oracle rejects timestamps with no zone and reads usage values like `jsonInt`. Both are self-tests. |
+| Canary thresholds outside the ranges (P-A9) | The canary uses in-range values. The memberwise initializer is internal and used by tests. |
+| Evidence cites a stale artifact; no calibration driver (P-A8) | `calib_summary.py` prints the blob hashes and its command, then the summary (`calib-v05.txt`). `d1_sensitivity.py` calls the committed `report()`. |
+| `isSidechain` missing from the privacy docs (P-A11) | Added to Task 4. |
+| Plan carries local paths into a public repo (P-B9) | `$SCRATCH` is named without its path, and Task 4 strips any local path before the merge. The data-incident row stays, as the record of what happened. |
+| Smaller notes from deepseek: ISO 8601 dates, half-cent wording, `--now` invocation, subagent counts, joint-cap case, stale round-3 row, oracle docstring | Dates encode as ISO 8601. "Strictly within half a cent". The probe pins `--now <value>`. Task 2 asserts subagent counts. The running-minimum case with an earlier burst's remaining growth is listed. The round-3 row is marked superseded. The docstring no longer names a plan version. |
+| `Suggestion` repeats per-session fields (P-B10) | Kept. The flat list is what the comparator keys on. |

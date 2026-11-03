@@ -1,10 +1,15 @@
 """Write a synthetic VIBRA_HOME that any seat may use for the Swift-vs-oracle comparison.
 
-    python3 -I make_synthetic_home.py <out_dir> [--now 2026-11-03T21:00:00Z]
+    TZ=America/Los_Angeles python3 -I make_synthetic_home.py <out_dir> --now 2026-11-03T21:00:00Z
+
+Run it, Vibra and perf_oracle.py with TZ=America/Los_Angeles: the dst.jsonl head then sits on either
+side of the window start across the 2026-11-01 DST change.
 
 Covers: duplicate response records, a compaction, a subagent file, an unpriced
 session, an out-of-window head across the DST change, a stale file, a zero-usage
-<synthetic> record, and sessions that fire D1, D2 and D3 as leads.
+<synthetic> record, an inline sidechain record, a line that is not valid UTF-8, an unterminated last
+line, a post-compaction write that only the segment rule keeps out of D2, and sessions that fire D1, D2
+and D3 as leads.
 """
 import json, os, sys
 from datetime import datetime, timedelta, timezone
@@ -22,20 +27,23 @@ def rec(i, cr=0, cc=0, inp=0, out=0, model="claude-sonnet-5-5", tools=(), at=Non
                                     "usage": {"input_tokens": inp, "output_tokens": out, "cache_creation_input_tokens": cc, "cache_read_input_tokens": cr}}}
 
 
-def write(name, records, mtime=None):
+def write(name, records, mtime=None, tail=b""):
     path = os.path.join(root, name)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        for r in records: f.write(json.dumps(r) + "\n")
+    with open(path, "wb") as f:
+        for r in records: f.write(r if isinstance(r, bytes) else (json.dumps(r) + "\n").encode())
+        f.write(tail)
     m = (mtime or now).timestamp(); os.utime(path, (m, m))
 
 
-write("carry.jsonl", [rec(i, cr=250_000, out=100) for i in range(60)] + [rec(60, cr=250_000, out=5, rid="d"), rec(60, cr=250_000, out=9, rid="d")])
+write("carry.jsonl", [rec(i, cr=250_000, out=100) for i in range(30)] + [dict(rec(30, cr=5_000), isSidechain=True), b"\xff\xfe not utf-8\n"]
+      + [rec(i, cr=250_000, out=100) for i in range(31, 60)] + [rec(60, cr=250_000, out=5, rid="d"), rec(60, cr=250_000, out=9, rid="d")],
+      tail=json.dumps(rec(61, cr=999_999)).encode())
 write("rewrite.jsonl", [rec(i, cr=100_000) for i in range(6)] + [rec(6, model="<synthetic>")] + [rec(7, cc=100_000, at=T0 + timedelta(hours=3))]
       + [rec(i, cr=100_000, at=T0 + timedelta(hours=3, minutes=i)) for i in range(8, 14)])
 write("burst.jsonl", [rec(i, cr=20_000) for i in range(3)] + [rec(i, cr=20_000, tools=("Read", "Grep")) for i in range(3, 7)]
       + [rec(i, cr=200_000, tools=("Bash",)) for i in range(7, 20)])
-write("compaction.jsonl", [rec(i, cr=200_000 + i * 1_000) for i in range(30)] + [rec(30, cc=20_000)] + [rec(i, cr=20_000) for i in range(31, 45)])
+write("compaction.jsonl", [rec(i, cr=229_000) for i in range(30)] + [rec(30, cc=60_000)] + [rec(i, cr=60_000) for i in range(31, 45)])
 write("switch.jsonl", [rec(i, cr=100_000) for i in range(6)] + [rec(6, cc=100_000, model="claude-opus-5-5")] + [rec(i, cr=100_000, model="claude-opus-5-5") for i in range(7, 14)])
 write("idle10.jsonl", [rec(i, cr=100_000) for i in range(6)] + [rec(6, cc=100_000, at=T0 + timedelta(minutes=16))] + [rec(i, cr=100_000, at=T0 + timedelta(minutes=10 + i)) for i in range(7, 14)])
 write("other.jsonl", [rec(i, cr=100_000) for i in range(6)] + [rec(6, cc=100_000)] + [rec(i, cr=100_000) for i in range(7, 14)])

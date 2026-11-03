@@ -1,4 +1,4 @@
-"""Independent oracle for plan v0.2: the Usage Report's Claude Code totals and D1-D3.
+"""Independent oracle for the perf-suggestions plan: the Usage Report's Claude Code totals and D1-D3.
 
 Reimplements the plan's rules in Python so the Swift output can be compared
 field by field. Prints JSON with no message text, no tool arguments and no
@@ -31,37 +31,47 @@ def rate(model):
 
 
 def parse_ts(s):
-    if not s: return None
-    try: return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    """Like Swift's parseISODate: an ISO 8601 date-time with a zone, else None."""
+    if not isinstance(s, str) or not s: return None
+    try: d = datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError: return None
+    return d if d.tzinfo is not None else None
+
+
+def jint(v):
+    """Like Swift's jsonInt: numbers truncate, booleans are 0/1, digit strings parse, anything else is 0."""
+    if isinstance(v, bool): return int(v)
+    if isinstance(v, (int, float)): return int(v)
+    if isinstance(v, str):
+        t = v[1:] if v[:1] in "+-" else v
+        return int(v) if t.isdigit() and t.isascii() else 0
+    return 0
 
 
 def samples_of(path):
     """Assistant records with usage, folded per message.id (first timestamp, last usage, last non-nil model)."""
     out, pending = [], None
-    sidechain = False
     for raw in open(path, "rb"):
         if not raw.endswith(b"\n"): break  # IncrementalLineReader never returns an unterminated tail
         try: r = json.loads(raw.decode("utf-8"))
         except Exception: continue
         if not isinstance(r, dict) or r.get("type") != "assistant": continue
-        if r.get("isSidechain") is True: sidechain = True
         m = r.get("message")
         if not isinstance(m, dict) or not isinstance(m.get("usage"), dict): continue
         u = m["usage"]
-        s = dict(id=m.get("id"), at=parse_ts(r.get("timestamp")), model=m.get("model"), project=(os.path.basename(r["cwd"].rstrip("/")) or None) if isinstance(r.get("cwd"), str) else None,
-                 u=[int(u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")],
+        s = dict(id=m.get("id"), at=parse_ts(r.get("timestamp")), model=m.get("model"), side=r.get("isSidechain") is True, project=(os.path.basename(r["cwd"].rstrip("/")) or None) if isinstance(r.get("cwd"), str) else None,
+                 u=[jint(u.get(k)) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")],
                  tools=[b["name"] for b in (m.get("content") or []) if isinstance(b, dict) and b.get("type") == "tool_use" and isinstance(b.get("name"), str) and b["name"]])
         if pending and s["id"] is not None and s["id"] == pending["id"]:
             pending["u"] = s["u"]; pending["tools"] += s["tools"]
             pending["model"] = s["model"] or pending["model"]; pending["project"] = s["project"] or pending["project"]
-            pending["at"] = pending["at"] or s["at"]
+            pending["at"] = pending["at"] or s["at"]; pending["side"] = pending["side"] or s["side"]
             continue
         if pending: out.append(pending)
         if s["id"] is None: out.append(s); pending = None
         else: pending = s
     if pending: out.append(pending)
-    return out, sidechain
+    return out
 
 
 def ctx(t): return t["u"][0] + t["u"][2] + t["u"][3]
@@ -77,7 +87,7 @@ def usd(t):
 
 
 def analyze(stem, samples, in_window, T):
-    turns = [t for t in samples if ctx(t) > 0]
+    turns = [t for t in samples if ctx(t) > 0 and not t["side"]]
     inw = [in_window(t) for t in turns]
     n_in = sum(inw)
     if n_in < T["minTurns"]: return None
@@ -137,7 +147,7 @@ def analyze(stem, samples, in_window, T):
     if len(run) >= T["d3MinBurstTurns"]: bursts.append(run)
     bursts = [b for b in bursts if any(inw[i] for i in b)]
     if bursts:
-        carried, base = {}, {}
+        carried = {}
         for b in bursts:
             first, last = b[0], b[-1]
             top = last + 1 if last + 1 < len(turns) and seg_id[last + 1] == seg_id[first] else last
@@ -148,8 +158,7 @@ def analyze(stem, samples, in_window, T):
                 still = max(0, min(still, ctx(turns[j]) - ctx(turns[first])))
                 if j < last + 2 or not inw[j]: continue
                 carried[j] = carried.get(j, 0) + still
-                base[j] = min(base.get(j, ctx(turns[first])), ctx(turns[first]))
-        exposure = sum(min(v, max(0, ctx(turns[j]) - base[j])) * rate(turns[j]["model"])[3] for j, v in carried.items()) / 1e6 if priced else None
+        exposure = sum(v * rate(turns[j]["model"])[3] for j, v in carried.items()) / 1e6 if priced else None
         emit("explorationBurst", dict(bursts=len(bursts), burstTurns=sum(1 for b in bursts for i in b if inw[i])), exposure)
     return dict(found=found, priced=priced)
 
@@ -171,16 +180,16 @@ def report(root_home, now, days=7, T=DEFAULTS):
     total = [0, 0, 0, 0]
     suggestions = []; analyzed = unpriced = small = 0
     for f in files:
-        samples, sidechain = samples_of(f)
+        samples = samples_of(f)
         for t in samples:
             if in_window(t): total = [x + y for x, y in zip(total, t["u"])]
-        if sidechain or "subagents" in os.path.relpath(f, root).split(os.sep)[:-1]: continue
+        if "subagents" in os.path.relpath(f, root).split(os.sep)[:-1]: continue
         res = analyze(os.path.splitext(os.path.basename(f))[0], samples, in_window, T)
         if res is None: small += 1; continue
         analyzed += 1; unpriced += not res["priced"]; suggestions += res["found"]
     return dict(window=dict(days=days, start=start.isoformat(), now=now.isoformat()),
                 claudeTotal=dict(input=total[0], output=total[1], cacheCreation=total[2], cacheRead=total[3]),
-                analyzedSessions=analyzed, unpricedSessions=unpriced, skippedSmallSessions=small,
+                analyzedSessions=analyzed, unpricedSessions=unpriced, skippedSmallSessions=small, thresholds=dict(T),
                 suggestions=sorted(suggestions, key=lambda s: (s["detector"], s["sessionID"])))
 
 

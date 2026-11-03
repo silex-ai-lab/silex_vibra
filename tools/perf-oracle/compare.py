@@ -24,6 +24,8 @@ if total_only:
     sys.exit(0 if bad == 0 else 1)
 
 perf = vibra["perf"]
+if perf.get("thresholds") != oracle["thresholds"]:
+    bad += 1; print("THRESHOLDS MISMATCH: vibra", perf.get("thresholds"), "oracle", oracle["thresholds"])
 for k in ("analyzedSessions", "unpricedSessions", "skippedSmallSessions"):
     if perf[k] != oracle[k]:
         bad += 1; print(f"COUNT MISMATCH {k}: vibra={perf[k]} oracle={oracle[k]}")
