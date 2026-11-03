@@ -20,6 +20,18 @@ all: app
 build:
 	swift build -c $(CONFIG) --product VibraApp
 
+# Opt-in SwiftPM build backend for the test run, e.g. `make test
+# SWIFT_BUILD_SYSTEM=native`. Unset, `swift run` keeps its default. On Swift
+# 6.4 Command Line Tools with no Xcode, the default swiftbuild backend fails to
+# load the Swift Testing macro plugin ("plugin for module 'TestingMacros' not
+# found"), even on a commit that builds fine with `native`.
+SWIFT_BUILD_SYSTEM ?=
+TEST_BUILD_FLAGS := $(if $(SWIFT_BUILD_SYSTEM),--build-system $(SWIFT_BUILD_SYSTEM),)
+
+# Each privacy canary is checked by its exact Swift Testing line, so a renamed
+# or deleted canary fails the run instead of being matched by a substring.
+CANARIES := canaryTokenNeverLeaks perfPrivacySentinelsNeverLeak
+
 # NOT `swift test`. On a machine without Xcode, SwiftPM builds the suite as an
 # .xctest bundle it cannot execute: it prints "Build complete!", runs ZERO
 # tests, and exits 0. A silent false green is worse than no tests, so the suite
@@ -27,14 +39,16 @@ build:
 # asserts that a non-zero number of tests actually ran.
 test:
 	@mkdir -p $(BUILD_DIR); \
-	  set -o pipefail; swift run VibraTests 2>&1 | tee $(BUILD_DIR)/test.log; \
+	  set -o pipefail; swift run $(TEST_BUILD_FLAGS) VibraTests 2>&1 | tee $(BUILD_DIR)/test.log; \
 	  status=$$?; \
 	  if [ $$status -ne 0 ]; then echo "FAIL: test run exited $$status"; exit $$status; fi; \
 	  if ! grep -qE 'Test run with [1-9][0-9]* tests' $(BUILD_DIR)/test.log; then \
 	    echo "FAIL: no tests executed - refusing to report green"; exit 1; fi; \
-	  if ! grep -q 'canaryTokenNeverLeaks' $(BUILD_DIR)/test.log; then \
-	    echo "FAIL: security canary test did not run"; exit 1; fi; \
-	  echo "OK: tests executed, canary present"
+	  for canary in $(CANARIES); do \
+	    if ! grep -qF "Test $$canary() passed" $(BUILD_DIR)/test.log; then \
+	      echo "FAIL: canary $$canary did not pass"; exit 1; fi; \
+	  done; \
+	  echo "OK: tests executed, canaries passed: $(CANARIES)"
 
 # Assemble a real .app by hand. LSUIElement=true keeps it out of the Dock and
 # the app switcher - the status item is the whole UI.
