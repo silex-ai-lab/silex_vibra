@@ -608,3 +608,20 @@ v0.6: its diff only resolved round-5 findings (deviation from the interrogate ca
 |---|---|
 | The `read` values have no path into `ReportJSON.encode` or `ReportText.render` (codex 1, deepseek 1) | `ReadStats { bytes, files }` lives on `ReportInput`. `ReportJSON.encode(usage:window:read:perf:)` and `ReportText.render(usage:perf:read:seconds:)` take it explicitly, and both callers pass `ReportInput.read` from the same ingest. A `ReportJSON` test runs a fixture tree from `collect` to `encode`. A `ReportText` test covers the read line. The canary passes the fixture's `read`. |
 | Probe 4 times JSON on one side and text on the other (deepseek note) | Both timed runs are text `--report`. The branch's exact counts come from an extra untimed `--report --json` run. |
+
+## Plan gate record
+
+The plan gate passed on plan v0.8, commit `99ed4ab`, after 8 rounds.
+
+| Seat | Final verdict | On |
+|---|---|---|
+| `reviewer-codex` (GPT-6.1-Sol, high) | `PLAN-APPROVED` | v0.8, `99ed4ab` (round 8) |
+| `coder-deepseek` (DeepSeek V4.1 Flash) | `PLAN-APPROVED` | v0.8, `99ed4ab` (round 8) |
+| planner (`claude`, claude-opus-5-5) | `PLANNER (claude): PLAN-APPROVED` | v0.8, `99ed4ab` |
+
+Rejections by round: codex R1 to R5 and R7, deepseek R1 to R3 and R5 to R7. Codex approved v0.6 and
+deepseek approved v0.4; both approvals were superseded by later changes and re-confirmed on v0.8.
+`pstack:interrogate` (opus @high, fable @high, sonnet @medium) ran on v0.1, v0.3, v0.4 and v0.5. It was
+not re-run on v0.6 to v0.8, whose diffs only resolved round-5 to round-7 findings (a recorded deviation
+from the cadence). Accepted non-blocking note (deepseek R8): probe 4's 15% time bar covers the added
+analysis and rendering as well as the read. The exact bytes-and-files guard is what isolates the read.
