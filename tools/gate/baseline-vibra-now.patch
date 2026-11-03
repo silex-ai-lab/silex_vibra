@@ -1,0 +1,50 @@
+diff --git a/Sources/VibraApp/main.swift b/Sources/VibraApp/main.swift
+index 620a4ac..45e6e13 100644
+--- a/Sources/VibraApp/main.swift
++++ b/Sources/VibraApp/main.swift
+@@ -233,9 +233,11 @@ if CommandLine.arguments.contains("--report") {
+     nonisolated(unsafe) var done = false
+     Task.detached {
+         let t0 = Date()
+-        let samples = await ingest.collectSamples()
++        let now = ProcessInfo.processInfo.environment["VIBRA_NOW"].flatMap { ISO8601DateFormatter().date(from: $0) } ?? Date()
++        let samples = await ingest.collectSamples(now: now)
+         let bytes = await ingest.lastBytesRead
+-        let report = ReportBuilder().build(samplesByAgent: samples)
++        let files = await ingest.lastFilesRead
++        let report = ReportBuilder().build(samplesByAgent: samples, now: now)
+ 
+         let df = DateFormatter()
+         df.dateFormat = "EEE MMM d"
+@@ -276,6 +278,7 @@ if CommandLine.arguments.contains("--report") {
+         }
+         print("")
+         print(String(format: "  read %.1f MB in %.2fs", Double(bytes) / 1_048_576, Date().timeIntervalSince(t0)))
++        print("read-exact bytes=\(bytes) files=\(files)")
+         done = true
+     }
+     let deadline = Date().addingTimeInterval(120)
+diff --git a/Sources/VibraCore/Report/ReportIngest.swift b/Sources/VibraCore/Report/ReportIngest.swift
+index 7005d80..0c4f2ec 100644
+--- a/Sources/VibraCore/Report/ReportIngest.swift
++++ b/Sources/VibraCore/Report/ReportIngest.swift
+@@ -27,9 +27,11 @@ public actor ReportIngest {
+     }
+ 
+     public private(set) var lastBytesRead: Int = 0
++    public private(set) var lastFilesRead: Int = 0
+ 
+     public func collectSamples(now: Date = Date()) -> [AgentKind: [UsageSample]] {
+         lastBytesRead = 0
++        lastFilesRead = 0
+         // Read a day wider than the report window: a file last written just
+         // after midnight still contains records belonging to the previous day.
+         let cutoff = now.addingTimeInterval(-Double(windowDays + 1) * 86_400)
+@@ -42,6 +44,7 @@ public actor ReportIngest {
+             let sources = (try? adapter.sources()) ?? []
+             for source in sources where source.modified >= cutoff {
+                 guard source.url.pathExtension == "jsonl" else { continue }
++                lastFilesRead += 1
+                 var offset: UInt64 = 0
+                 while true {
+                     guard let batch = try? reader.read(url: source.url, from: offset) else { break }
