@@ -3,10 +3,10 @@ import Foundation
 /// Reads Claude Code sessions from `~/.claude/projects/<slug>/<uuid>.jsonl`.
 ///
 /// Every line in a session file is a JSON record. `assistant` records carry the
-/// model and per-response token usage; usage is summed across all assistant
-/// records in the file so the session reflects the whole conversation, not one
-/// API response. The oldest timestamp becomes `startedAt`, the newest becomes
-/// `lastActivity`.
+/// model and per-response token usage; `ClaudeUsageSampler` folds the records
+/// of one response into one usage, and those are summed across the file so the
+/// session reflects the whole conversation, not one API response. The oldest
+/// timestamp becomes `startedAt`, the newest becomes `lastActivity`.
 ///
 /// Steady-state polling goes through `sources()` + `update(...)`: the ingest
 /// layer hands over only the records appended since the last poll, and the
@@ -90,27 +90,22 @@ public struct ClaudeCodeAdapter: AgentAdapter {
 
     // MARK: - Reporting
 
-    /// One timestamped sample per `assistant` record. Each record's
-    /// `message.usage` is a per-response delta, so the samples are additive and
-    /// their sum equals the aggregate usage from `discoverSessions`. Timestamps
-    /// are emitted as UTC `Date`s; `ReportBuilder` does local-day bucketing.
-    public func usageSamples(from records: [String]) -> [UsageSample] {
-        records.compactMap { line in
-            guard let record = jsonObject(line) else { return nil }
-            guard record["type"] as? String == "assistant" else { return nil }
-            guard let message = record["message"] as? [String: Any] else { return nil }
-            guard let u = message["usage"] as? [String: Any] else { return nil }
+    /// One sample per API response, folded from the records that share its
+    /// `message.id`, so the samples are additive and their sum equals the
+    /// usage from `discoverSessions`. Timestamps are emitted as UTC `Date`s;
+    /// `ReportBuilder` does local-day bucketing.
+    public func makeUsageSampler(for source: URL) -> any UsageSampler {
+        ClaudeUsageSampler(isSubagent: isSubagentSource(source))
+    }
 
-            let usage = TokenUsage(
-                input: jsonInt(u["input_tokens"]),
-                output: jsonInt(u["output_tokens"]),
-                cacheCreation: jsonInt(u["cache_creation_input_tokens"]),
-                cacheRead: jsonInt(u["cache_read_input_tokens"])
-            )
-            let timestamp = (record["timestamp"] as? String).flatMap(parseISODate)
-            let model = message["model"] as? String
-            return UsageSample(timestamp: timestamp, model: model, usage: usage)
-        }
+    /// A directory named `subagents` between the projects root and the file.
+    /// The single-file entry point has no root, so it is never a subagent.
+    private func isSubagentSource(_ url: URL) -> Bool {
+        guard let projectsRoot else { return false }
+        let root = projectsRoot.standardizedFileURL.pathComponents
+        let path = url.standardizedFileURL.pathComponents
+        guard path.count > root.count, path[..<root.count].elementsEqual(root) else { return false }
+        return path[root.count..<(path.count - 1)].contains("subagents")
     }
 
     // MARK: - History
@@ -139,10 +134,11 @@ public struct ClaudeCodeAdapter: AgentAdapter {
     }
 
     private func parseSession(at file: URL) -> Session? {
-        let lines = readLines(file) ?? []
         var checkpoint = ClaudeCheckpoint()
-        for line in lines {
-            checkpoint.fold(line)
+        foldLineBatches(of: file) { lines in
+            for line in lines {
+                checkpoint.fold(line)
+            }
         }
         return checkpoint.buildSession(
             agent: kind,
@@ -161,7 +157,11 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
     var cwd: String?
     var gitBranch: String?
     var model: String?
-    var usage = TokenUsage.zero
+    /// Usage of every response the sampler has made final. The session's
+    /// usage is this plus the response still pending in the sampler, so a
+    /// response split across two reads or two polls is counted once.
+    var committed = TokenUsage.zero
+    var sampler = ClaudeUsageSampler()
     var earliest: Date?
     var latest: Date?
     var lastRecordType: String?
@@ -178,7 +178,8 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
         let type = record["type"] as? String
         if let type { lastRecordType = type }
 
-        if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
+        let timestamp = (record["timestamp"] as? String).flatMap(parseISODate)
+        if let ts = timestamp {
             if earliest == nil || ts < earliest! { earliest = ts }
             if latest == nil || ts > latest! { latest = ts }
         }
@@ -203,15 +204,8 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
 
         if model == nil { model = message["model"] as? String }
         if let stopReason = message["stop_reason"] as? String { lastAssistantStopReason = stopReason }
-        if let u = message["usage"] as? [String: Any] {
-            // Claude usage is per-response: accumulate across every assistant
-            // record, never replace.
-            usage += TokenUsage(
-                input: jsonInt(u["input_tokens"]),
-                output: jsonInt(u["output_tokens"]),
-                cacheCreation: jsonInt(u["cache_creation_input_tokens"]),
-                cacheRead: jsonInt(u["cache_read_input_tokens"])
-            )
+        for sample in sampler.add(record: record, timestamp: timestamp, detail: false) {
+            committed += sample.usage
         }
     }
 
@@ -245,11 +239,112 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
             state: .idle,
             startedAt: started,
             lastActivity: last,
-            usage: usage,
+            usage: committed + sampler.pendingUsage,
             lastEvent: lastEvent,
             scheduledTask: scheduledTask,
             entrypoint: entrypoint
         )
+    }
+}
+
+// MARK: - Claude usage sampler
+
+/// Folds the records of one API response into one sample.
+///
+/// Claude Code writes a response as several `assistant` records, one per
+/// content block, each repeating `message.id` and the response's `usage`.
+/// Summing them counted a response once per block, which about doubled the
+/// Usage Report's Claude Code total on this machine (measured ratio 2.13).
+/// Records that share an ID merge
+/// into one pending sample; the last record's usage is the response's usage,
+/// since only `output_tokens` grows between them. A record with another ID,
+/// or none, makes the pending sample final. Records with no ID never merge.
+struct ClaudeUsageSampler: UsageSampler {
+    let isSubagent: Bool
+    /// The response whose records may still be arriving. Only a record with
+    /// an ID can be pending; one without is final the moment it is read.
+    private var pending: (id: String, sample: UsageSample)?
+
+    init(isSubagent: Bool = false) {
+        self.isSubagent = isSubagent
+    }
+
+    var pendingUsage: TokenUsage { pending?.sample.usage ?? .zero }
+
+    mutating func add(_ lines: [String]) -> [UsageSample] {
+        var final: [UsageSample] = []
+        for line in lines {
+            guard let record = jsonObject(line) else { continue }
+            let timestamp = (record["timestamp"] as? String).flatMap(parseISODate)
+            final += add(record: record, timestamp: timestamp, detail: true)
+        }
+        return final
+    }
+
+    /// The fold. `detail: false` skips tool names and project, which the live
+    /// path never shows; the rules are otherwise the same for both callers.
+    mutating func add(record: [String: Any], timestamp: Date?, detail: Bool) -> [UsageSample] {
+        guard record["type"] as? String == "assistant",
+              let message = record["message"] as? [String: Any],
+              let u = message["usage"] as? [String: Any]
+        else { return [] }
+
+        let sample = UsageSample(
+            timestamp: timestamp,
+            model: message["model"] as? String,
+            usage: TokenUsage(
+                input: jsonInt(u["input_tokens"]),
+                output: jsonInt(u["output_tokens"]),
+                cacheCreation: jsonInt(u["cache_creation_input_tokens"]),
+                cacheRead: jsonInt(u["cache_read_input_tokens"])
+            ),
+            toolNames: detail ? Self.toolNames(in: message) : [],
+            project: detail ? Self.projectName(ofCWD: record["cwd"] as? String) : nil,
+            isSidechain: record["isSidechain"] as? Bool == true
+        )
+        let id = message["id"] as? String
+
+        if let id, let held = pending, held.id == id {
+            pending = (id, UsageSample(
+                timestamp: held.sample.timestamp ?? sample.timestamp,
+                model: sample.model ?? held.sample.model,
+                usage: sample.usage,
+                toolNames: held.sample.toolNames + sample.toolNames,
+                project: sample.project ?? held.sample.project,
+                isSidechain: held.sample.isSidechain || sample.isSidechain
+            ))
+            return []
+        }
+
+        var final = finish()
+        if let id {
+            pending = (id, sample)
+        } else {
+            final.append(sample)
+        }
+        return final
+    }
+
+    mutating func finish() -> [UsageSample] {
+        defer { pending = nil }
+        return pending.map { [$0.sample] } ?? []
+    }
+
+    /// `tool_use.name` values, in order. Never the block's `input`.
+    private static func toolNames(in message: [String: Any]) -> [String] {
+        guard let content = message["content"] as? [Any] else { return [] }
+        return content.compactMap { block in
+            guard let block = block as? [String: Any],
+                  block["type"] as? String == "tool_use",
+                  let name = block["name"] as? String, !name.isEmpty
+            else { return nil }
+            return name
+        }
+    }
+
+    /// Last non-empty path component, so no parent directory leaves the file.
+    private static func projectName(ofCWD cwd: String?) -> String? {
+        cwd?.split(separator: "/").last.map(String.init)
     }
 }
 
@@ -299,12 +394,32 @@ func jsonInt(_ value: Any?) -> Int {
     }
 }
 
-/// Streams complete lines out of a file in bounded memory. The previous
-/// whole-file string load was what ballooned resident size to 626 MB on a
-/// 262 MB transcript tree.
-func readLines(_ url: URL) -> [String]? {
-    guard let result = try? IncrementalLineReader().read(url: url, from: 0) else { return nil }
-    return result.lines
+/// Hands every complete line of a file to `fold`, one bounded batch at a time,
+/// and returns the bytes read. The previous whole-file string load was what
+/// ballooned resident size to 626 MB on a 262 MB transcript tree, and a single
+/// `read` stops at `maxLinesPerRead`, which silently cut long transcripts at
+/// 2,000 lines.
+@discardableResult
+func foldLineBatches(
+    of url: URL,
+    reader: IncrementalLineReader = IncrementalLineReader(),
+    _ fold: ([String]) -> Void
+) -> Int {
+    var offset: UInt64 = 0
+    var bytesRead = 0
+    while true {
+        guard let batch = try? reader.read(url: url, from: offset) else { break }
+        bytesRead += batch.bytesRead
+        let advanced = batch.nextOffset > offset
+        offset = batch.nextOffset
+        if batch.lines.isEmpty && !advanced { break }
+        // Drain per batch: JSONSerialization autoreleases, and a
+        // multi-hundred-megabyte pass without this was worth hundreds of
+        // megabytes of resident memory.
+        autoreleasepool { fold(batch.lines) }
+        if !advanced { break }
+    }
+    return bytesRead
 }
 
 func fileModificationDate(_ url: URL) -> Date? {

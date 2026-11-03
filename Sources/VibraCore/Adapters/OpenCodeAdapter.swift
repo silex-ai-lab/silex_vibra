@@ -71,12 +71,8 @@ public struct OpenCodeAdapter: AgentAdapter {
 
     /// OpenCode stores per-session totals with no per-record timestamps, so its
     /// usage is real but undatable. A fabricated day would be worse than an
-    /// honest "day unknown", so this returns no samples and `ReportBuilder`
-    /// reports the totals on its undated line.
-    public func usageSamples(from records: [String]) -> [UsageSample] {
-        []
-    }
-
+    /// honest "day unknown", so the default sampler yields nothing and
+    /// `ReportBuilder` reports the totals on its undated line.
     public var reportsUndatedTotals: Bool { true }
 
     // MARK: - Allowlist

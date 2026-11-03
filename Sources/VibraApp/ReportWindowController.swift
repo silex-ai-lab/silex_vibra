@@ -47,12 +47,12 @@ final class ReportWindowController: RenderableWindow {
         let ingest = ReportIngest(adapters: adapters)
         Task { [weak self] in
             let started = Date()
-            let samples = await ingest.collectSamples()
-            let bytes = await ingest.lastBytesRead
-            let report = ReportBuilder().build(samplesByAgent: samples)
+            let window = ReportWindow(now: started, days: 7, calendar: .current)
+            let input = await ingest.collect(window: window)
+            let report = ReportBuilder().build(samplesByAgent: input.samplesByAgent, window: window)
             await MainActor.run {
                 self?.isLoading = false
-                self?.render(Self.format(report, bytes: bytes, seconds: Date().timeIntervalSince(started)))
+                self?.render(Self.format(report, read: input.read, seconds: Date().timeIntervalSince(started)))
                 // Let the text view lay out before anyone snapshots it.
                 self?.textView?.layoutManager?.ensureLayout(for: self!.textView!.textContainer!)
                 self?.onRendered?()
@@ -99,7 +99,7 @@ final class ReportWindowController: RenderableWindow {
     /// flat fee — so it is never called a cost, a bill, or a quota. Unpriced
     /// and undated tokens get their own lines rather than vanishing into a
     /// total that would then look authoritative and be wrong.
-    static func format(_ r: UsageReport, bytes: Int, seconds: TimeInterval) -> String {
+    static func format(_ r: UsageReport, read: ReadStats, seconds: TimeInterval) -> String {
         let df = DateFormatter()
         df.dateFormat = "EEE MMM d"
         func tok(_ n: Int) -> String {
@@ -155,7 +155,8 @@ final class ReportWindowController: RenderableWindow {
         out += "subscription you pay a flat fee; this is what the same\n"
         out += "usage would cost at published API rates.\n"
         out += "Computed locally. Nothing left this machine.\n"
-        out += String(format: "\nRead %.1f MB in %.1fs.\n", Double(bytes) / 1_048_576, seconds)
+        out += String(format: "\nRead %.1f MB from %d files in %.1fs.\n",
+                      Double(read.bytes) / 1_048_576, read.files, seconds)
         return out
     }
 }

@@ -24,6 +24,8 @@ struct ReportBuilderTests {
 
     private var now: Date { date("2026-09-20T12:00:00Z") }
 
+    private var window: ReportWindow { ReportWindow(now: now, days: 7, calendar: calendar) }
+
     // MARK: - The bug this feature exists to avoid
 
     @Test func multiDayUsageIsSplitAcrossDays() {
@@ -34,8 +36,7 @@ struct ReportBuilderTests {
             UsageSample(timestamp: date("2026-09-19T10:00:00Z"), model: "claude-opus-5", usage: usage(200)),
             UsageSample(timestamp: date("2026-09-20T10:00:00Z"), model: "claude-opus-5", usage: usage(300)),
         ]
-        let r = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: samples], now: now)
+        let r = ReportBuilder().build(samplesByAgent: [.claudeCode: samples], window: window)
 
         #expect(r.days.count == 3, "three days of work must produce three day lines")
         #expect(r.days.map(\.usage.input) == [100, 200, 300])
@@ -51,8 +52,7 @@ struct ReportBuilderTests {
             UsageSample(timestamp: date("2026-08-25T10:00:00Z"), model: "claude-opus-5", usage: usage(999)),
             UsageSample(timestamp: date("2026-09-20T10:00:00Z"), model: "claude-opus-5", usage: usage(5)),
         ]
-        let r = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: samples], now: now, windowDays: 7)
+        let r = ReportBuilder().build(samplesByAgent: [.claudeCode: samples], window: window)
 
         #expect(r.total.input == 5, "out-of-window days must be dropped, got \(r.total.input)")
         #expect(r.days.count == 1)
@@ -61,8 +61,7 @@ struct ReportBuilderTests {
     @Test func windowIncludesTodayAndSixPrecedingDays() {
         let inWindow = UsageSample(timestamp: date("2026-09-14T18:00:00Z"), model: "claude-opus-5", usage: usage(7))
         let outOfWindow = UsageSample(timestamp: date("2026-09-13T18:00:00Z"), model: "claude-opus-5", usage: usage(11))
-        let r = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: [inWindow, outOfWindow]], now: now, windowDays: 7)
+        let r = ReportBuilder().build(samplesByAgent: [.claudeCode: [inWindow, outOfWindow]], window: window)
         #expect(r.total.input == 7)
     }
 
@@ -72,8 +71,7 @@ struct ReportBuilderTests {
         // 2026-09-19T03:00Z is still the evening of Sep 18 in Los Angeles.
         // Bucketing by UTC would move it to the 19th.
         let sample = UsageSample(timestamp: date("2026-09-19T03:00:00Z"), model: "claude-opus-5", usage: usage(42))
-        let r = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: [sample]], now: now)
+        let r = ReportBuilder().build(samplesByAgent: [.claudeCode: [sample]], window: window)
 
         let day = try! #require(r.days.first?.day)
 
@@ -93,8 +91,7 @@ struct ReportBuilderTests {
         let sample = UsageSample(timestamp: date("2026-09-20T10:00:00Z"),
                                  model: "some-model-nobody-published-rates-for",
                                  usage: usage(1_000))
-        let r = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: [sample]], now: now)
+        let r = ReportBuilder().build(samplesByAgent: [.claudeCode: [sample]], window: window)
 
         #expect(r.estimatedValue == 0)
         #expect(r.unpricedTokens == 1_000, "unpriced tokens must be surfaced, not silently free")
@@ -108,10 +105,8 @@ struct ReportBuilderTests {
         let opus = UsageSample(timestamp: day, model: "claude-opus-5", usage: usage(1_000_000))
         let haiku = UsageSample(timestamp: day, model: "claude-haiku-4-5", usage: usage(1_000_000))
 
-        let both = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: [opus, haiku]], now: now)
-        let opusOnly = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: [opus, UsageSample(timestamp: day, model: "claude-opus-5", usage: usage(1_000_000))]], now: now)
+        let both = ReportBuilder().build(samplesByAgent: [.claudeCode: [opus, haiku]], window: window)
+        let opusOnly = ReportBuilder().build(samplesByAgent: [.claudeCode: [opus, UsageSample(timestamp: day, model: "claude-opus-5", usage: usage(1_000_000))]], window: window)
 
         #expect(both.estimatedValue < opusOnly.estimatedValue,
                 "a cheaper model in the mix must lower the estimate")
@@ -123,8 +118,7 @@ struct ReportBuilderTests {
     @Test func undatedUsageIsReportedSeparatelyNotDroppedOrDatedToToday() {
         let dated = UsageSample(timestamp: date("2026-09-20T10:00:00Z"), model: "claude-opus-5", usage: usage(10))
         let undated = UsageSample(timestamp: nil, model: "deepseek-v4-pro", usage: usage(777))
-        let r = ReportBuilder(calendar: calendar)
-            .build(samplesByAgent: [.claudeCode: [dated], .openCode: [undated]], now: now)
+        let r = ReportBuilder().build(samplesByAgent: [.claudeCode: [dated], .openCode: [undated]], window: window)
 
         #expect(r.undated.input == 777, "undatable usage must be kept")
         #expect(r.days.count == 1, "undatable usage must not create or join a day")
@@ -132,7 +126,7 @@ struct ReportBuilderTests {
     }
 
     @Test func emptyInputProducesEmptyReport() {
-        let r = ReportBuilder(calendar: calendar).build(samplesByAgent: [:], now: now)
+        let r = ReportBuilder().build(samplesByAgent: [:], window: window)
         #expect(r.days.isEmpty)
         #expect(r.total.total == 0)
         #expect(r.estimatedValue == 0)

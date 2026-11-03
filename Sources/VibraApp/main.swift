@@ -233,9 +233,9 @@ if CommandLine.arguments.contains("--report") {
     nonisolated(unsafe) var done = false
     Task.detached {
         let t0 = Date()
-        let samples = await ingest.collectSamples()
-        let bytes = await ingest.lastBytesRead
-        let report = ReportBuilder().build(samplesByAgent: samples)
+        let window = ReportWindow(now: t0, days: 7, calendar: .current)
+        let input = await ingest.collect(window: window)
+        let report = ReportBuilder().build(samplesByAgent: input.samplesByAgent, window: window)
 
         let df = DateFormatter()
         df.dateFormat = "EEE MMM d"
@@ -275,7 +275,8 @@ if CommandLine.arguments.contains("--report") {
             print("    \(fmtTok(report.undated.total)) tokens could not be dated (source has no per-record timestamps).")
         }
         print("")
-        print(String(format: "  read %.1f MB in %.2fs", Double(bytes) / 1_048_576, Date().timeIntervalSince(t0)))
+        print(String(format: "  read %.1f MB from %d files in %.2fs",
+                     Double(input.read.bytes) / 1_048_576, input.read.files, Date().timeIntervalSince(t0)))
         done = true
     }
     let deadline = Date().addingTimeInterval(120)

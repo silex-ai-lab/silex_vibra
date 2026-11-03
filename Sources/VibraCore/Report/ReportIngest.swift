@@ -1,5 +1,60 @@
 import Foundation
 
+/// The final samples of one JSONL file.
+public struct SourceSamples: Sendable {
+    public let url: URL
+    public let isSubagent: Bool
+    /// Empty when the file holds no usage.
+    public let samples: [UsageSample]
+
+    public init(url: URL, isSubagent: Bool, samples: [UsageSample]) {
+        self.url = url
+        self.isSubagent = isSubagent
+        self.samples = samples
+    }
+}
+
+/// What one report read cost, exactly.
+public struct ReadStats: Sendable, Equatable, Codable {
+    public let bytes: Int
+    /// JSONL files read, counted once each.
+    public let files: Int
+
+    public init(bytes: Int, files: Int) {
+        self.bytes = bytes
+        self.files = files
+    }
+}
+
+/// Everything one read of the window produced. The report and the perf
+/// analyzer are both built from this, so one read serves both.
+public struct ReportInput: Sendable {
+    /// One entry per JSONL file read, empty or not.
+    public let sources: [AgentKind: [SourceSamples]]
+    /// OpenCode and Hermes session totals, which carry no timestamp.
+    public let undated: [AgentKind: [UsageSample]]
+    public let read: ReadStats
+
+    public init(sources: [AgentKind: [SourceSamples]], undated: [AgentKind: [UsageSample]], read: ReadStats) {
+        self.sources = sources
+        self.undated = undated
+        self.read = read
+    }
+
+    /// Sources plus undated, for the builder.
+    public var samplesByAgent: [AgentKind: [UsageSample]] {
+        var result: [AgentKind: [UsageSample]] = [:]
+        for (agent, files) in sources {
+            let samples = files.flatMap(\.samples)
+            if !samples.isEmpty { result[agent, default: []] += samples }
+        }
+        for (agent, samples) in undated where !samples.isEmpty {
+            result[agent, default: []] += samples
+        }
+        return result
+    }
+}
+
 /// Reads a wider window than the status path, on demand only.
 ///
 /// Deliberately holds **no state shared with `SessionIngest`**. If the two
@@ -14,63 +69,47 @@ import Foundation
 public actor ReportIngest {
     private let adapters: [any AgentAdapter]
     private let reader: IncrementalLineReader
-    private let windowDays: Int
 
     public init(
         adapters: [any AgentAdapter],
-        reader: IncrementalLineReader = IncrementalLineReader(),
-        windowDays: Int = 7
+        reader: IncrementalLineReader = IncrementalLineReader()
     ) {
         self.adapters = adapters
         self.reader = reader
-        self.windowDays = windowDays
     }
 
-    public private(set) var lastBytesRead: Int = 0
-
-    public func collectSamples(now: Date = Date()) -> [AgentKind: [UsageSample]] {
-        lastBytesRead = 0
-        // Read a day wider than the report window: a file last written just
-        // after midnight still contains records belonging to the previous day.
-        let cutoff = now.addingTimeInterval(-Double(windowDays + 1) * 86_400)
-        var result: [AgentKind: [UsageSample]] = [:]
+    public func collect(window: ReportWindow) -> ReportInput {
+        var sources: [AgentKind: [SourceSamples]] = [:]
+        var undated: [AgentKind: [UsageSample]] = [:]
+        var bytes = 0
+        var files = 0
 
         for adapter in adapters {
             guard adapter.isAvailable else { continue }
-            var samples: [UsageSample] = []
+            var read: [SourceSamples] = []
 
-            let sources = (try? adapter.sources()) ?? []
-            for source in sources where source.modified >= cutoff {
+            for source in (try? adapter.sources()) ?? [] where source.modified >= window.fileCutoff {
                 guard source.url.pathExtension == "jsonl" else { continue }
-                var offset: UInt64 = 0
-                while true {
-                    guard let batch = try? reader.read(url: source.url, from: offset) else { break }
-                    lastBytesRead += batch.bytesRead
-                    let advanced = batch.nextOffset > offset
-                    offset = batch.nextOffset
-                    if batch.lines.isEmpty && !advanced { break }
-                    // Drain per batch: JSONSerialization autoreleases, and a
-                    // multi-hundred-megabyte pass without this was worth
-                    // hundreds of megabytes of resident memory.
-                    autoreleasepool {
-                        samples.append(contentsOf: adapter.usageSamples(from: batch.lines))
-                    }
-                    if !advanced { break }
+                var sampler = adapter.makeUsageSampler(for: source.url)
+                var samples: [UsageSample] = []
+                bytes += foldLineBatches(of: source.url, reader: reader) { lines in
+                    samples += sampler.add(lines)
                 }
+                samples += sampler.finish()
+                read.append(SourceSamples(url: source.url, isSubagent: sampler.isSubagent, samples: samples))
             }
+            files += read.count
+            if !read.isEmpty { sources[adapter.kind] = read }
 
             // Adapters that cannot attribute usage in time still contribute
             // their totals, reported as undated rather than guessed onto a day.
-            if samples.isEmpty, adapter.reportsUndatedTotals {
-                for session in adapter.discoverSessionsSafely() where session.usage.total > 0 {
-                    samples.append(
-                        UsageSample(timestamp: nil, model: session.model, usage: session.usage)
-                    )
-                }
+            if adapter.reportsUndatedTotals, read.allSatisfy(\.samples.isEmpty) {
+                let totals = adapter.discoverSessionsSafely()
+                    .filter { $0.usage.total > 0 }
+                    .map { UsageSample(timestamp: nil, model: $0.model, usage: $0.usage) }
+                if !totals.isEmpty { undated[adapter.kind] = totals }
             }
-
-            if !samples.isEmpty { result[adapter.kind] = samples }
         }
-        return result
+        return ReportInput(sources: sources, undated: undated, read: ReadStats(bytes: bytes, files: files))
     }
 }

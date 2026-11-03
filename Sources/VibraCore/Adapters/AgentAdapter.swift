@@ -28,16 +28,16 @@ public protocol AgentAdapter: Sendable {
     /// and `SessionIngest` falls back to `discoverSessions()`.
     func sources() throws -> [SourceDescriptor]
 
-    /// Timestamped usage slices for reporting, extracted from raw records.
+    /// A fresh sampler for one source's records, for reporting.
     ///
     /// Separate from `update` on purpose. `Session` is the poll-path hot row —
     /// compared and encoded on every refresh — so a growing per-day map on it
     /// would threaten the idle-cost property Phase 0 recovered. Reports
-    /// re-read their own window and accumulate these instead.
+    /// re-read their own window and accumulate samples instead.
     ///
-    /// Returning an empty array means the adapter cannot attribute usage in
+    /// The default yields no samples: the adapter cannot attribute usage in
     /// time, and its totals are reported as undated rather than guessed at.
-    func usageSamples(from records: [String]) -> [UsageSample]
+    func makeUsageSampler(for source: URL) -> any UsageSampler
 
     /// True for an adapter whose store keeps per-session token totals with no
     /// per-record timestamps. The report then counts its sessions' totals on
@@ -66,7 +66,7 @@ public extension AgentAdapter {
     func sources() throws -> [SourceDescriptor] { [] }
 
     /// Default: no per-record attribution available.
-    func usageSamples(from records: [String]) -> [UsageSample] { [] }
+    func makeUsageSampler(for source: URL) -> any UsageSampler { EmptyUsageSampler() }
 
     /// Default: usage, if any, is dated per record.
     var reportsUndatedTotals: Bool { false }

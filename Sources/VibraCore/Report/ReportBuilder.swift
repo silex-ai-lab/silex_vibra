@@ -4,8 +4,9 @@ import Foundation
 ///
 /// All the error-prone accounting lives here, in one testable place:
 ///
-/// - Buckets are **local** days. Transcript timestamps are UTC; bucketing by
-///   UTC day silently moves an evening session into tomorrow.
+/// - Buckets are **local** days, as `ReportWindow` defines them. Transcript
+///   timestamps are UTC; bucketing by UTC day silently moves an evening
+///   session into tomorrow.
 /// - The window filter is applied **per day, not per session**. A session
 ///   active today whose earlier days fall outside the window must contribute
 ///   only its in-window days.
@@ -15,21 +16,12 @@ import Foundation
 /// - An unknown model yields *unpriced tokens*, never a zero dollar figure.
 ///   Free and unknown must not look the same.
 public struct ReportBuilder: Sendable {
-    public let calendar: Calendar
-
-    public init(calendar: Calendar = .current) {
-        self.calendar = calendar
-    }
+    public init() {}
 
     public func build(
         samplesByAgent: [AgentKind: [UsageSample]],
-        now: Date = Date(),
-        windowDays: Int = 7
+        window: ReportWindow
     ) -> UsageReport {
-        let today = calendar.startOfDay(for: now)
-        // A 7-day window is today plus the six preceding days.
-        let windowStart = calendar.date(byAdding: .day, value: -(windowDays - 1), to: today) ?? today
-
         var perAgent: [AgentKind: [UsageBucket: TokenUsage]] = [:]
         var undated = TokenUsage.zero
 
@@ -41,10 +33,9 @@ public struct ReportBuilder: Sendable {
                     undated += sample.usage
                     continue
                 }
-                let day = calendar.startOfDay(for: timestamp)
                 // Per-day window filter, not per-session.
-                guard day >= windowStart, day <= today else { continue }
-                let key = UsageBucket(day: day, model: sample.model)
+                guard window.contains(timestamp) else { continue }
+                let key = UsageBucket(day: window.day(of: timestamp), model: sample.model)
                 buckets[key, default: .zero] += sample.usage
             }
             if !buckets.isEmpty { perAgent[agent] = buckets }
@@ -105,9 +96,9 @@ public struct ReportBuilder: Sendable {
         let undatedPriced = price(usage: undated, model: nil)
 
         return UsageReport(
-            windowDays: windowDays,
-            generatedAt: now,
-            windowStart: windowStart,
+            windowDays: window.days,
+            generatedAt: window.now,
+            windowStart: window.start,
             days: dayLines,
             agents: agentLines,
             total: total,

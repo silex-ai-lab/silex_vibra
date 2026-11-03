@@ -318,7 +318,7 @@ struct HistoryIndexTests {
 
     @Test func windowStartMatchesTheReport() {
         let now = ISO8601DateFormatter().date(from: "2026-09-26T12:00:00Z")!
-        let report = ReportBuilder(calendar: utcPlus8).build(samplesByAgent: [:], now: now, windowDays: 7)
+        let report = ReportBuilder().build(samplesByAgent: [:], window: ReportWindow(now: now, days: 7, calendar: utcPlus8))
         #expect(HistoryIndex.windowStart(windowDays: 7, now: now, calendar: utcPlus8) == report.windowStart)
     }
 

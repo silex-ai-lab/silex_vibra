@@ -21,10 +21,30 @@ public struct UsageSample: Sendable, Equatable {
     /// The delta incurred at this point — never a running total.
     public let usage: TokenUsage
 
-    public init(timestamp: Date?, model: String?, usage: TokenUsage) {
+    /// `tool_use.name` values only; never a tool's input, never a result.
+    public let toolNames: [String]
+
+    /// Last non-empty path component of `cwd`, cut at the adapter so no parent
+    /// component ever leaves the file. Nil for "/" or no cwd.
+    public let project: String?
+
+    /// Any record of the response had `isSidechain: true`.
+    public let isSidechain: Bool
+
+    public init(
+        timestamp: Date?,
+        model: String?,
+        usage: TokenUsage,
+        toolNames: [String] = [],
+        project: String? = nil,
+        isSidechain: Bool = false
+    ) {
         self.timestamp = timestamp
         self.model = model
         self.usage = usage
+        self.toolNames = toolNames
+        self.project = project
+        self.isSidechain = isSidechain
     }
 }
 
