@@ -21,6 +21,7 @@ Current state: see [STATUS.md](STATUS.md).
 | 1 | P1.1 Terminal jump-back | **Done (v1)** 2026-09-20 |
 | 1 | P1.2 Usage figures stay local | **Decided** — no network, ever |
 | 1 | P1.3 Weekly report card | **Done** 2026-09-20 |
+| 1 | P1.4 Performance suggestions (Claude Code, MVP) | **Done** 2026-11-03 |
 | 2 | P2.1 Auto-detect installed agents | **Done** 2026-09-20 |
 | 2 | P2.2 More adapters | **Done** — Cursor, VS Code Copilot Chat |
 | 4 | P4.1 History window (no storage) | **Done** 2026-09-26 |
@@ -249,6 +250,20 @@ path, even off by default, is a permanently different security posture.
 **Label it honestly.** Figures are "estimated API-equivalent value", never
 presented as a subscription quota. A real subscription read, if ever wanted,
 ships as a separate clearly-labelled tool.
+
+## P1.4 — Performance suggestions — **DONE** 2026-11-03 (MVP)
+
+**Goal.** Tell the user where a Claude Code session's tokens went to waste and
+what to type next time, from metadata Vibra already reads, inside the Usage
+Report. Three kinds: context carry, cache rewrite, exploration burst. Plan,
+evidence and every review round:
+[PLAN-2026-11-03-perf-suggestions.md](PLAN-2026-11-03-perf-suggestions.md).
+
+**Critical decisions.** Count each Claude Code response once (it was summed
+about twice). Figures are estimated exposures, never savings. One read serves
+the report and the suggestions. An independent Python oracle
+(`tools/perf-oracle/`) checks the Swift output field by field. **Next (V2):**
+Codex and the other agents, more kinds; model-mismatch advice is deferred.
 
 ## P1.3 — Weekly report card — **DONE** 2026-09-20
 

@@ -39,3 +39,12 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   `ai.silexlab.vibra` preferences domain. (The `--show-* --snapshot <path>`
   diagnostics write a PNG where you tell them to.)
 - Adapters never log or print raw rows.
+- **The Usage Report's performance suggestions** read, from Claude Code
+  transcripts, only each response's ID, token counts, model, timestamp,
+  `isSidechain` flag, the names of the tools it called and the last component
+  of its working directory. Never tool inputs, tool results or message text. A
+  canary test (`perfPrivacySentinelsNeverLeak`) plants a sentinel in message
+  text, a thinking block, a tool input, a tool result, `wireToolInputs` and a
+  parent directory, makes every suggestion kind fire, and asserts no sentinel
+  reaches a sample, the JSON or the rendered text. `make test` fails if that
+  test did not run.

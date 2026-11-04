@@ -28,6 +28,74 @@ out of the estimate rather than counted as `$0`. See
 [What the cost figures mean](#what-the-cost-figures-mean) for what the value
 is and is not.
 
+Claude Code writes one API response as several transcript records, one per
+content block, each repeating the response's ID and token counts. Vibra counts
+each response once, keeping its last record. Before 2026-11-03 it summed every
+record, which overstated Claude Code tokens and value by about 2x (measured
+2.13x on one machine's last 7 days). Totals from earlier versions are not
+comparable.
+
+### Performance suggestions
+
+Below the totals, the report lists up to three patterns that cost your Claude
+Code sessions the most in the window, one per kind, each with the command to
+try next time and the evidence behind it:
+
+```
+PERFORMANCE — Claude Code sessions
+1. Run /compact inside long tasks and /clear between tasks. Split unrelated work into separate sessions.
+   proj, Nov 2, 60 turns above 200k: the context above 200k cost about $0.90.
+```
+
+| Kind | What it measures | Figure |
+|---|---|---|
+| Context carry | At least 50 turns in one stretch between compactions whose prompt was above 200k tokens. | What the prompt tokens above 200k cost on those turns. |
+| Cache rewrite | Turns where most of what the previous turn left in cache was written to cache again, with the cause it coincided with: a model switch, a gap of over an hour, a gap of over 5 minutes, or neither. The cause is a correlation, labelled "inferred". | The write premium over a cache read on that context. |
+| Exploration burst | At least 3 turns in a row that only Read, Grep or Glob. | If what the burst added stayed in context, what re-sending it cost. |
+
+How to read them:
+
+- **A figure is an estimate of what the pattern cost, not a promised saving.**
+  The alternative (`/compact`, a subagent) has its own cost, which the
+  transcript cannot show. Figures use Vibra's rate table, last verified
+  2026-09-19, which has a single cache-write rate, so 1-hour cache writes are
+  priced low.
+- **Only patterns worth acting on are shown.** A pattern is listed when it cost
+  at least $0.25 and at least 10% of that session's value. When none qualifies,
+  the report says so instead of padding the list.
+- **Sessions on a model with no published rate** (Fable, today) get no figure.
+  Their patterns are listed separately, marked "no published rate".
+- **Subagent transcripts** count in the totals but are not analyzed: the advice
+  is about the main session.
+- Sessions with fewer than 10 turns in the window are skipped.
+- The exploration-burst kind has not yet been seen as a lead on real sessions.
+
+The thresholds can be changed with `defaults write`, read when the report
+opens:
+
+| Key | Default |
+|---|---|
+| `perf.minTurns` | 10 |
+| `perf.d1MinTurnsAboveFloor` | 50 |
+| `perf.d1CarryFloorTokens` | 200000 |
+| `perf.d2MinRewriteTokens` | 30000 |
+| `perf.d3MinBurstTurns` | 3 |
+| `perf.leadMinUSD` | 0.25 |
+| `perf.leadMinShare` | 0.10 |
+
+```sh
+defaults write ai.silexlab.vibra perf.d1CarryFloorTokens -int 300000
+defaults delete ai.silexlab.vibra perf.d1CarryFloorTokens   # back to the default
+```
+
+### `--report` and `--report --json`
+
+`Vibra --report` prints the same text as the window. `Vibra --report --json`
+prints one JSON object with `"schema": 1`, the window, the bytes and files
+read, exact token counts per agent, and every suggestion that fired with its
+evidence. `VIBRA_NOW=<ISO 8601 time>` runs either at a fixed time. Neither
+prints message text.
+
 ## History, settings and `--query`
 
 **History…** (⌘Y in the menu) lists the questions you typed into Claude Code,
