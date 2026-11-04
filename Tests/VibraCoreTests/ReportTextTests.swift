@@ -94,6 +94,12 @@ struct ReportTextTests {
 
     // MARK: - Empty states
 
+    @Test func noClaudeCodeSessionAtAllSaysSo() {
+        let text = render(perf([], analyzed: 0, skipped: 0), usage: usage(days: 3))
+        #expect(text.contains("No Claude Code sessions in the last 3 days."))
+        #expect(!text.contains("enough turns"))
+    }
+
     @Test func noAnalyzedSessionNamesTheWindowDays() {
         let text = render(perf([], analyzed: 0, skipped: 4), usage: usage(days: 3))
         #expect(text.contains("No Claude Code session in the last 3 days had enough turns to analyze."))

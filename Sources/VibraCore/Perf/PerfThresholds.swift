@@ -57,13 +57,13 @@ public struct PerfThresholds: Sendable, Equatable, Codable {
             clampedSetting(store.value(forKey: key), default: defaultValue, range: range)
         }
         return PerfThresholds(
-            minTurns: int("perf.minTurns", 10, 3...1000),
-            d1MinTurnsAboveFloor: int("perf.d1MinTurnsAboveFloor", 50, 5...5000),
-            d1CarryFloorTokens: int("perf.d1CarryFloorTokens", 200_000, 20_000...2_000_000),
-            d2MinRewriteTokens: int("perf.d2MinRewriteTokens", 30_000, 5_000...2_000_000),
-            d3MinBurstTurns: int("perf.d3MinBurstTurns", 3, 2...50),
-            leadMinUSD: double("perf.leadMinUSD", 0.25, 0...100),
-            leadMinShare: double("perf.leadMinShare", 0.10, 0...1)
+            minTurns: int("perf.minTurns", defaults.minTurns, 3...1000),
+            d1MinTurnsAboveFloor: int("perf.d1MinTurnsAboveFloor", defaults.d1MinTurnsAboveFloor, 5...5000),
+            d1CarryFloorTokens: int("perf.d1CarryFloorTokens", defaults.d1CarryFloorTokens, 20_000...2_000_000),
+            d2MinRewriteTokens: int("perf.d2MinRewriteTokens", defaults.d2MinRewriteTokens, 5_000...2_000_000),
+            d3MinBurstTurns: int("perf.d3MinBurstTurns", defaults.d3MinBurstTurns, 2...50),
+            leadMinUSD: double("perf.leadMinUSD", defaults.leadMinUSD, 0...100),
+            leadMinShare: double("perf.leadMinShare", defaults.leadMinShare, 0...1)
         )
     }
 }

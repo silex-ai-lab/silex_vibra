@@ -184,6 +184,10 @@ struct ReportWindowTests {
 }
 
 struct PerfThresholdsTests {
+    @Test func loadingFromAnEmptyStoreGivesTheDefaults() {
+        #expect(PerfThresholds.load(from: DictionarySettingsStore()) == PerfThresholds.defaults)
+    }
+
     /// The comparator checks these keys and values against the oracle's
     /// `DEFAULTS` exactly, so both are pinned here.
     @Test func encodesTheOraclesSevenBareKeysAndDefaults() throws {

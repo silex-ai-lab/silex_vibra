@@ -14,10 +14,13 @@ public struct SourceSamples: Sendable {
     }
 }
 
-/// What one report read cost, exactly.
+/// What one report read cost.
 public struct ReadStats: Sendable, Equatable, Codable {
+    /// Bytes read from disk. A batch that stops at the reader's line cap
+    /// re-reads the rest of its chunk next time, so this can exceed the files'
+    /// size.
     public let bytes: Int
-    /// JSONL files read, counted once each.
+    /// JSONL files whose read was attempted, counted once each.
     public let files: Int
 
     public init(bytes: Int, files: Int) {

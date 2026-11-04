@@ -30,7 +30,9 @@ is and is not.
 
 Claude Code writes one API response as several transcript records, one per
 content block, each repeating the response's ID and token counts. Vibra counts
-each response once, keeping its last record. Before 2026-11-03 it summed every
+each response once, keeping its last record, when those records are adjacent
+in the file, as they were in every case measured (9,789 repeats, none
+non-adjacent, none across files). Before 2026-11-03 it summed every
 record, which overstated Claude Code tokens and value by about 2x (measured
 2.13x on one machine's last 7 days). Totals from earlier versions are not
 comparable.

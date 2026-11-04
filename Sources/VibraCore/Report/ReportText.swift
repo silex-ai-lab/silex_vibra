@@ -4,9 +4,9 @@ import Foundation
 /// `--report`. Every string the user reads about a perf suggestion is built
 /// here; `Suggestion` carries typed evidence only.
 ///
-/// Wording is deliberate. Every dollar figure is an estimate of what the usage
-/// would have cost at Vibra's table rates (on a subscription you pay a flat
-/// fee), so it is never called a cost, a bill, or a quota. Unpriced and
+/// Wording is deliberate. Every dollar figure is an estimate at Vibra's table
+/// rates (on a subscription you pay a flat fee), so it is never presented as a
+/// bill, a quota or a saving. Unpriced and
 /// undated tokens get their own lines rather than vanishing into a total that
 /// would then look authoritative and be wrong.
 public enum ReportText {
@@ -111,9 +111,13 @@ public enum ReportText {
         lines.sort { ($0.exposure, $1.detector.caseName) > ($1.exposure, $0.detector.caseName) }
 
         if lines.isEmpty {
-            out += perf.analyzedSessions == 0
-                ? "No Claude Code session in the last \(days) days had enough turns to analyze.\n"
-                : "No priced pattern above the thresholds in \(count(perf.analyzedSessions, "analyzed session")).\n"
+            if perf.analyzedSessions == 0 && perf.skippedSmallSessions == 0 {
+                out += "No Claude Code sessions in the last \(days) days.\n"
+            } else if perf.analyzedSessions == 0 {
+                out += "No Claude Code session in the last \(days) days had enough turns to analyze.\n"
+            } else {
+                out += "No priced pattern above the thresholds in \(count(perf.analyzedSessions, "analyzed session")).\n"
+            }
         }
         for (number, line) in lines.enumerated() {
             out += "\(number + 1). \(action(for: line.evidence))\n"

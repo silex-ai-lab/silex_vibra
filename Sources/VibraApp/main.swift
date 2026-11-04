@@ -234,7 +234,9 @@ if CommandLine.arguments.contains("--report") {
     let asJSON = CommandLine.arguments.contains("--json")
     let now: Date
     if let pinned = ProcessInfo.processInfo.environment["VIBRA_NOW"], !pinned.isEmpty {
-        guard let date = ISO8601DateFormatter().date(from: pinned) else {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = fractional.date(from: pinned) ?? ISO8601DateFormatter().date(from: pinned) else {
             FileHandle.standardError.write(Data("VIBRA_NOW must be an ISO 8601 date-time, got \(pinned)\n".utf8))
             exit(2)
         }

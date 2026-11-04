@@ -261,8 +261,9 @@ evidence and every review round:
 
 **Critical decisions.** Count each Claude Code response once (it was summed
 about twice). Figures are estimated exposures, never savings. One read serves
-the report and the suggestions. An independent Python oracle
-(`tools/perf-oracle/`) checks the Swift output field by field. **Next (V2):**
+the report and the suggestions. A second implementation of the
+same rules in Python (`tools/perf-oracle/`) is compared with the Swift output
+field by field; it catches implementation errors, not errors in the rules. **Next (V2):**
 Codex and the other agents, more kinds; model-mismatch advice is deferred.
 
 ## P1.3 — Weekly report card — **DONE** 2026-09-20

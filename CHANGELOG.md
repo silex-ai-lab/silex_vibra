@@ -4,15 +4,16 @@
 
 - **Usage Report: performance suggestions for Claude Code.** Below the totals,
   the report (⌘U and `Vibra --report`) lists up to three patterns that cost
-  your sessions the most this week (context carried above 200k tokens, cache
+  your sessions the most in the last 7 days (context carried above 200k tokens, cache
   rewritten after a break or a model switch, long Read/Grep/Glob bursts), each
   with the command to try and the evidence. Figures are estimates of what the
   pattern cost at Vibra's table rates, not savings. New `Vibra --report --json`
   and `VIBRA_NOW`. See [docs/features.md](docs/features.md#performance-suggestions).
 - **Fix: Claude Code tokens were counted about twice.** Claude Code writes one
   response as several records with the same ID and usage; Vibra now counts each
-  response once. Claude Code totals in the Usage Report and the menu drop by
-  about half. Also fixed: the full-parse path read only the first 2,000 lines of
+  response once (its records are adjacent, as in every case measured). Claude Code totals in the Usage Report and the menu drop; on
+  the machine measured they halved (ratio 2.13), and yours depends on how many
+  content blocks your responses have. Also fixed: the full-parse path read only the first 2,000 lines of
   a transcript, and Codex tokens after line 2,000 were reported as unpriced.
   Record: [docs/PLAN-2026-11-03-perf-suggestions.md](docs/PLAN-2026-11-03-perf-suggestions.md).
 
