@@ -161,6 +161,15 @@ struct ReportTextTests {
                 == "unknown project, Oct 30: 2 search bursts. If what they added stayed in context, re-sending it cost about $0.75.")
     }
 
+    @Test func singleEventsAndBurstsAreSingular() {
+        let rewrite = suggestion(.cacheRewrite(events: 1, rewrittenTokens: 100_000, dominantCause: .idleOver1h), exposure: 0.5)
+        #expect(ReportText.evidenceLine(for: rewrite)
+                == "proj, Oct 30: 1 time, context already in cache was written again, the largest part after a gap of over an hour (inferred). Write premium about $0.50.")
+        let burst = suggestion(.explorationBurst(bursts: 1, burstTurns: 4), exposure: 0.75)
+        #expect(ReportText.evidenceLine(for: burst)
+                == "proj, Oct 30: 1 search burst. If what they added stayed in context, re-sending it cost about $0.75.")
+    }
+
     @Test func d2LinesFollowTheDominantCause() {
         let lines = [
             Suggestion.RewriteCause.modelSwitch: "after a model switch",

@@ -42,10 +42,10 @@ public enum ReportText {
             case .idleOver5m: "after a gap of over 5 minutes"
             case .other: "with no model switch or long gap"
             }
-            return "\(project), \(date): \(events) times, context already in cache was written again, "
+            return "\(project), \(date): \(count(events, "time")), context already in cache was written again, "
                 + "the largest part \(after) (inferred). Write premium \(figure)."
         case let .explorationBurst(bursts, _):
-            return "\(project), \(date): \(bursts) search bursts. "
+            return "\(project), \(date): \(count(bursts, "search burst")). "
                 + "If what they added stayed in context, re-sending it cost \(figure)."
         }
     }
