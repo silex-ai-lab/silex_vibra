@@ -274,7 +274,12 @@ struct ClaudeUsageSampler: UsageSampler {
     mutating func add(_ lines: [String]) -> [UsageSample] {
         var final: [UsageSample] = []
         for line in lines {
-            guard let record = jsonObject(line) else { continue }
+            // Date parsing builds formatters and dominated a 7-day report at
+            // 2.6x the old cost, so only records the fold can use pay for it.
+            guard let record = jsonObject(line),
+                  record["type"] as? String == "assistant",
+                  (record["message"] as? [String: Any])?["usage"] is [String: Any]
+            else { continue }
             let timestamp = (record["timestamp"] as? String).flatMap(parseISODate)
             final += add(record: record, timestamp: timestamp, detail: true)
         }
