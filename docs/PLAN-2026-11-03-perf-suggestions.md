@@ -12,7 +12,7 @@ their resolutions are in the tables at the end.
 | Roster | standard. Planner `claude` (Claude Code, claude-opus-5-5). Coder and reviewer `coder-deepseek` (OpenCode, `deepseek/deepseek-flash`, footer "DeepSeek V4.1 Flash"). Third judge `reviewer-codex` (Codex CLI 0.166.0, GPT-6.1-Sol, reasoning high). |
 | Gates | Plan gate and code gate are unanimous across all three seats. |
 | Branch | `feat/perf-suggestions`, cut from `main` at `60a61b8`. |
-| Review base | `BASE` is recorded here when Step 5 starts. |
+| Review base | `BASE` = `c4b318c` (the plan gate record commit). |
 | Scratch | `$SCRATCH`, a session scratch directory outside the repo (verdicts, ledger, probes). |
 | Checkout | One shared working tree. Owners write disjoint files. Task 3 starts only after Task 2 is done, so no half-written file breaks another owner's build. Nothing under `tools/perf-oracle/` changes while a review round is open. |
 | Data rule | The repo is public. Seats read the repo, `$SCRATCH` and synthetic fixtures only. They never read `~/.claude` or the frozen snapshot. The snapshot of real transcripts lives in a planner-only directory outside `$SCRATCH`. Seats see aggregate counts with no project names. |
@@ -625,3 +625,144 @@ deepseek approved v0.4; both approvals were superseded by later changes and re-c
 not re-run on v0.6 to v0.8, whose diffs only resolved round-5 to round-7 findings (a recorded deviation
 from the cadence). Accepted non-blocking note (deepseek R8): probe 4's 15% time bar covers the added
 analysis and rendering as well as the read. The exact bytes-and-files guard is what isolates the read.
+
+## Outcome
+
+**Shipped on `feat/perf-suggestions`** (not merged or pushed): Tasks 1 to 4 on top of `BASE` `c4b318c`.
+Final reviewed revision `a3aae3f` (diff hash of `git diff c4b318c` over the 32 implementation paths),
+head `c19c3a3`.
+
+**Code gate.** Unanimous after 2 rounds.
+
+| Seat | Round 1 (`ac54d9d`) | Round 2 (`a3aae3f`, final) |
+|---|---|---|
+| `reviewer-codex` | `IMPL-APPROVED` | `IMPL-APPROVED` |
+| `coder-deepseek` | `IMPL-APPROVED` | `IMPL-APPROVED` |
+| planner (`claude`) | | `PLANNER (claude): IMPL-APPROVED` on `a3aae3f`, base `c4b318c` |
+
+Round 2 was a confirmation round for one commit (`c19c3a3`) made from round-1 notes. `pstack:interrogate`
+(opus @high, fable @high, sonnet @medium) ran on the round-1 diff; it found no correctness or privacy
+defect. It was not re-run on round 2, whose 67 lines only resolved its own and the seats' notes (a
+recorded deviation from the cadence).
+
+**Who wrote what.** Task 1 and Task 3: planner-owned subagents (Fable) in their own worktrees, reviewed
+and verified by the planner before merge. Task 2: `coder-deepseek`. Task 4 and the fixes `c3db411`,
+`512cadc`, `c19c3a3`: the planner.
+
+**Probes at `c19c3a3`** (saved in the run's scratch directory as `probes-r1.txt`, `probes-r2.txt`,
+`mutate-r2.txt`):
+
+1. `make test SWIFT_BUILD_SYSTEM=native`: 254 tests in 35 suites passed; both canaries passed.
+2. `make bench` on the frozen snapshot: PASS 3 times of 3 (an unchanged refresh reads 0 bytes). On the
+   live home it failed intermittently because agents were writing during the run.
+3. Oracle comparison, tooling clean at the pinned blobs, both self-tests passing. 3a synthetic home:
+   61,034,916 tokens, 7 of 7 suggestions, 6 of 6 leads, MATCH. 3b frozen snapshot: 1,931,896,094 tokens,
+   19 of 19 suggestions, 11 of 11 leads, MATCH.
+4. `perf-bench.sh`, 3 interleaved runs each on the snapshot (473,058,916 bytes, 166 files, equal on both
+   sides): `--report` median 7.98 s against 7.91 s baseline, peak RSS 518 MB against 518 MB, PASS. The
+   first run, at `c3db411`, failed at 21.65 s against 8.30 s. A process sample traced it to ISO 8601
+   formatter construction for every line in `ClaudeUsageSampler.add(_:)`, fixed in `512cadc`.
+5. `mutate.sh`: all 4 mutations caught, each by its named test.
+
+**What review caught.** Plan gate (8 rounds): the D2 formula fired on new content and on first cache
+fills; D3 charged growth that had already dropped; the oracle disagreed with the plan in several places
+and was once edited after its freeze (fixed by committing and pinning it); a real data incident (round 1,
+see Run info); two build breaks in task ownership; and the Codex model loss after line 2,000. Code gate:
+non-blocking notes only; the planner's own probe 4 caught the 2.6x report regression before review.
+
+**Deviations from the plan, accepted at the code gate.** An opt-in `SWIFT_BUILD_SYSTEM` Makefile
+variable (the default swiftbuild backend of this Swift 6.4 Command Line Tools toolchain cannot load the
+Swift Testing macro plugin, on the base commit too); `ReportJSON.encode` throws; the default sampler is
+`EmptyUsageSampler`; one batch loop `foldLineBatches`; ReportText presentation choices listed in the
+round-1 implementation notes; a third empty state for no Claude Code sessions at all.
+
+**Known follow-ups (non-blocking, recorded at the code gate).**
+
+- With only subagent transcripts in the window, the empty state says "No Claude Code sessions" under a
+  usage total that includes them. Word it "No Claude Code main-thread sessions", with a test.
+- The window runs build and analysis on the main actor (probe 4 bounds the cost); move them off it.
+- The `Finding`-to-name mapping is switched in three places; give `Finding` one `detector` property.
+- `parseISODate` builds formatters per call on the live path too (unchanged from `main`); cache them.
+- `PerfAnalyzer.analyze` is one long function; `foldLineBatches` belongs on `IncrementalLineReader`, and
+  `SessionIngest` keeps its own copy of the loop.
+- The report carries two "not a bill" sentences; a 1.5M floor renders "1500k"; "from 1 files"; the JSON
+  window has no time zone; CLI diagnostics now read whole transcripts.
+- The fold merges only adjacent records of one response; that held for every repeat measured.
+- `make test` without the variable still fails on this toolchain.
+
+**Seat dispositions.** `coder-deepseek` and `reviewer-codex`: left attached for the user.
+
+## Dispatch ledger
+
+Every dispatch of the run: time, ID, seat, evidence, event.
+
+```
+2026-11-03T21:40:12Z	deepseek-plan-r1	deepseek	plan v0.1	sent
+2026-11-03T21:40:12Z	codex-plan-r1	codex	plan v0.1	sent
+2026-11-03T21:40:54Z	deepseek-plan-r1	deepseek	plan v0.1	delivered
+2026-11-03T21:40:54Z	codex-plan-r1	codex	plan v0.1	delivered
+2026-11-03T21:44:30Z	codex-plan-r1	codex	plan v0.1	verdict PLAN-REJECTED
+2026-11-03T22:01:56Z	deepseek-plan-r1	deepseek	plan v0.1	verdict PLAN-REJECTED
+2026-11-03T22:07:41Z	deepseek-plan-r2	deepseek	plan v0.2	sent
+2026-11-03T22:07:41Z	codex-plan-r2	codex	plan v0.2	sent
+2026-11-03T22:08:01Z	deepseek-plan-r2	deepseek	plan v0.2	delivered
+2026-11-03T22:08:01Z	codex-plan-r2	codex	plan v0.2	delivered
+2026-11-03T22:12:30Z	codex-plan-r2	codex	plan v0.2	verdict PLAN-REJECTED
+2026-11-03T22:19:02Z	deepseek-plan-r3	deepseek	plan v0.3	sent
+2026-11-03T22:19:02Z	codex-plan-r3	codex	plan v0.3	sent
+2026-11-03T22:19:21Z	deepseek-plan-r3	deepseek	plan v0.3	delivered
+2026-11-03T22:19:21Z	codex-plan-r3	codex	plan v0.3	delivered
+2026-11-03T22:20:05Z	deepseek-plan-r2	deepseek	plan v0.2	verdict PLAN-REJECTED
+2026-11-03T22:22:13Z	codex-plan-r3	codex	plan v0.3	verdict PLAN-REJECTED
+2026-11-03T22:24:46Z	deepseek-plan-r3	deepseek	plan v0.3	verdict PLAN-REJECTED
+2026-11-03T22:34:35Z	deepseek-plan-r4	deepseek	plan v0.4	sent
+2026-11-03T22:34:35Z	codex-plan-r4	codex	plan v0.4	sent
+2026-11-03T22:34:55Z	deepseek-plan-r4	deepseek	plan v0.4	delivered
+2026-11-03T22:34:55Z	codex-plan-r4	codex	plan v0.4	delivered
+2026-11-03T22:38:00Z	codex-plan-r4	codex	plan v0.4 839fb6a	verdict PLAN-REJECTED
+2026-11-03T22:42:45Z	deepseek-plan-r4	deepseek	plan v0.4 839fb6a	verdict PLAN-APPROVED
+2026-11-03T22:52:04Z	deepseek-plan-r5	deepseek	plan v0.5	sent
+2026-11-03T22:52:04Z	codex-plan-r5	codex	plan v0.5	sent
+2026-11-03T22:52:26Z	deepseek-plan-r5	deepseek	plan v0.5 2276132	delivered
+2026-11-03T22:52:26Z	codex-plan-r5	codex	plan v0.5 2276132	delivered
+2026-11-03T22:55:40Z	codex-plan-r5	codex	plan v0.5 2276132	verdict PLAN-REJECTED
+2026-11-03T22:57:23Z	deepseek-plan-r5	deepseek	plan v0.5 2276132	verdict PLAN-REJECTED
+2026-11-03T23:01:36Z	deepseek-plan-r6	deepseek	plan v0.6	sent
+2026-11-03T23:01:36Z	codex-plan-r6	codex	plan v0.6	sent
+2026-11-03T23:01:44Z	deepseek-plan-r6	deepseek	plan v0.6 35cbeeb	delivered
+2026-11-03T23:01:44Z	codex-plan-r6	codex	plan v0.6 35cbeeb	delivered
+2026-11-03T23:04:34Z	codex-plan-r6	codex	plan v0.6 35cbeeb	verdict PLAN-APPROVED
+2026-11-03T23:06:10Z	deepseek-plan-r6	deepseek	plan v0.6 35cbeeb	verdict PLAN-REJECTED
+2026-11-03T23:06:28Z	deepseek-plan-r7	deepseek	plan v0.7	sent
+2026-11-03T23:06:28Z	codex-plan-r7	codex	plan v0.7	sent
+2026-11-03T23:06:36Z	deepseek-plan-r7	deepseek	plan v0.7 62b4ed6	delivered
+2026-11-03T23:06:36Z	codex-plan-r7	codex	plan v0.7 62b4ed6	delivered
+2026-11-03T23:08:22Z	deepseek-plan-r7	deepseek	plan v0.7 62b4ed6	verdict PLAN-REJECTED
+2026-11-03T23:09:39Z	codex-plan-r7	codex	plan v0.7 62b4ed6	verdict PLAN-REJECTED
+2026-11-03T23:09:51Z	deepseek-plan-r8	deepseek	plan v0.8	sent
+2026-11-03T23:09:51Z	codex-plan-r8	codex	plan v0.8	sent
+2026-11-03T23:09:59Z	deepseek-plan-r8	deepseek	plan v0.8 99ed4ab	delivered
+2026-11-03T23:09:59Z	codex-plan-r8	codex	plan v0.8 99ed4ab	delivered
+2026-11-03T23:11:50Z	deepseek-plan-r8	deepseek	plan v0.8 99ed4ab	verdict PLAN-APPROVED
+2026-11-03T23:40:20Z	planner-task1	planner	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 head a69a22a: 202 tests native, 3a+3b total MATCH, bench 3/3 PASS frozen	done succeeded
+2026-11-03T23:40:36Z	deepseek-task2-a1	deepseek	plan v0.8, base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1, on a69a22a	sent
+2026-11-03T23:40:56Z	deepseek-task2-a1	deepseek	plan v0.8, base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1, on a69a22a	delivered
+2026-11-03T23:43:24Z	codex-plan-r8	codex	plan v0.8 99ed4ab	verdict PLAN-APPROVED
+2026-11-03T23:47:42Z	deepseek-task2-a1	deepseek	232 tests native; names present; scope 4 files; committed 6641281	done succeeded
+2026-11-04T00:16:00Z	deepseek-impl-r1	deepseek	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev ac54d9d0b696c96fcf14e5d1d5ef8703b4ef81e7	sent
+2026-11-04T00:16:00Z	codex-impl-r1	codex	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev ac54d9d0b696c96fcf14e5d1d5ef8703b4ef81e7	sent
+2026-11-04T00:16:08Z	deepseek-impl-r1	deepseek	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev ac54d9d0b696c96fcf14e5d1d5ef8703b4ef81e7	delivered
+2026-11-04T00:16:08Z	codex-impl-r1	codex	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev ac54d9d0b696c96fcf14e5d1d5ef8703b4ef81e7	delivered
+2026-11-04T00:21:18Z	codex-impl-r1	codex	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev ac54d9d0b696c96fcf14e5d1d5ef8703b4ef81e7	verdict IMPL-APPROVED
+2026-11-04T00:25:01Z	deepseek-impl-r1	deepseek	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev ac54d9d0b696c96fcf14e5d1d5ef8703b4ef81e7	verdict IMPL-APPROVED
+2026-11-04T00:31:36Z	deepseek-impl-r2	deepseek	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev a3aae3f0a1e0c82e2a31d3e0809883b2c16744c5	sent
+2026-11-04T00:31:36Z	codex-impl-r2	codex	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev a3aae3f0a1e0c82e2a31d3e0809883b2c16744c5	sent
+2026-11-04T00:31:45Z	deepseek-impl-r2	deepseek	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev a3aae3f0a1e0c82e2a31d3e0809883b2c16744c5	delivered
+2026-11-04T00:31:45Z	codex-impl-r2	codex	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev a3aae3f0a1e0c82e2a31d3e0809883b2c16744c5	delivered
+2026-11-04T00:34:39Z	codex-impl-r2	codex	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev a3aae3f0a1e0c82e2a31d3e0809883b2c16744c5	verdict IMPL-APPROVED
+2026-11-04T00:36:16Z	deepseek-impl-r2	deepseek	base c4b318c8fd0cfd9e24fe642b8fb1f312abededc1 rev a3aae3f0a1e0c82e2a31d3e0809883b2c16744c5	verdict IMPL-APPROVED
+2026-11-04T00:36:44Z	planner-task3	planner	254 tests native; 3a/3b MATCH; probe 4 PASS; mutate 4/4	done succeeded
+2026-11-04T00:36:44Z	planner-task4	planner	docs reviewed in code gate r1 and r2	done succeeded
+2026-11-04T00:36:55Z	seat:deepseek	deepseek	-	disposition left
+2026-11-04T00:36:55Z	seat:codex	codex	-	disposition left
+```
