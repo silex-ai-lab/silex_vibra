@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="330" viewBox="0 0 880 330" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>How Vibra works: agents already write session files on your Mac; Vibra only reads them and shows the result in the menu bar, with no network</title>
+  <defs>
+    <style>
+      .t { fill: #1f2328; }
+      .m { fill: #59636e; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; fill: #1f2328; }
+      .hd { font-size: 14px; font-weight: 700; fill: #1f2328; }
+      .card { fill: #ffffff; stroke: #d1d9e0; }
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#59636e"/>
+    </marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="879" height="329" rx="14" fill="#f6f8fa" stroke="#d1d9e0"/>
+
+  <!-- column 1: agents -->
+  <text x="130" y="40" class="hd" text-anchor="middle">1. Your agents work as usual</text>
+  <g transform="translate(30,56)">
+    <rect width="200" height="196" rx="10" class="card"/>
+    <g font-size="13" class="t">
+      <text x="18" y="32">Claude Code</text>
+      <text x="18" y="60">Codex</text>
+      <text x="18" y="88">Cursor</text>
+      <text x="18" y="116">VS Code (Copilot Chat)</text>
+      <text x="18" y="144">OpenCode</text>
+      <text x="18" y="172">Hermes</text>
+    </g>
+  </g>
+  <line x1="236" y1="154" x2="292" y2="154" stroke="#59636e" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="264" y="144" font-size="11" class="m" text-anchor="middle">write</text>
+
+  <!-- column 2: files -->
+  <text x="440" y="40" class="hd" text-anchor="middle">2. They already save session files</text>
+  <g transform="translate(298,56)">
+    <rect width="284" height="196" rx="10" class="card"/>
+    <g>
+      <path d="M16 18 h14 l6 6 v18 h-20 z" fill="#eaeef2" stroke="#8c959f"/>
+      <text x="46" y="36" class="mono">~/.claude/projects/…/*.jsonl</text>
+      <path d="M16 56 h14 l6 6 v18 h-20 z" fill="#eaeef2" stroke="#8c959f"/>
+      <text x="46" y="74" class="mono">~/.codex/sessions/…/*.jsonl</text>
+      <path d="M16 94 h14 l6 6 v18 h-20 z" fill="#eaeef2" stroke="#8c959f"/>
+      <text x="46" y="112" class="mono">…/opencode/opencode.db</text>
+      <path d="M16 132 h14 l6 6 v18 h-20 z" fill="#eaeef2" stroke="#8c959f"/>
+      <text x="46" y="150" class="mono">…/Cursor/…/state.vscdb</text>
+      <text x="142" y="182" font-size="11.5" class="m" text-anchor="middle">all on your own Mac</text>
+    </g>
+  </g>
+  <line x1="588" y1="154" x2="644" y2="154" stroke="#59636e" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="616" y="144" font-size="11" class="m" text-anchor="middle">read-only</text>
+
+  <!-- column 3: vibra -->
+  <text x="750" y="40" class="hd" text-anchor="middle">3. Vibra reads and shows</text>
+  <g transform="translate(650,56)">
+    <rect width="200" height="196" rx="10" class="card"/>
+    <rect x="16" y="18" width="168" height="26" rx="6" fill="#eaeef2"/>
+    <text x="100" y="36" font-size="13" font-weight="600" class="t" text-anchor="middle"><tspan fill="#0969da">2▶</tspan> <tspan fill="#bc4c00">2!</tspan></text>
+    <g font-size="12.5" class="t">
+      <circle cx="26" cy="68" r="5" fill="#0969da"/><text x="38" y="72">working</text>
+      <circle cx="26" cy="92" r="5" fill="#e16f24"/><text x="38" y="96">your turn</text>
+      <circle cx="26" cy="116" r="5" fill="#cf222e"/><text x="38" y="120">needs approval</text>
+      <circle cx="26" cy="140" r="5" fill="#d4a72c"/><text x="38" y="144">stalled</text>
+      <circle cx="26" cy="164" r="5" fill="#d0d7de" stroke="#8c959f"/><text x="38" y="168">idle</text>
+    </g>
+  </g>
+
+  <!-- footer -->
+  <g transform="translate(30,272)">
+    <rect width="820" height="38" rx="8" fill="#dafbe1" stroke="#aceebb"/>
+    <text x="410" y="24" font-size="13" fill="#116329" text-anchor="middle" font-weight="600">No network  ·  No account  ·  No hooks or plugins added to your agents  ·  Never clicks "Allow" for you</text>
+  </g>
+</svg>
