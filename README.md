@@ -91,6 +91,14 @@ agents.
 
 #### Homebrew
 
+Vibra is free to install and use under the [Apache-2.0 license](LICENSE).
+Both this repository and the official tap are public. No GitHub account,
+invitation, or repository access approval is needed.
+
+Apple Silicon and Intel Macs are supported. Check `swift --version` before
+installing. If Swift is missing, run `xcode-select --install`. If it is older
+than Swift 6, update the Command Line Tools through Software Update.
+
 With [Homebrew](https://brew.sh), macOS 14 or later, and Swift 6 or later:
 
 ```sh
