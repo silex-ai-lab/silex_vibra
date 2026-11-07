@@ -169,7 +169,7 @@ ready-made skill that teaches a coding agent to use it.
 
 ## Session states
 
-The five states are listed on the [README](../README.md#session-states).
+The five states are listed on the [README](../README.md#what-the-colours-mean).
 
 `stalled` exists because an agent that died mid-turn looks identical to a busy
 one if you only ask "is it running?".

@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="400" viewBox="0 0 880 400" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Without Vibra: two of four agents have stopped and are waiting, while you work in another window</title>
+  <defs>
+    <style>
+      .t { fill: #1f2328; }
+      .m { fill: #59636e; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; fill: #d1d9e0; }
+      .dim { fill: #8b949e; }
+      .bar { fill: #2d333b; }
+      .win { fill: #161b22; }
+    </style>
+  </defs>
+  <rect x="0.5" y="0.5" width="879" height="399" rx="14" fill="#f6f8fa" stroke="#d1d9e0"/>
+  <text x="28" y="40" font-size="18" font-weight="700" class="t">Without Vibra</text>
+  <text x="28" y="62" font-size="13" class="m">Four agents, four windows. You are in a fifth one.</text>
+
+  <!-- window 1: working -->
+  <g transform="translate(28,82)">
+    <rect width="290" height="132" rx="8" class="win"/>
+    <rect width="290" height="24" rx="8" class="bar"/><rect y="16" width="290" height="8" class="bar"/>
+    <circle cx="14" cy="12" r="4" fill="#ff5f57"/><circle cx="27" cy="12" r="4" fill="#febc2e"/><circle cx="40" cy="12" r="4" fill="#28c840"/>
+    <text x="56" y="16" font-size="11" class="dim">Claude Code · vibra</text>
+    <text x="14" y="50" class="mono">● Editing Sources/Menu.swift</text>
+    <text x="14" y="70" class="mono dim">  ⎿ 48 lines changed</text>
+    <text x="14" y="90" class="mono">● Running make test…</text>
+    <rect x="14" y="104" width="86" height="18" rx="9" fill="#0969da"/>
+    <text x="57" y="117" font-size="11" fill="#fff" text-anchor="middle">working</text>
+  </g>
+
+  <!-- window 2: finished long ago -->
+  <g transform="translate(334,82)">
+    <rect width="290" height="132" rx="8" class="win"/>
+    <rect width="290" height="24" rx="8" class="bar"/><rect y="16" width="290" height="8" class="bar"/>
+    <circle cx="14" cy="12" r="4" fill="#ff5f57"/><circle cx="27" cy="12" r="4" fill="#febc2e"/><circle cx="40" cy="12" r="4" fill="#28c840"/>
+    <text x="56" y="16" font-size="11" class="dim">Claude Code · jayskills</text>
+    <text x="14" y="50" class="mono">✓ Done. All 12 tests pass.</text>
+    <text x="14" y="70" class="mono">  What should I do next?</text>
+    <text x="14" y="90" class="mono">&gt; <tspan fill="#d1d9e0">▌</tspan></text>
+    <rect x="14" y="104" width="160" height="18" rx="9" fill="#bc4c00"/>
+    <text x="94" y="117" font-size="11" fill="#fff" text-anchor="middle">waiting on you · 18 min</text>
+  </g>
+
+  <!-- window 3: working -->
+  <g transform="translate(28,228)">
+    <rect width="290" height="132" rx="8" class="win"/>
+    <rect width="290" height="24" rx="8" class="bar"/><rect y="16" width="290" height="8" class="bar"/>
+    <circle cx="14" cy="12" r="4" fill="#ff5f57"/><circle cx="27" cy="12" r="4" fill="#febc2e"/><circle cx="40" cy="12" r="4" fill="#28c840"/>
+    <text x="56" y="16" font-size="11" class="dim">Codex · silex_poc</text>
+    <text x="14" y="50" class="mono">• Reading api/routes.py</text>
+    <text x="14" y="70" class="mono">• Planning the refactor…</text>
+    <text x="14" y="90" class="mono dim">  esc to interrupt</text>
+    <rect x="14" y="104" width="86" height="18" rx="9" fill="#0969da"/>
+    <text x="57" y="117" font-size="11" fill="#fff" text-anchor="middle">working</text>
+  </g>
+
+  <!-- window 4: blocked on approval -->
+  <g transform="translate(334,228)">
+    <rect width="290" height="132" rx="8" class="win"/>
+    <rect width="290" height="24" rx="8" class="bar"/><rect y="16" width="290" height="8" class="bar"/>
+    <circle cx="14" cy="12" r="4" fill="#ff5f57"/><circle cx="27" cy="12" r="4" fill="#febc2e"/><circle cx="40" cy="12" r="4" fill="#28c840"/>
+    <text x="56" y="16" font-size="11" class="dim">VS Code · Fix the login flow</text>
+    <text x="14" y="50" class="mono">Allow edits to auth.ts?</text>
+    <rect x="14" y="62" width="58" height="20" rx="4" fill="#238636"/><text x="43" y="76" font-size="11" fill="#fff" text-anchor="middle">Allow</text>
+    <rect x="80" y="62" width="58" height="20" rx="4" fill="#30363d"/><text x="109" y="76" font-size="11" fill="#d1d9e0" text-anchor="middle">Skip</text>
+    <rect x="14" y="104" width="214" height="18" rx="9" fill="#cf222e"/>
+    <text x="121" y="117" font-size="11" fill="#fff" text-anchor="middle">stuck on a permission prompt · 7 min</text>
+  </g>
+
+  <!-- you, elsewhere -->
+  <g transform="translate(648,82)">
+    <rect width="204" height="278" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+    <text x="102" y="30" font-size="12" class="m" text-anchor="middle">Meanwhile, you are in</text>
+    <text x="102" y="48" font-size="12" class="m" text-anchor="middle">email, a doc, a meeting…</text>
+    <circle cx="102" cy="104" r="26" fill="#eaeef2"/>
+    <circle cx="102" cy="96" r="10" fill="#8c959f"/>
+    <path d="M82 124 q20 -22 40 0" fill="#8c959f"/>
+    <rect x="22" y="150" width="160" height="56" rx="12" fill="#eaeef2"/>
+    <path d="M92 150 l10 -12 l10 12 z" fill="#eaeef2"/>
+    <text x="102" y="174" font-size="13" class="t" text-anchor="middle">"Is it done yet?</text>
+    <text x="102" y="193" font-size="13" class="t" text-anchor="middle">I'll check later."</text>
+    <text x="102" y="236" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">Two agents stopped.</text>
+    <text x="102" y="255" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">Nothing told you.</text>
+  </g>
+</svg>

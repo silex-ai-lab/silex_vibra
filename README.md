@@ -1,7 +1,7 @@
 <h1 align="center">📳 Vibra</h1>
 
 <p align="center">
-  <strong>Know when your coding agents need you.</strong>
+  <strong>Your AI coding agent finished ten minutes ago. Did you notice?</strong>
 </p>
 
 <p align="center">
@@ -13,99 +13,84 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick start</a> · <a href="#supported-agents">Supported agents</a> · <a href="#privacy">Privacy</a> · <a href="#design-principles">Design principles</a>
+  <a href="#the-problem">The problem</a> · <a href="#quick-start">Quick start</a> · <a href="#supported-agents">Supported agents</a> · <a href="#privacy">Privacy</a>
   <br>
   English · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a>
 </p>
 
 ---
 
-A macOS menu-bar app that shows which of your Claude Code, Codex, Cursor,
-VS Code (Copilot Chat), OpenCode and Hermes sessions are working, waiting for
-your turn, or need an approval — for the agents that can report it; see
-[Supported agents](#supported-agents). Open source (Apache 2.0). Local-only: no
-account, no telemetry, no network.
+## The problem
 
-```
-Vibra 2▶ 1!
-─────────────────────────
-Claude Code · 2
-  🔵 vibra · working · 41k tok
-  🟠 jayskills · your turn · 12k tok
-Codex · 1
-  🔵 silex_poc · working · 8k tok
-OpenCode · 1
-  ⚪️ scratchpad · idle · 10k tok
-VS Code · 1
-  🔴 Fix the login flow · needs approval · 3k tok
-```
+You give Claude Code a task and switch to something else while it works. Then
+you start Codex on a second task, and maybe Copilot in VS Code on a third.
+Here is what usually happens next.
+
+- **One agent finishes in three minutes. You check back after twenty.** It sat
+  there doing nothing for seventeen of them.
+- **Another one stops after thirty seconds to ask "May I edit this file?"**
+  Nothing moves until you answer, and you don't see the question until much later.
+- **To find out, you click through every terminal tab and window.** One by one,
+  several times an hour.
+
+<p align="center">
+  <img src="docs/assets/readme/problem.svg" width="820" alt="Four agent windows. Two are working. One finished 18 minutes ago and is waiting for you. One has been stuck on a permission prompt for 7 minutes. You are in another window and nothing tells you.">
+</p>
+
+Agents rarely fail by crashing. They fail by waiting quietly in a window you
+are not looking at. The more agents you run at once, the more time you lose
+this way.
+
+## What Vibra does about it
+
+Vibra is a small, free app that lives in your Mac's menu bar. It keeps an eye
+on all your agent sessions and tells you as soon as one of them needs you.
+
+<p align="center">
+  <img src="docs/assets/readme/menubar.svg" width="820" alt="The Vibra menu open under the menu bar, listing sessions grouped by agent with their state and token count, next to a notification that reads: jayskills is waiting for you.">
+</p>
+
+| The problem | With Vibra |
+|---|---|
+| 😴 An agent finished and you didn't notice | Its row turns 🟠 **your turn** and you get a notification. The notification disappears once you have answered. |
+| ✋ An agent is stuck on "Allow this?" | Its row turns 🔴 **needs approval**. Vibra only shows it. It never clicks Allow for you. |
+| 🔎 You hunt through tabs for the right one | Click the row or the notification to jump to its terminal tab or app window. |
+| 👀 You can't tell which agents are still busy | The menu bar shows it at a glance. `2▶` means two are working, `2!` means two need you. |
+| 🧾 You wonder what all this work used | **Usage Report…** (⌘U) shows 7 days of tokens and what they would cost at API prices. |
+
+Not every agent reports every state, and some cannot be jumped to. The
+[Supported agents](#supported-agents) table shows exactly what works for each one.
 
 > ⭐ **Star this repo** to keep up with new agents and fixes. When an agent changes its session files, I update Vibra so you don't have to. [Why star it →](#-why-star-vibra)
 
-## Why Vibra?
+## How it works
 
-Agents work for minutes at a time. The expensive failure isn't a crash — it's an
-agent that finished four minutes ago and has been waiting for you ever since,
-in a terminal tab you aren't looking at. Vibra watches the session files the
-agents already write and surfaces the one that needs you.
+Each of these agents already saves its conversation to files on your Mac. Vibra
+reads those files, read-only, and works out what state each session is in.
+That's all. It sends nothing over the network and installs nothing into your
+agents.
 
-- 🟠 **An agent finished its turn** → for the agents that can report it, the row turns 🟠 your turn and you get a notification, withdrawn once no longer true.
-- 🔴 **An agent is sitting on a permission prompt** → for the agents that can report it, the row turns 🔴 needs approval; Vibra only shows it and never approves it for you.
-- 🖱️ **You want to get back to it** → a click jumps to it, where the agent allows; see [What it does](#what-it-does).
-- 🧾 **You want to know what the work used** → **Usage Report…** (⌘U) shows 7 days of tokens and API-equivalent value.
+<p align="center">
+  <img src="docs/assets/readme/how-it-works.svg" width="820" alt="Three steps. Your agents work as usual. They already save session files on your Mac. Vibra reads those files read-only and shows each session as working, your turn, needs approval, stalled or idle. No network, no account, no hooks or plugins, never clicks Allow for you.">
+</p>
 
 ### ✅ Before you install
 
 | | |
 |---|---|
 | 💰 **Free and open source** | Apache License 2.0. |
-| 🔒 **Local-only** | No network egress at all. No account, no telemetry, no update ping. |
+| 🔒 **Local-only** | No network traffic at all. No account, no telemetry, no update check. |
 | 🧩 **Installs nothing into your agents** | No hooks, no plugins, no statusline, no wrapper binaries. |
-| 🤖 **Six agents** | Not every agent can report every state; see [Supported agents](#supported-agents). |
+| 🤖 **Six agents** | Claude Code, Codex, Cursor, VS Code (Copilot Chat), OpenCode and Hermes. Not every agent can report every state; see [Supported agents](#supported-agents). |
 | 🩺 **Self-check** | `make probe` in the cloned repo prints sessions and states, never message content. |
-| ⚠️ **Build from source** | There is no downloadable app yet: Vibra is ad-hoc signed and not notarized, so notifications need one manual System Settings step. |
-
-## Supported agents
-
-| Agent guide | Covers | 🔵 | 🟠 | 🔴 | 🟡 | ⚪️ |
-|---|---|---|---|---|---|---|
-| <img src="docs/assets/agents/claudecode.svg" width="16" height="16" alt="Claude Code"> [Claude Code](docs/agents/claude-code.md) | CLI, Claude desktop app, VS Code / Cursor extension | ✓ | ✓ | ✓ | ✓ | ✓ |
-| <img src="docs/assets/agents/codex.svg" width="16" height="16" alt="Codex"> [Codex](docs/agents/codex.md) | CLI, `codex exec`, desktop app, IDE extension | live | live | — | ✓ | ✓ |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/cursor-for-dark.svg"><img src="docs/assets/agents/cursor-for-light.svg" width="16" height="16" alt="Cursor"></picture> [Cursor](docs/agents/cursor.md) | Agents window and editor chat | live | ✓ | ✓ | — | live |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/githubcopilot-for-dark.svg"><img src="docs/assets/agents/githubcopilot-for-light.svg" width="16" height="16" alt="GitHub Copilot"></picture> [VS Code](docs/agents/vscode.md) | GitHub Copilot Chat (Ask, Edit, Agent mode), also Insiders | live | live | live | ✓ | live |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/opencode-for-dark.svg"><img src="docs/assets/agents/opencode-for-light.svg" width="16" height="16" alt="OpenCode"></picture> [OpenCode](docs/agents/opencode.md) | incl. DeepSeek | ✓ | — | ✓ | — | ✓ |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/hermesagent-for-dark.svg"><img src="docs/assets/agents/hermesagent-for-light.svg" width="16" height="16" alt="Hermes Agent"></picture> [Hermes](docs/agents/hermes.md) | CLI and chat gateways | ✓ | ✓ | — | ✓ | ✓ |
-
-**live**: observed in a recorded live session. **✓**: can show; no live record yet (the guide
-says if a fixture test covers it). **—**: never shown (e.g. no approval state from Codex/Hermes).
-
-### Session states
-
-| State | Meaning |
-|---|---|
-| 🔵 working | Producing output. Leave it alone. |
-| 🟠 your turn | Finished its turn; waiting on you. |
-| 🔴 needs approval | Sitting on a permission prompt. |
-| 🟡 stalled | Claimed to be mid-turn, then went silent. |
-| ⚪️ idle | Settled, nothing pending. |
-
-## What it does
-
-- **Every session's state in the menu bar**, with its project and tokens.
-- **A notification when one needs you** (🟠 or 🔴), withdrawn once no longer true.
-  A click jumps to it: the terminal tab (iTerm2, Terminal, herdr) or hosting app
-  for Claude Code and Codex, the VS Code window, or Cursor brought forward.
-  OpenCode and Hermes sessions cannot be jumped to.
-- **What the work used and asked.** **Usage Report…** (⌘U): 7 days of tokens and
-  API-equivalent value, dated for Claude Code and Codex. **History…** (⌘Y): the
-  questions you asked. `--query`: the menu as JSON. See [features](docs/features.md).
+| ⚠️ **Build from source** | There is no downloadable app yet. Vibra is ad-hoc signed and not notarized, so notifications need one manual System Settings step. |
 
 ## Quick start
 
 ### Install
 
-Requires **macOS 14+** and a Swift 6 toolchain. **Xcode is not required** —
-Command Line Tools is enough:
+You need **macOS 14 or later** and a Swift 6 toolchain. **You do not need
+Xcode.** The Command Line Tools are enough:
 
 ```sh
 xcode-select --install     # skip if `swift --version` already works
@@ -120,12 +105,12 @@ make install               # builds, then copies to /Applications
 open /Applications/Vibra.app
 ```
 
-`make install` quits any running copy first, so it is safe to re-run after
-pulling changes.
+`make install` quits any running copy first, so you can safely run it again
+after pulling changes.
 
-There is no Dock icon and no window — `LSUIElement` is set, so **the menu bar
-item is the entire app**. Look at the right-hand side of your menu bar for
-`Vibra`, or a count like `2▶ 1!` when sessions are live.
+Vibra has no Dock icon and no window. **The menu bar item is the whole app.**
+Look on the right-hand side of your menu bar for `Vibra`, or for a count such
+as `2▶ 1!` when sessions are live.
 
 To remove it completely:
 
@@ -135,54 +120,96 @@ make uninstall
 
 ### First launch
 
-macOS may warn that the app is from an unidentified developer: it is ad-hoc
-signed, not Developer ID signed. Right-click the app in Finder and choose
-**Open** once, or run:
+macOS may warn that the app is from an unidentified developer, because it is
+ad-hoc signed rather than Developer ID signed. Right-click the app in Finder
+and choose **Open** once, or run:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Vibra.app
 ```
 
-There is no downloadable app yet: Vibra is ad-hoc signed and not notarized, so
-notifications need one manual System Settings step — see
-[Troubleshooting](docs/troubleshooting.md#troubleshooting).
+Notifications need one manual step in System Settings, because the app is not
+notarized. See [Troubleshooting](docs/troubleshooting.md#troubleshooting).
 
 ### Your first two minutes
 
-1. Open Vibra. With nothing run in 12 hours it reads `No active sessions`: expected.
+1. Open Vibra. If you have not used an agent in the last 12 hours, it reads
+   `No active sessions`. That is expected.
 2. In a terminal, start an interactive **Claude Code** or **Codex** session and
    give it a task. Its row shows 🔵 working.
-3. Let the turn finish: the row turns 🟠 your turn and the menu bar shows `1!`.
+3. Let the turn finish. The row turns 🟠 your turn and the menu bar shows `1!`.
 
-Without the menu: `make probe` in the cloned repo prints sessions and states,
-never message content; it exits `2` if it finds none.
+Prefer the terminal? `make probe` in the cloned repo prints sessions and
+states, never message content. It exits with code `2` if it finds none.
+
+## Supported agents
+
+| Agent guide | Covers | 🔵 | 🟠 | 🔴 | 🟡 | ⚪️ |
+|---|---|---|---|---|---|---|
+| <img src="docs/assets/agents/claudecode.svg" width="16" height="16" alt="Claude Code"> [Claude Code](docs/agents/claude-code.md) | CLI, Claude desktop app, VS Code / Cursor extension | ✓ | ✓ | ✓ | ✓ | ✓ |
+| <img src="docs/assets/agents/codex.svg" width="16" height="16" alt="Codex"> [Codex](docs/agents/codex.md) | CLI, `codex exec`, desktop app, IDE extension | live | live | — | ✓ | ✓ |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/cursor-for-dark.svg"><img src="docs/assets/agents/cursor-for-light.svg" width="16" height="16" alt="Cursor"></picture> [Cursor](docs/agents/cursor.md) | Agents window and editor chat | live | ✓ | ✓ | — | live |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/githubcopilot-for-dark.svg"><img src="docs/assets/agents/githubcopilot-for-light.svg" width="16" height="16" alt="GitHub Copilot"></picture> [VS Code](docs/agents/vscode.md) | GitHub Copilot Chat (Ask, Edit, Agent mode), also Insiders | live | live | live | ✓ | live |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/opencode-for-dark.svg"><img src="docs/assets/agents/opencode-for-light.svg" width="16" height="16" alt="OpenCode"></picture> [OpenCode](docs/agents/opencode.md) | incl. DeepSeek | ✓ | — | ✓ | — | ✓ |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/agents/hermesagent-for-dark.svg"><img src="docs/assets/agents/hermesagent-for-light.svg" width="16" height="16" alt="Hermes Agent"></picture> [Hermes](docs/agents/hermes.md) | CLI and chat gateways | ✓ | ✓ | — | ✓ | ✓ |
+
+**live**: seen in a recorded real session. **✓**: the code can show it, but no
+live record yet (the guide says if a fixture test covers it). **—**: never
+shown (for example, Codex and Hermes have no approval state).
+
+Clicking a row jumps to the terminal tab (iTerm2, Terminal, herdr) or hosting
+app for Claude Code and Codex, to the VS Code window, or brings Cursor forward.
+OpenCode and Hermes sessions cannot be jumped to.
+
+### What the colours mean
+
+| State | Meaning |
+|---|---|
+| 🔵 working | Busy producing output. Leave it alone. |
+| 🟠 your turn | Finished its turn and waiting for you. |
+| 🔴 needs approval | Waiting on a permission prompt. |
+| 🟡 stalled | Said it was mid-turn, then went silent. |
+| ⚪️ idle | Settled, nothing pending. |
+
+## More it can do
+
+- **Usage Report…** (⌘U): 7 days of tokens and API-equivalent value, by day
+  for Claude Code and Codex, plus tips on what cost your Claude Code sessions
+  the most.
+- **History…** (⌘Y): the questions you asked your agents.
+- **`--query`**: the menu as JSON, for scripts.
+
+Details: [features](docs/features.md).
 
 ## Design principles
 
-- **A passive reader.** Vibra never asks these tools to change what they write. It is a passive reader
-  of files that already exist.
-- **Shows, never acts.** It never approves an agent's permission prompt for you; it only shows it.
-- **Says what it has seen.** The table above keeps states observed in a recorded live session (**live**)
-  apart from states the code can show with no live record yet (**✓**).
+- **A passive reader.** Vibra never asks these tools to change what they write.
+  It only reads files that already exist.
+- **Shows, never acts.** It never approves an agent's permission prompt for you.
+  It only shows it.
+- **Says what it has seen.** The table above keeps states seen in a recorded
+  live session (**live**) apart from states the code can show with no live
+  record yet (**✓**).
 
 ## Privacy
 
-Vibra reads local files and sends nothing anywhere — a passive reader of the
-session files and databases the agents already write (paths in each guide).
+Vibra reads local files and sends nothing anywhere. It is a passive reader of
+the session files and databases the agents already write (paths in each guide).
 
-- **No network egress at all.** No account, no telemetry, no update ping.
-- **It installs nothing into your agents** — no hooks, no plugins, no
+- **No network traffic at all.** No account, no telemetry, no update check.
+- **It installs nothing into your agents.** No hooks, no plugins, no
   statusline, no wrapper binaries.
-- OpenCode's and Cursor's databases hold auth tokens; each is opened read-only
+- OpenCode's and Cursor's databases hold auth tokens. Each is opened read-only
   with one hard-coded `SELECT`, and the token tables are never queried.
 - `--query`, `--probe` and the other machine-readable outputs never contain
   message text. History, the one feature that shows what you typed, keeps it in
   memory only while its window is open and writes nothing.
-- It never approves an agent's permission prompt for you; it only shows it.
+- It never approves an agent's permission prompt for you. It only shows it.
 
-**Canary tests** plant sentinel secrets and message text in fixtures and assert they are absent
-from returned sessions, their JSON, `--query` output or errors (per adapter); `make test` fails if
-the OpenCode token canary did not run. Detail: [docs/privacy.md](docs/privacy.md).
+**Canary tests** plant fake secrets and message text in test fixtures and check
+that none of it shows up in returned sessions, their JSON, `--query` output or
+errors (per adapter). `make test` fails if the OpenCode token canary did not
+run. Detail: [docs/privacy.md](docs/privacy.md).
 
 ## ⭐ Why star Vibra
 
@@ -195,7 +222,7 @@ I use Vibra every day to keep track of my own agents, so I keep maintaining it.
 More reasons:
 
 - 🔒 **Privacy is tested, not promised.** Canary tests plant fake secrets and message text, then fail the build if any of it leaks into Vibra's output.
-- 🧾 **Honest about what works.** The compatibility table marks what has been seen in a real session (**live**) separately from what the code can show but nobody has seen yet (**✓**). As more states are seen live, the table gets updated.
+- 🧾 **Honest about what works.** The compatibility table marks what has been seen in a real session (**live**) separately from what the code can show but nobody has seen yet (**✓**).
 - 🧩 **Leaves your setup alone.** It adds no hooks, plugins or wrappers to your agents, and `make uninstall` removes the app.
 - 🌏 **Readable in four languages:** English, 简体中文, 日本語 and 한국어.
 - 📣 **Helps other people find it.** A star makes Vibra easier to find for anyone else running several agents at once.
@@ -207,7 +234,7 @@ Star it so you can find it the next time an agent has been waiting on you withou
 [Features](docs/features.md) · [Troubleshooting & limitations](docs/troubleshooting.md) ·
 [Development](docs/development.md) · [Changelog](CHANGELOG.md) · [Roadmap](docs/ROADMAP.md)
 
-Issues and pull requests are welcome. Run the tests with `make test` — not
+Issues and pull requests are welcome. Run the tests with `make test`, not
 `swift test`, which runs zero tests on a machine without Xcode.
 
 ## License
