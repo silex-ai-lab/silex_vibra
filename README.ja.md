@@ -92,6 +92,12 @@ Vibra は Mac のメニューバーに常駐する、小さな無料アプリで
 
 #### Homebrew
 
+Vibra は [Apache-2.0 ライセンス](LICENSE)に基づき、誰でも無料でインストールして使用できます。
+このリポジトリと公式 tap は公開されています。GitHub アカウント、招待、リポジトリへのアクセス承認は不要です。
+
+Apple Silicon と Intel Mac に対応しています。インストール前に `swift --version` で Swift 6 以降であることを確認してください。
+Swift がない場合は `xcode-select --install` を実行し、古い場合は「ソフトウェアアップデート」で Command Line Tools を更新してください。
+
 [Homebrew](https://brew.sh)、macOS 14 以降、Swift 6 以降が必要です。
 
 ```sh
