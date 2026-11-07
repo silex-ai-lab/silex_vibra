@@ -86,6 +86,26 @@ Vibra 是一个住在 Mac 菜单栏里的免费小应用。它替你盯着所有
 
 ### 安装
 
+#### Homebrew
+
+已安装 [Homebrew](https://brew.sh)，并具备 macOS 14 或更高版本及 Swift 6 或更高版本时：
+
+```sh
+brew install silex-ai-lab/tap/vibra
+open "$(brew --prefix vibra)/Vibra.app"
+```
+
+[官方 tap](https://github.com/silex-ai-lab/homebrew-tap) 会下载带 SHA-256 校验的源码归档并在本机编译。
+只需 Command Line Tools，不需要完整 Xcode。安装后也可以使用 `vibra --query` 查询状态。
+
+启动前请退出旧版 Vibra。Homebrew 不会覆盖 `/Applications/Vibra.app`，也不会修改登录项。
+该版本仍采用 ad-hoc 签名，未做公证。迁移和权限限制见 [tap 说明](https://github.com/silex-ai-lab/homebrew-tap#switch-from-a-manual-installation)。
+
+更新前先退出 Vibra，再运行 `brew upgrade silex-ai-lab/tap/vibra`。
+卸载使用 `brew uninstall silex-ai-lab/tap/vibra`。
+
+#### 手动从源码构建
+
 需要 **macOS 14 或更高版本** 和 Swift 6 工具链。**不需要 Xcode。**
 有 Command Line Tools 就够了：
 
@@ -115,12 +135,10 @@ make uninstall
 
 ### 首次启动
 
-macOS 可能警告该应用来自身份不明的开发者，因为它采用 ad-hoc 签名，
-而不是 Developer ID 签名。在 Finder 中右键点按该应用，选择 **打开** 一次，或运行：
+Vibra 采用 ad-hoc 签名，而不是 Developer ID 签名。如果 macOS 阻止打开，
+请先在 **系统设置 > 隐私与安全性** 中检查应用，再决定是否选择 **仍要打开**。
+Homebrew 版本位于 `$(brew --prefix vibra)/Vibra.app`，手动安装的版本位于 `/Applications/Vibra.app`。
 
-```sh
-xattr -dr com.apple.quarantine /Applications/Vibra.app
-```
 
 因为应用没有做公证，通知需要在“系统设置”里手动操作一步。见
 [疑难解答](docs/troubleshooting.md#troubleshooting)。

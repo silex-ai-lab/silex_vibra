@@ -89,6 +89,28 @@ agents.
 
 ### Install
 
+#### Homebrew
+
+With [Homebrew](https://brew.sh), macOS 14 or later, and Swift 6 or later:
+
+```sh
+brew install silex-ai-lab/tap/vibra
+open "$(brew --prefix vibra)/Vibra.app"
+```
+
+The [official tap](https://github.com/silex-ai-lab/homebrew-tap) builds from a
+checksum-verified source archive. Command Line Tools are enough; Xcode is not
+required. It also installs `vibra --query` for scripts.
+
+Quit an older Vibra copy before launching the Homebrew app. Homebrew does not
+replace `/Applications/Vibra.app` or update login items. This build is ad-hoc
+signed and not notarized. See the tap's [migration and signing notes](https://github.com/silex-ai-lab/homebrew-tap#switch-from-a-manual-installation).
+
+Quit Vibra before updating with `brew upgrade silex-ai-lab/tap/vibra` or
+removing it with `brew uninstall silex-ai-lab/tap/vibra`.
+
+#### Manual source build
+
 You need **macOS 14 or later** and a Swift 6 toolchain. **You do not need
 Xcode.** The Command Line Tools are enough:
 
@@ -120,13 +142,11 @@ make uninstall
 
 ### First launch
 
-macOS may warn that the app is from an unidentified developer, because it is
-ad-hoc signed rather than Developer ID signed. Right-click the app in Finder
-and choose **Open** once, or run:
+Vibra is ad-hoc signed rather than Developer ID signed. If macOS blocks it,
+review the app in **System Settings > Privacy & Security** before choosing
+**Open Anyway**. The Homebrew app is at `$(brew --prefix vibra)/Vibra.app`;
+a manual installation is at `/Applications/Vibra.app`.
 
-```sh
-xattr -dr com.apple.quarantine /Applications/Vibra.app
-```
 
 Notifications need one manual step in System Settings, because the app is not
 notarized. See [Troubleshooting](docs/troubleshooting.md#troubleshooting).

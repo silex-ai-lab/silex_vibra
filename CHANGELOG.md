@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Homebrew installation.** The official `silex-ai-lab/tap` provides a source
+  formula for `brew install silex-ai-lab/tap/vibra`. It installs the app in the
+  Homebrew Cellar and adds `vibra --query`. It does not replace manual app
+  installations or change signing and permission requirements.
+
 - **Usage Report: performance suggestions for Claude Code.** Below the totals,
   the report (⌘U and `Vibra --report`) lists up to three patterns that cost
   your sessions the most in the last 7 days (context carried above 200k tokens, cache
