@@ -106,6 +106,8 @@ public struct Session: Identifiable, Codable, Sendable, Equatable {
         }
     }
 
+    public var key: SessionKey { SessionKey(agent: agent, id: id) }
+
     /// What to call the session: its Claude UI title when it has one, else the
     /// project folder.
     public var displayName: String {
