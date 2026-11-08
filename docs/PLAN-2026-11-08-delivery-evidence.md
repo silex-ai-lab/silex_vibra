@@ -216,9 +216,11 @@ third element. `CommandClassifier` splits the script outside quotes.
 - Separators are `&&`, `||`, `;`, `|`, a lone `&` and newline. `2>&1` and `&>`
   are not separators. Text after a heredoc's first newline is ignored.
 - A segment is a check only when its first word, after leading `(`, `VAR=value`,
-  `env`, `time`, `command`, `timeout N`, `npx`, `bunx`, `pnpm exec`, `uv run` and
-  `poetry run`, starts a runner in the table. The first word is compared by
-  basename. A quoted `"make test"` in a commit message is not a check.
+  `env`, `time`, `command`, `timeout N`, `npx`, `bunx`, `pnpm exec`, `do` and
+  `then`, starts a runner in the table. The first word is compared by basename.
+  A quoted `"make test"` in a commit message is not a check. After `uv run` or
+  `poetry run`, any later word may start the runner, because their options can
+  take values (170 real commands use this form).
 - Runners. Test is `swift test`, `make test`, `make check`, `xcodebuild test`,
   `pytest`, `python[3] -m pytest`, `python[3] -m unittest`,
   `npm|pnpm|yarn|bun [run] test`, `vitest`, `jest`, `cargo test`, `go test`.
