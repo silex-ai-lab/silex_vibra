@@ -114,15 +114,48 @@ enum CommandClassifier {
         return name.range(of: #"^python[0-9.]*$"#, options: .regularExpression) != nil ? "python" : name
     }
 
+    private static func delimiter(in chars: [Character], after start: Int) -> String {
+        var i = start
+        while i < chars.count, chars[i] == "-" || chars[i] == " " || chars[i] == "\t" { i += 1 }
+        var word = ""
+        var quote: Character?
+        while i < chars.count {
+            let c = chars[i]
+            if let q = quote {
+                if c == q { quote = nil } else { word.append(c) }
+            } else if c == "'" || c == "\"" {
+                quote = c
+            } else if c.isWhitespace || ";|&<>()".contains(c) {
+                break
+            } else if c != "\\" {
+                word.append(c)
+            }
+            i += 1
+        }
+        return word
+    }
+
+    /// The index just past the delimiter's own line, or the end when it never closes.
+    private static func indexAfterHeredoc(in chars: [Character], from start: Int, delimiter: String) -> Int {
+        var lineStart = start
+        while lineStart < chars.count {
+            let lineEnd = chars[lineStart...].firstIndex(of: "\n") ?? chars.count
+            let line = String(chars[lineStart..<lineEnd]).trimmingCharacters(in: .whitespaces)
+            if line == delimiter { return min(lineEnd + 1, chars.count) }
+            lineStart = lineEnd + 1
+        }
+        return chars.count
+    }
+
     /// Quote-aware, one pass. A heredoc's body is dropped, because it is data
-    /// and not commands.
+    /// and not commands, and parsing resumes after its closing delimiter.
     private static func split(_ script: String) -> [Segment] {
         var segments: [Segment] = []
         var current = Segment()
         var word = ""
         var hasWord = false
         var quote: Character?
-        var heredoc = false
+        var heredocDelimiter: String?
         let chars = Array(script)
         var i = 0
 
@@ -138,7 +171,7 @@ enum CommandClassifier {
             current = Segment()
         }
 
-        scan: while i < chars.count {
+        while i < chars.count {
             let c = chars[i]
             let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
             if let q = quote {
@@ -160,8 +193,12 @@ enum CommandClassifier {
             case " ", "\t":
                 endWord()
             case "\n":
-                if heredoc { break scan }
                 endSegment(.newline)
+                if let delimiter = heredocDelimiter {
+                    heredocDelimiter = nil
+                    i = indexAfterHeredoc(in: chars, from: i + 1, delimiter: delimiter)
+                    continue
+                }
             case ";":
                 endSegment(.semicolon)
             case "|":
@@ -173,7 +210,9 @@ enum CommandClassifier {
                 else if next == ">" || previous == ">" || previous == "<" { word.append(c); hasWord = true }
                 else { endSegment(.background) }
             case "<":
-                if next == "<", i + 2 >= chars.count || chars[i + 2] != "<" { heredoc = true }
+                if next == "<", i + 2 >= chars.count || chars[i + 2] != "<" {
+                    heredocDelimiter = delimiter(in: chars, after: i + 2)
+                }
                 word.append(c)
                 hasWord = true
             default:

@@ -216,7 +216,8 @@ days of transcripts.
 third element. `CommandClassifier` splits the script outside quotes.
 
 - Separators are `&&`, `||`, `;`, `|`, a lone `&` and newline. `2>&1` and `&>`
-  are not separators. Text after a heredoc's first newline is ignored.
+  are not separators. A heredoc's body is ignored, and parsing resumes after its
+  closing delimiter.
 - A segment is a check only when its first word, after leading `(`, `VAR=value`,
   `env`, `time`, `command`, `timeout N`, `npx`, `bunx`, `pnpm exec`, `do` and
   `then`, starts a runner in the table. The first word is compared by basename.
@@ -244,6 +245,10 @@ third element. `CommandClassifier` splits the script outside quotes.
 | Visible, non-zero | any | `failed(.exitStatus)` |
 | Masked | any | Runner summary, else `unknown` |
 | No result record | none | `unknown` |
+
+The last output line that matches a runner summary decides, and on that line
+failure beats pass. A pass after an earlier failure line is `unknown`, because
+output can quote a failure, as one real test run's own test names did.
 
 A masked non-zero status is not a failure. `swift test | grep FAIL` exits 1 when
 nothing failed. A Claude Code result that begins "The user doesn't want to

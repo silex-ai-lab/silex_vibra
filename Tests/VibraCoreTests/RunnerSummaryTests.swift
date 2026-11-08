@@ -44,6 +44,15 @@ struct RunnerSummaryTests {
         #expect(RunnerSummary.verdict(outputTail: tail) == false)
     }
 
+    @Test func aPassAfterAQuotedFailureIsUndecided() {
+        let tail = "Test case \"Test run with 12 tests failed\" started.\nTest run with 380 tests in 49 suites passed."
+        #expect(RunnerSummary.verdict(outputTail: tail) == nil)
+    }
+
+    @Test func aFailureOnTheLastSummaryLineIsAFailure() {
+        #expect(RunnerSummary.verdict(outputTail: "Build complete!\nmake: *** [test] Error 1") == false)
+    }
+
     @Test func onlyTheTailIsRead() {
         let early = "Test run with 4 tests in 1 suites failed with 1 issue.\n"
         let filler = String(repeating: "x", count: RunnerSummary.tailBytes + 100)

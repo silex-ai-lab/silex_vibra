@@ -17,6 +17,20 @@ struct CommandClassifierTests {
         #expect(classify(script)?.exitVisible == true)
     }
 
+    @Test(arguments: [
+        "python3 - <<'EOF'\nprint(1)\nEOF\nswift test",
+        "cat <<-EOF\n\tswift build\n\tEOF\nswift test",
+        "cat <<\"A B\"\nx\nA B\nswift test",
+    ])
+    func parsingResumesAfterAHeredoc(script: String) {
+        #expect(classify(script)?.kind == .test)
+        #expect(classify(script)?.exitVisible == true)
+    }
+
+    @Test func anUnterminatedHeredocSwallowsTheRest() {
+        #expect(classify("cat <<EOF\nswift test") == nil)
+    }
+
     @Test func aRunWrapperAroundAnotherProgramIsNotACheck() {
         #expect(classify("uv run script.py") == nil)
     }

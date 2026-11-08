@@ -33,7 +33,7 @@ PM = {"npm", "pnpm", "yarn", "bun"}
 
 def split_script(script):
     """[(segment, separator after it)], splitting outside quotes."""
-    out, cur, i, quote, n, heredoc = [], [], 0, None, len(script), False
+    out, cur, i, quote, n, heredoc = [], [], 0, None, len(script), None
 
     def flush(sep):
         text = "".join(cur).strip()
@@ -61,8 +61,9 @@ def split_script(script):
             cur.append(ch)
             cur.append(script[i + 1])
             i += 1
-        elif script.startswith("<<", i):
-            heredoc = True
+        elif script.startswith("<<", i) and not script.startswith("<<<", i):
+            m = re.match(r"""<<-?[ \t]*((?:'[^']*'|"[^"]*"|[^\s;|&<>()])*)""", script[i:])
+            heredoc = re.sub(r"""['"\\]""", "", m.group(1))
             cur.append("<<")
             i += 1
         elif script.startswith("&&", i):
@@ -82,8 +83,17 @@ def split_script(script):
                 flush("&")
         elif ch == "\n":
             flush("\n")
-            if heredoc:
-                return out
+            if heredoc is not None:
+                j = i + 1
+                while j < n:
+                    end = script.find("\n", j)
+                    end = n if end < 0 else end
+                    closed = script[j:end].strip(" \t") == heredoc
+                    j = end + 1
+                    if closed:
+                        break
+                i = min(j, n) - 1
+                heredoc = None
         else:
             cur.append(ch)
         i += 1
@@ -179,9 +189,13 @@ def classify(script):
 
 def summary(text):
     tail = text.encode("utf-8", "replace")[-TAIL:].decode("utf-8", "replace")
-    if FAIL.search(tail):
-        return False
-    return True if PASS.search(tail) else None
+    ends_in_pass = False
+    for line in reversed(re.split(r"\r\n|[\n\r\x0b\x0c\x85  ]", tail)):
+        if FAIL.search(line):
+            return None if ends_in_pass else False
+        if PASS.search(line):
+            ends_in_pass = True
+    return True if ends_in_pass else None
 
 
 def when(stamp):

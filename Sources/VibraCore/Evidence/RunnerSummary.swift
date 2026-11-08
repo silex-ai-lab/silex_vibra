@@ -3,8 +3,10 @@ import Foundation
 /// Reads a runner's own summary line from the end of a check's output.
 ///
 /// The two patterns are pinned by a separate oracle in `tools/evidence-oracle`.
-/// Change one only together with the other. Failure is checked first, so a
-/// tail that carries both reads as failed. No match is undecided, never a pass.
+/// Change one only together with the other. The last line that matches decides,
+/// and on that line failure beats pass. A pass after an earlier failure line is
+/// undecided: output can quote a failure (a test named "...failed") or hold two
+/// runs, and neither may be called a pass or a failure on that alone.
 enum RunnerSummary {
     static let tailBytes = 6000
 
@@ -18,12 +20,18 @@ enum RunnerSummary {
         try! NSRegularExpression(pattern: pattern, options: .anchorsMatchLines)
     }
 
+    private static func matches(_ pattern: NSRegularExpression, _ line: String) -> Bool {
+        pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil
+    }
+
     /// true passed, false failed, nil undecided.
     static func verdict(outputTail: String) -> Bool? {
         let tail = String(decoding: Array(outputTail.utf8.suffix(tailBytes)), as: UTF8.self)
-        let range = NSRange(tail.startIndex..., in: tail)
-        if fail.firstMatch(in: tail, range: range) != nil { return false }
-        if pass.firstMatch(in: tail, range: range) != nil { return true }
-        return nil
+        var endsInPass = false
+        for line in tail.split(whereSeparator: \.isNewline).reversed().map(String.init) {
+            if matches(fail, line) { return endsInPass ? nil : false }
+            if matches(pass, line) { endsInPass = true }
+        }
+        return endsInPass ? true : nil
     }
 }

@@ -55,6 +55,7 @@ final class SessionDetailWindowController: NSObject, RenderableWindow {
             "history: \(historyButton.isHidden ? "hidden" : "shown")",
             "route: \(model.map { "\($0.returnRoute)" } ?? "none") live=\(model?.isLive ?? false)",
             "evidence: \(evidenceCaseName)",
+            "grid: \(grid.numberOfRows) rows, \(grid.subviews.count) views",
         ].joined(separator: "\n")
     }
 
@@ -171,7 +172,12 @@ final class SessionDetailWindowController: NSObject, RenderableWindow {
 
     private func renderRows() {
         guard let model else { return }
-        while grid.numberOfRows > 0 { grid.removeRow(at: 0) }
+        // removeRow leaves the cells' views on screen, so they must go first.
+        while grid.numberOfRows > 0 {
+            let row = grid.row(at: 0)
+            for index in 0..<row.numberOfCells { row.cell(at: index).contentView?.removeFromSuperview() }
+            grid.removeRow(at: 0)
+        }
         var rows: [(String, String)] = [
             ("Agent", model.agentName),
             ("Branch", model.branch),
