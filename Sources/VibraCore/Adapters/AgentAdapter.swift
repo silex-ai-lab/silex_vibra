@@ -49,6 +49,13 @@ public protocol AgentAdapter: Sendable {
     /// `HistoryIngest` does not open them at all.
     func historyExtractor() -> (any HistoryExtractor)?
 
+    /// A fresh per-transcript extractor for the Session Details evidence row,
+    /// or nil when this adapter has no transcript Vibra reads for it.
+    func evidenceExtractor() -> (any EvidenceExtractor)?
+
+    /// Every transcript that belongs to `session`: its own and its subagents'.
+    func evidenceSources(for session: Session) -> [URL]
+
     /// Questions from a database store since `cutoff`. History window only.
     func storedQuestions(since cutoff: Date) -> [QuestionRecord]
 
@@ -73,6 +80,12 @@ public extension AgentAdapter {
 
     /// Default: no history.
     func historyExtractor() -> (any HistoryExtractor)? { nil }
+
+    /// Default: no evidence.
+    func evidenceExtractor() -> (any EvidenceExtractor)? { nil }
+
+    /// Default: no evidence transcripts.
+    func evidenceSources(for session: Session) -> [URL] { [] }
 
     /// Default: no stored history.
     func storedQuestions(since cutoff: Date) -> [QuestionRecord] { [] }
