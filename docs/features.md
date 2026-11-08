@@ -1,7 +1,42 @@
 # Features
 
-Everything Vibra does beyond the menu itself. The menu, the five session
-states and the compatibility table are on the [README](../README.md).
+The five session states and the compatibility table are on the
+[README](../README.md). This page covers the menu's structure and everything
+beyond it.
+
+## The menu
+
+The dropdown leads with **Needs You**: every session waiting on you, across all
+agents, approvals before finished turns, longest wait first. **Running** comes
+next (working and stalled), and idle sessions collapse into a **Recent**
+submenu. Each row names the agent, and a waiting row also says how long —
+`needs approval · 4m`, or `your turn · first seen 4m ago` when Vibra did not see
+the turn end. Rows that share a label are told apart by branch, then the last
+two path components, then a short session prefix. A row carries no token count; the tooltip does
+(`Tokens: none reported` when the agent publishes none), and so does the detail
+window.
+
+A row for an agent Vibra cannot return to — OpenCode and Hermes — is not
+disabled: clicking it opens its details.
+
+**Session Details** lists every session in the same order, whatever its state.
+Clicking one opens the detail window: project, agent, branch, state and the
+evidence behind that state, when it was last observed and whether its data
+source is being read normally, tokens, and buttons for **Return to Session**
+(only when a return is possible), **View History** (only for agents whose
+history Vibra reads), **Open Project Folder** and **Copy Path**. A session that
+exits keeps the details it had and says `No longer active`.
+
+When there is nothing to show, the menu says why: `No active sessions` when the
+sources are readable, a list of agents to start when none has state on disk,
+and a notice instead of a claim of inactivity when a source cannot be read.
+
+**Setup…** reopens the first-run window. At first launch it shows what Vibra
+found for each agent (`seen recently`, `no recent sessions` or `no sessions
+yet` — never "not installed"), the notification state with **Enable
+Notifications** and **Send Test**, **Open Notification Settings**, and
+**Launch Vibra at login**. Closing it counts as finishing it, so it does not
+reopen on its own.
 
 ## Usage Report
 

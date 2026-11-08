@@ -151,8 +151,9 @@ Homebrew 版本位于 `$(brew --prefix vibra)/Vibra.app`，手动安装的版本
 
 ### 你的最初两分钟
 
-1. 打开 Vibra。如果你最近 12 小时都没用过 Agent，它会显示
-   `No active sessions`。这是正常的。
+1. 打开 Vibra。**Setup** 窗口会显示在每个 Agent 上发现了什么、通知状态，
+   以及 **Launch Vibra at login** 选项；关闭它，或点击 **Start Using Vibra**。
+   如果你最近 12 小时都没用过 Agent，菜单随后会显示 `No active sessions`。这是正常的。
 2. 在终端里启动一个交互式 **Claude Code** 或 **Codex** 会话，
    给它一个任务。它那一行会显示 🔵 working（工作中）。
 3. 等这一回合结束。该行变为 🟠 your turn（轮到你），菜单栏显示 `1!`。
@@ -175,7 +176,8 @@ Homebrew 版本位于 `$(brew --prefix vibra)/Vibra.app`，手动安装的版本
 会说明是否有夹具测试覆盖）。**—**：从不显示（例如 Codex 和 Hermes 没有批准状态）。
 
 点击某一行时：Claude Code 和 Codex 会跳到终端标签页（iTerm2、Terminal、herdr）或宿主应用，
-VS Code 会跳到对应窗口，Cursor 会被带到前台。OpenCode 和 Hermes 会话无法跳转。
+VS Code 会跳到对应窗口，Cursor 会被带到前台。OpenCode 和 Hermes 会话无法跳转：
+点击这类行会打开它的详情。
 
 ### 颜色代表什么
 

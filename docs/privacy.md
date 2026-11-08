@@ -35,9 +35,21 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   Everything machine-readable stays content-free: `--query`, `--probe`,
   `--dump-sessions` and `--history-stats` print states, counts and project
   names, never message text, and a canary test covers `--history-stats`.
-- The only thing Vibra persists between runs is its three settings, in the
-  `ai.silexlab.vibra` preferences domain. (The `--show-* --snapshot <path>`
-  diagnostics write a PNG where you tell them to.)
+- `--dump-menu`, and the file named by `VIBRA_DEBUG_MENU_DUMP`, carry keys,
+  states and codes only: an agent, a session id, a state, a wait kind and
+  seconds, a click kind, and a failing agent's problem code. Never a title,
+  path or branch. A canary test covers it.
+- Notification bodies name the project, or a scheduled task plus its project;
+  they never carry a title the agent derived from a prompt.
+- The only thing Vibra persists between runs is its four settings, in the
+  `ai.silexlab.vibra` preferences domain: the three thresholds in Settings, and
+  `onboardingCompleted`, the boolean that records the first-run window was
+  closed. (The `--show-* --snapshot <path>` diagnostics write a PNG where you
+  tell them to.)
+- `VIBRA_HOME`, `VIBRA_PREFS_DOMAIN` and `VIBRA_DEBUG_MENU_DUMP` are diagnostic
+  environment overrides: a fixture data tree, a separate preferences domain and
+  a place to write the menu dump. Unset, Vibra uses the real ones and writes no
+  dump.
 - Adapters never log or print raw rows.
 - **The Usage Report's performance suggestions** read, from Claude Code
   transcripts, only each response's ID, token counts, model, timestamp,

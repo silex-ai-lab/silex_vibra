@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **A first-use loop.** The menu now leads with **Needs You** across all agents,
+  then **Running**, with idle sessions in a **Recent** submenu; each row shows
+  the agent, and a waiting row how long it has waited. **Session Details** opens
+  a window for any session with the project, branch, state and the evidence
+  behind it, its data source's health, tokens, and buttons for Return to
+  Session, View History, Open Project Folder and Copy Path. A first-run
+  **Setup** window (reopened by **Setup…**) shows what was found for each agent,
+  the notification state with Enable and Send Test, and Launch at login. A
+  source that cannot be read now shows a `Couldn't read <Agent> data` notice and
+  keeps that agent's sessions listed. Agents and watched roots that appear after
+  launch are discovered without a relaunch.
+- **Changed: notification text uses the project name**, or a scheduled task name
+  plus the project, never a title derived from a prompt.
+- **Removed: the per-row token count.** Tokens are in the row's tooltip and in
+  the detail window, where an unpublished count reads `None reported`.
+
 - **Homebrew installation.** The official `silex-ai-lab/tap` provides a source
   formula for `brew install silex-ai-lab/tap/vibra`. It installs the app in the
   Homebrew Cellar and adds `vibra --query`. It does not replace manual app
