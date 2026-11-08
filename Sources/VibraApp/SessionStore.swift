@@ -10,8 +10,10 @@ import VibraCore
 /// coalesced rather than stacked.
 @MainActor
 final class SessionStore {
-    private(set) var sessions: [Session] = []
+    private(set) var snapshot = StatusSnapshot()
+    var sessions: [Session] { snapshot.sessions }
 
+    private var attentionClock = AttentionClock()
     private let ingest: SessionIngest
     private let settingsStore: any SettingsStore
 
@@ -39,9 +41,10 @@ final class SessionStore {
     private var isRefreshing = false
     private var refreshRequested = false
 
-    /// Called whenever the session list changes, with the previous list so
-    /// callers can detect transitions (e.g. into `awaitingInput`).
-    var onChange: (([Session], [Session]) -> Void)?
+    /// Called whenever the snapshot changes, with the previous sessions so
+    /// callers can detect transitions (e.g. into `awaitingInput`). A change of
+    /// source health alone calls this with `previous` equal to the sessions.
+    var onChange: (([Session], StatusSnapshot) -> Void)?
 
     /// Sessions untouched for longer than the activity window (a setting,
     /// 12 h by default) are not shown at all. Without it the list is every
@@ -136,6 +139,7 @@ final class SessionStore {
         // The read happens on the ingest actor; only the finished snapshot
         // crosses back to the main actor.
         let raw = await ingest.refresh()
+        let health = await ingest.health
         let fresh = await LiveSessions.snapshot(
             raw: raw,
             settings: settings,
@@ -143,10 +147,16 @@ final class SessionStore {
             desktopIndex: desktopIndex
         )
 
-        guard fresh != sessions else { return }
-        let previous = sessions
-        sessions = fresh
-        onChange?(previous, fresh)
+        var next = snapshot
+        next.health = health
+        if fresh != snapshot.sessions {
+            next.sessions = fresh
+            next.attention = attentionClock.advance(to: fresh, now: Date())
+        }
+        guard next != snapshot else { return }
+        let previous = snapshot.sessions
+        snapshot = next
+        onChange?(previous, next)
     }
 
     /// Bytes read from disk during the most recent refresh. Zero on a refresh

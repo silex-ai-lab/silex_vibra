@@ -42,6 +42,37 @@ final class UserNotificationSink: NotificationSink {
         }
     }
 
+    /// Whether macOS will show Vibra's notifications, as the setup window words it.
+    @MainActor func authorizationSummary() async -> NotificationAuthorization {
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral: return .allowed
+        case .denied: return .denied
+        case .notDetermined: return .notAsked
+        @unknown default: return .notAsked
+        }
+    }
+
+    /// Asks macOS. The answer may be a refusal: see `requestAuthorizationIfNeeded`.
+    @MainActor func requestAuthorization() async -> NotificationAuthorization {
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        return await authorizationSummary()
+    }
+
+    /// False when macOS refused to take the notification.
+    @MainActor func deliverTest() async -> Bool {
+        let content = UNMutableNotificationContent()
+        content.title = "Vibra"
+        content.body = "Test notification. This is how Vibra tells you a session is waiting."
+        let request = UNNotificationRequest(identifier: "vibra.setup.test", content: content, trigger: nil)
+        do {
+            try await center.add(request)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func deliver(_ notification: AttentionNotification) {
         let content = UNMutableNotificationContent()
         content.title = notification.title
@@ -89,6 +120,10 @@ final class UserNotificationSink: NotificationSink {
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: stale)
         }
     }
+}
+
+enum NotificationAuthorization: Sendable, Equatable {
+    case allowed, denied, notAsked
 }
 
 /// Separate from the sink so it can be `Sendable`: the notification center

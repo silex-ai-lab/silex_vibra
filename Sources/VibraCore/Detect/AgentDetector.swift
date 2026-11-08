@@ -60,12 +60,4 @@ public struct AgentDetector: Sendable {
             lastActivity: sources.map(\.modified).max()
         )
     }
-
-    /// Adapters worth polling: those with state on disk.
-    ///
-    /// Absent agents are dropped rather than polled and skipped, so supporting
-    /// an agent nobody has installed costs nothing at runtime.
-    public func activeAdapters() -> [any AgentAdapter] {
-        adapters.filter { $0.isAvailable }
-    }
 }

@@ -7,13 +7,13 @@ import VibraCore
 /// sentence. Detail belongs in the dropdown, where it costs the user a click
 /// they chose to spend.
 @MainActor
-final class MenuBarController {
+final class MenuBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let store: SessionStore
     private let notchOverlay: NotchOverlay?
-    private lazy var reportWindow = ReportWindowController(adapters: AdapterRegistry.detected())
+    private lazy var reportWindow = ReportWindowController(adapters: AdapterRegistry.all())
     private lazy var historyWindow = HistoryWindowController(
-        adapters: AdapterRegistry.detected(),
+        adapters: AdapterRegistry.all(),
         liveSession: { [weak self] id in self?.store.sessions.first { $0.id == id } }
     )
     private lazy var settingsWindow: SettingsWindowController = {
@@ -24,6 +24,18 @@ final class MenuBarController {
         return controller
     }()
     private let notificationSink = UserNotificationSink()
+    private lazy var setupWindow: SetupWindowController = {
+        SetupWindowController(sink: notificationSink, detections: AdapterRegistry.detections)
+    }()
+    private lazy var detailWindow = SessionDetailWindowController(
+        onReturn: { [weak self] session in
+            guard let self else { return }
+            self.explainFailure(TerminalJumper.jump(to: session), for: session)
+        },
+        onHistory: { [weak self] session in
+            self?.historyWindow.show(sessionID: session.id, notice: nil)
+        }
+    )
     private lazy var notifier = AttentionNotifier(sink: notificationSink)
     private var hasBaseline = false
 
@@ -32,24 +44,36 @@ final class MenuBarController {
         // nil on a machine with no notch - the whole feature no-ops rather
         // than drawing a floating panel where no notch exists.
         self.notchOverlay = NotchOverlay.makeIfSupported()
+        super.init()
     }
 
     func start() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        let menu = NSMenu()
+        menu.delegate = self
+        item.menu = menu
         statusItem = item
 
-        // Ask once, up front. Delivery is not guaranteed for an ad-hoc signed
-        // bundle, so a refusal here must not be fatal - the menu bar still
-        // shows everything the notification would have said.
-        notificationSink.requestAuthorizationIfNeeded()
+        // Delivery is not guaranteed for an ad-hoc signed bundle, so a refusal
+        // here must not be fatal - the menu bar still shows everything the
+        // notification would have said. Until setup has run it owns the ask.
+        if FirstRun.isComplete() {
+            notificationSink.requestAuthorizationIfNeeded()
+        }
         notificationSink.onClick { [weak self] sessionID, key in
             self?.jumpFromNotification(sessionID: sessionID, key: key)
         }
 
-        store.onChange = { [weak self] previous, sessions in
+        store.onChange = { [weak self] previous, snapshot in
             guard let self else { return }
+            let sessions = snapshot.sessions
             self.render(sessions)
+            self.detailWindow.update(snapshot: snapshot)
+            self.writeDebugDump(snapshot)
+            // A health-only change says nothing about any session. Passing it
+            // through would also spend the baseline below on an empty list.
+            guard previous != sessions else { return }
             self.notchOverlay?.update(sessions: sessions)
             // The first snapshot is a baseline, not a transition. Diffed
             // against an empty list, every session that was already waiting -
@@ -64,6 +88,40 @@ final class MenuBarController {
         }
         render(store.sessions)
         store.start()
+        if !FirstRun.isComplete() { setupWindow.show() }
+    }
+
+    /// Rebuilt when the menu opens, so wait times are current then and a
+    /// refresh does not rebuild a menu nobody is looking at.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        populate(menu)
+    }
+
+    /// Env-guarded and content-free: see `SessionMenuModel.diagnosticLines`.
+    private func writeDebugDump(_ snapshot: StatusSnapshot) {
+        guard let path = ProcessInfo.processInfo.environment["VIBRA_DEBUG_MENU_DUMP"],
+              !path.isEmpty else { return }
+        let now = Date()
+        let lines = SessionMenuModel.build(snapshot, now: now).diagnosticLines(snapshot, now: now)
+        try? (lines.joined(separator: "\n") + "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
+
+    /// `--menu-check`: builds the real menu, invokes its first Session Details
+    /// item and reports whether the detail window opened for that session.
+    func runMenuCheck() -> Bool {
+        let menu = NSMenu()
+        populate(menu)
+        let details = menu.items.first { $0.title == Self.detailsTitle }?.submenu
+        guard let details, details.numberOfItems > 0,
+              let session = details.items[0].representedObject as? Session else {
+            print("menu-check: no Session Details item")
+            return false
+        }
+        details.performActionForItem(at: 0)
+        let visible = detailWindow.windowIsVisible
+        let matches = detailWindow.showing == session.key
+        print("menu-check: details items \(details.numberOfItems), window visible \(visible), shows clicked session \(matches)")
+        return visible && matches
     }
 
     /// Clears Vibra's own delivered notifications on the way out.
@@ -76,9 +134,7 @@ final class MenuBarController {
     }
 
     private func render(_ sessions: [Session]) {
-        guard let item = statusItem else { return }
-        item.button?.title = summaryTitle(sessions)
-        item.menu = buildMenu(sessions)
+        statusItem?.button?.title = summaryTitle(sessions)
     }
 
     /// e.g. "Vibra 2▶ 1!"  - working count, then attention count.
@@ -92,32 +148,56 @@ final class MenuBarController {
         return parts.isEmpty ? "Vibra" : parts.joined(separator: " ")
     }
 
-    private func buildMenu(_ sessions: [Session]) -> NSMenu {
-        let menu = NSMenu()
+    private static let detailsTitle = "Session Details"
 
-        if sessions.isEmpty {
-            let empty = NSMenuItem(title: "No active sessions", action: nil, keyEquivalent: "")
+    private func populate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let snapshot = store.snapshot
+        let model = SessionMenuModel.build(snapshot, now: Date())
+        let byKey = Dictionary(
+            snapshot.sessions.map { ($0.key, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        if let message = model.emptyMessage {
+            let empty = NSMenuItem(title: message, action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
-        } else {
-            // Attention-needing sessions float to the top: the entire point of
-            // the app is surfacing the one that is waiting on you.
-            let ordered = sessions.sorted { lhs, rhs in
-                if lhs.state.needsAttention != rhs.state.needsAttention {
-                    return lhs.state.needsAttention
-                }
-                return lhs.lastActivity > rhs.lastActivity
+        }
+        for notice in model.notices {
+            let item = NSMenuItem(title: "⚠︎ \(notice)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        }
+        if model.emptyMessage != nil || !model.notices.isEmpty { menu.addItem(.separator()) }
+
+        for section in model.sections {
+            switch section.kind {
+            case .needsYou, .running:
+                let name = section.kind == .needsYou ? "Needs You" : "Running"
+                menu.addItem(sectionHeader("\(name) · \(section.rows.count)"))
+                for row in section.rows { menu.addItem(item(for: row, in: byKey)) }
+            case .recent:
+                let holder = NSMenuItem(title: "Recent · \(section.rows.count)", action: nil, keyEquivalent: "")
+                let submenu = NSMenu()
+                for row in section.rows { submenu.addItem(item(for: row, in: byKey)) }
+                holder.submenu = submenu
+                menu.addItem(holder)
             }
-            for group in AgentKind.allCases {
-                let inGroup = ordered.filter { $0.agent == group }
-                guard !inGroup.isEmpty else { continue }
-                menu.addItem(sectionHeader("\(group.displayName) · \(inGroup.count)"))
-                for session in inGroup { menu.addItem(row(for: session)) }
-                menu.addItem(.separator())
-            }
+            menu.addItem(.separator())
         }
 
-        menu.addItem(.separator())
+        if !model.detailRows.isEmpty {
+            let holder = NSMenuItem(title: Self.detailsTitle, action: nil, keyEquivalent: "")
+            let submenu = NSMenu()
+            for row in model.detailRows {
+                submenu.addItem(item(for: row, in: byKey, action: #selector(openDetails(_:))))
+            }
+            holder.submenu = submenu
+            menu.addItem(holder)
+            menu.addItem(.separator())
+        }
+
         let report = NSMenuItem(title: "Usage Report…", action: #selector(showReport), keyEquivalent: "u")
         report.target = self
         menu.addItem(report)
@@ -127,10 +207,12 @@ final class MenuBarController {
         let settings = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
+        let setup = NSMenuItem(title: "Setup…", action: #selector(showSetup), keyEquivalent: "")
+        setup.target = self
+        menu.addItem(setup)
         menu.addItem(NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r"))
         menu.items.last?.target = self
         menu.addItem(NSMenuItem(title: "Quit Vibra", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        return menu
     }
 
     private func sectionHeader(_ title: String) -> NSMenuItem {
@@ -146,34 +228,28 @@ final class MenuBarController {
         return item
     }
 
-    private func row(for session: Session) -> NSMenuItem {
-        let tokens = session.usage.total
-        let tokenText = tokens >= 1000 ? "\(tokens / 1000)k tok" : "\(tokens) tok"
-        let label = "\(dot(session.state)) \(session.displayName) · \(stateText(session.state)) · \(tokenText)"
-        // An agent that publishes no session->process link (OpenCode, Hermes)
-        // can never be jumped to. Its row carries no action, so it renders
-        // gray and a click cannot repeat the failure an alert would report
-        // every time; the tooltip says why instead.
-        let jumpable = ProcessLocator.canJump(session.agent)
+    private func item(
+        for row: MenuRow,
+        in sessions: [SessionKey: Session],
+        action explicit: Selector? = nil
+    ) -> NSMenuItem {
+        let session = sessions[row.key]
+        let action = explicit ?? (row.click == .returnToSession
+            ? #selector(jumpToSession(_:)) : #selector(openDetails(_:)))
         let item = NSMenuItem(
-            title: label,
-            action: jumpable ? #selector(jumpToSession(_:)) : nil,
+            title: session.map { "\(dot($0.state)) \(row.title)" } ?? row.title,
+            action: action,
             keyEquivalent: ""
         )
-        item.isEnabled = jumpable
         item.target = self
         item.representedObject = session
-        let action: String
-        if session.desktopSessionID != nil {
-            action = "Click to open it in Claude."
-        } else if jumpable {
-            action = "Click to open its window, or view its history if the window can't be found."
-        } else {
-            action = "\(session.agent.displayName) publishes no link between its "
-                + "session and its process, so there is no tab to focus."
-        }
-        item.toolTip = "\(session.cwd)\n\(session.model ?? "unknown model")\n\n\(action)"
+        item.toolTip = row.tooltip
         return item
+    }
+
+    @objc private func openDetails(_ sender: NSMenuItem) {
+        guard let session = sender.representedObject as? Session else { return }
+        detailWindow.show(session: session, snapshot: store.snapshot)
     }
 
     /// Clicking a row focuses the terminal the session runs in.
@@ -207,12 +283,12 @@ final class MenuBarController {
             return
         }
         // An agent that publishes no session->process link (OpenCode, Hermes)
-        // can never be jumped to. The banner pointed at a real waiting
-        // session, so the click clears it — and every other dead end beside
-        // it — without repeating an alert whose text would never change.
-        guard ProcessLocator.canJump(session.agent) else {
+        // has nothing to return to, so the click shows what Vibra knows about
+        // the session, and clears this and every other dead end beside it.
+        guard ReturnRoute.of(session) != .none else {
             notifier.dismiss(key: key)
             _ = dismissDeadEndNotifications()
+            detailWindow.show(session: session, snapshot: store.snapshot)
             return
         }
         let outcome = TerminalJumper.jump(to: session)
@@ -328,19 +404,10 @@ final class MenuBarController {
         }
     }
 
-    private func stateText(_ state: SessionState) -> String {
-        switch state {
-        case .working: "working"
-        case .awaitingInput: "your turn"
-        case .blocked: "needs approval"
-        case .stalled: "stalled"
-        case .idle: "idle"
-        }
-    }
-
     @objc private func refreshNow() { Task { await store.requestRefresh() } }
 
     @objc private func showReport() { reportWindow.show() }
     @objc private func showHistory() { historyWindow.show() }
     @objc private func showSettings() { settingsWindow.show() }
+    @objc private func showSetup() { setupWindow.show() }
 }
