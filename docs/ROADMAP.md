@@ -29,6 +29,7 @@ Current state: see [STATUS.md](STATUS.md).
 | 4 | P4.3 Attention-rule settings | **Done** 2026-09-26 |
 | 4 | P4.4 Hermes adapter | **Done** 2026-09-26 (states fixture-only) |
 | 4 | P4.5 OpenClaw adapter | **Deferred** — not installed here; would be a guessed format |
+| 4 | P4.6 Code checks in Session Details | **Done** 2026-11-08, [plan](PLAN-2026-11-08-delivery-evidence.md) |
 | 3 | P3.1 Developer ID signing | Blocked on a user decision |
 | 3 | P3.2 Sparkle auto-update | Not started |
 | 3 | P3.3 Homebrew cask | Not started |

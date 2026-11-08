@@ -10,7 +10,7 @@ rules, because both sides follow docs/PLAN-2026-11-08-delivery-evidence.md.
 --agreement instead compares the runner summary with the real exit status, on
 checks whose exit status is visible.
 """
-import collections, glob, json, os, re, sys, time
+import collections, glob, json, os, re, shlex, sys, time
 from datetime import datetime
 
 FAIL = re.compile(
@@ -92,10 +92,16 @@ def split_script(script):
 
 
 def runner(segment):
-    toks = [t.rstrip(")") for t in segment.lstrip("( ").split()]
+    try:
+        toks = shlex.split(segment, comments=True)
+    except ValueError:
+        toks = segment.split()
+    toks = [t.rstrip(")") for t in toks]
     while toks:
         head = toks[0]
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", head) or head in ("env", "time", "command", "npx", "bunx", "do", "then"):
+        if head.startswith("("):
+            toks = ([head.lstrip("(")] if head.lstrip("(") else []) + toks[1:]
+        elif re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", head) or head in ("env", "time", "command", "npx", "bunx", "do", "then"):
             toks = toks[1:]
         elif head == "timeout" and len(toks) > 1:
             toks = toks[2:]

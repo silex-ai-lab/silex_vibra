@@ -177,8 +177,10 @@ Each step ends in a check and a commit on `feat/delivery-evidence`, cut from
 1. `make test SWIFT_BUILD_SYSTEM=native` passes with all three canaries.
 2. A masked check is never reported as passed on exit status. Mutation check:
    removing the masking rule makes a test fail.
-3. Through `--evidence-stats` on real data, no check with a known exit status
-   gets the opposite verdict. Today's figure is 0 of 27 from the probe.
+3. On real data, no check with a known exit status gets the opposite verdict
+   from its runner summary. Measured by `evidence_oracle.py --agreement` after
+   the classifier was anchored: 27 such checks, 6 decided, 0 wrong. That sample
+   is small. The earlier 0 of 27 decided came from a looser probe.
 4. Swift and oracle counts agree, or each difference has a stated cause.
 5. `make bench` still reports zero bytes on a warm refresh, so the poll path is
    untouched.

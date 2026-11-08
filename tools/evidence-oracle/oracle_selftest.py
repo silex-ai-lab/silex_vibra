@@ -37,6 +37,8 @@ cases = [
     ("uv run --with x --python 3.12 pytest -q", ("test", True)),
     ("timeout 600 uv run --extra dev python -m pytest", ("test", True)),
     ("uv run script.py", None),
+    ("A='x y' uv run --q pytest", ("test", True)),
+    ("time (A=1 python -m unittest x | tail -1)", ("test", False)),
     ("for x in a; do swift test; done", ("test", False)),
     ("cat x | pytest", None),
     ("make bench", None),

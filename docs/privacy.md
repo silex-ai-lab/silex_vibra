@@ -30,6 +30,15 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   does runs only for the History window, and a test proves the status path
   never prepares it. A canary in a message row, the system prompt, `.env` and
   `auth.json` appears in no session, no `--query` output and no error.
+- **Code checks in Session Details read commands and check output, and show
+  neither.** For Claude Code and Codex, when you open a session's details Vibra
+  reads that session's transcripts, its subagents' included. It looks at shell
+  command text, the paths of edited files and the last 6 KB of output from test,
+  build and lint commands. Each is reduced in memory to a kind, a result and a
+  timestamp, then dropped. Nothing is written. A canary test
+  (`evidenceSentinelsNeverLeak`) plants a sentinel in a command, a path and tool
+  output for both agents and asserts it reaches no result, row text or
+  `--evidence-stats` output. `make test` fails if that test did not run.
 - **History is the one feature that shows what you typed.** It reads on demand,
   keeps the text in memory only while its window is open, and writes nothing.
   Everything machine-readable stays content-free: `--query`, `--probe`,
