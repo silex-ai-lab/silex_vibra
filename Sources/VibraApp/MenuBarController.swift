@@ -27,6 +27,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private lazy var setupWindow: SetupWindowController = {
         SetupWindowController(sink: notificationSink, detections: AdapterRegistry.detections)
     }()
+    private let evidenceIngest: EvidenceIngest
     private lazy var detailWindow = SessionDetailWindowController(
         onReturn: { [weak self] session in
             guard let self else { return }
@@ -34,13 +35,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         },
         onHistory: { [weak self] session in
             self?.historyWindow.show(sessionID: session.id, notice: nil)
-        }
+        },
+        evidence: { [weak self] session in await self?.readEvidence(for: session) ?? nil }
     )
     private lazy var notifier = AttentionNotifier(sink: notificationSink)
     private var hasBaseline = false
 
     init(store: SessionStore) {
         self.store = store
+        self.evidenceIngest = EvidenceIngest(adapters: AdapterRegistry.all())
         // nil on a machine with no notch - the whole feature no-ops rather
         // than drawing a floating panel where no notch exists.
         self.notchOverlay = NotchOverlay.makeIfSupported()
@@ -245,6 +248,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         item.representedObject = session
         item.toolTip = row.tooltip
         return item
+    }
+
+    private func readEvidence(for session: Session) async -> DeliveryEvidence? {
+        await evidenceIngest.evidence(for: session)
     }
 
     @objc private func openDetails(_ sender: NSMenuItem) {

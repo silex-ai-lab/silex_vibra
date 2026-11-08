@@ -546,8 +546,14 @@ func detailDiagnostic(sessionID: String?) -> any RenderableWindow {
     if CommandLine.arguments.contains("--vanished") {
         snapshot.sessions.removeAll { $0.key == session.key }
     }
-    let controller = SessionDetailWindowController(onReturn: { _ in }, onHistory: { _ in })
+    let ingest = EvidenceIngest(adapters: AdapterRegistry.all())
+    let controller = SessionDetailWindowController(
+        onReturn: { _ in }, onHistory: { _ in }, evidence: { await ingest.evidence(for: $0) })
     controller.prepare(session: session, snapshot: snapshot)
+    let deadline = Date().addingTimeInterval(120)
+    while !controller.evidenceSettled && Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
     return controller
 }
 

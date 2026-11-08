@@ -13,6 +13,7 @@ public struct SessionDetailModel: Sendable, Equatable {
     public let returnRoute: ReturnRoute
     public let isLive: Bool
     public let historyAvailable: Bool
+    public let evidenceAvailable: Bool
 
     public static func build(
         session: Session,
@@ -37,7 +38,8 @@ public struct SessionDetailModel: Sendable, Equatable {
             cwd: session.cwd,
             returnRoute: ReturnRoute.of(session),
             isLive: isLive,
-            historyAvailable: HistoryCoverage.agents.contains(session.agent)
+            historyAvailable: HistoryCoverage.agents.contains(session.agent),
+            evidenceAvailable: EvidenceCoverage.agents.contains(session.agent)
         )
     }
 

@@ -118,4 +118,11 @@ struct SessionDetailModelTests {
         #expect(hermes.returnRoute == .none)
         #expect(hermes.historyAvailable)
     }
+
+    @Test func codeChecksRowIsOfferedOnlyForAgentsWithAnExtractor() {
+        #expect(build(session(agent: .claudeCode)).evidenceAvailable)
+        #expect(build(session(agent: .codex)).evidenceAvailable)
+        #expect(build(session(agent: .openCode)).evidenceAvailable == false)
+        #expect(build(session(agent: .hermes)).evidenceAvailable == false)
+    }
 }
