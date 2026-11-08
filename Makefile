@@ -30,7 +30,7 @@ TEST_BUILD_FLAGS := $(if $(SWIFT_BUILD_SYSTEM),--build-system $(SWIFT_BUILD_SYST
 
 # Each privacy canary is checked by its exact Swift Testing line, so a renamed
 # or deleted canary fails the run instead of being matched by a substring.
-CANARIES := canaryTokenNeverLeaks perfPrivacySentinelsNeverLeak
+CANARIES := canaryTokenNeverLeaks perfPrivacySentinelsNeverLeak evidenceSentinelsNeverLeak
 
 # NOT `swift test`. On a machine without Xcode, SwiftPM builds the suite as an
 # .xctest bundle it cannot execute: it prints "Build complete!", runs ZERO
