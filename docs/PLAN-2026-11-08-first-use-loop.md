@@ -1,6 +1,6 @@
 # Plan: first-use loop (Milestone A of the external improvement plan)
 
-Date: 2026-11-08. Status: plan v0.4, plan gate passed, implementing.
+Date: 2026-11-08. Status: plan v0.4, implemented, code gate passed on diff revision 905be7c.
 
 Source under review: an external model's plan (`Silex_Vibra_Improvement_Plan.md`, copied to
 `$SCRATCH/gpt-plan.md`), written from static reading of `b14ecf0`.
@@ -387,3 +387,141 @@ Round 4 was void. The patch script failed before writing, so both seats reviewed
 rejected it for that reason. Round 5 re-sent the actual v0.4, bound to its hash.
 
 Review base for the code gate: `b14ecf0fb58dbe3fa03b433ce9e5fea6e064c589`.
+
+## Outcome
+
+Implemented A1 to A5 of the external plan's Milestone A on `feat/first-use-loop`. Not pushed. A6 (signed,
+notarized build) is not done: this machine reports 0 code signing identities and Developer ID is an owner
+decision (`docs/ROADMAP.md:411-423`).
+
+Rounds: plan gate 5 rounds, of which round 4 was void (the patch script failed before writing, so both seats
+reviewed unchanged text). Code gate 3 rounds.
+
+What each seat caught:
+
+- Codex: `AttentionClock` losing non-attention state; health unable to see scanner and adapter failures; stream
+  recreation with an unarmed failure state; root replacement between ticks; P1 and P3 unable to fail; content
+  in diagnostics; a nested unreadable directory aborting the whole listing; a horizon rule that violated the
+  approved sticky-failure text; probes that printed instead of asserting.
+- DeepSeek: per-pass health that vanished; `ReturnTarget` repeating the exactness error; `No coding agents
+  found` asserting what `.absent` cannot support; `open` losing env and reading real data; `lastSuccess` tied
+  to a byte counter the database branch never increments; a control that passed a window longer than the
+  safety timer; `VSCodeAdapter` aborting on one workspace.
+- Planner: FSEvents never delivering for a root absent at stream creation (measured); an empty listing
+  stamping `lastSuccess` every pass.
+
+Verification at the approved revision, in `$SCRATCH/probes-r3.txt` (`GATE=0`): `make test
+SWIFT_BUILD_SYSTEM=native` 308 tests in 41 suites, both canaries. P1 on the running app 0.3 s and 0.02 s
+against a 5 s bound; control a (frozen adapters) and control b (no re-arm) both fail that bound, and control b
+arrives at about 57 s through the safety timer. P3, P2, P4, P5, P7 pass. P6 idle CPU, 3 runs of 60 s against
+`b14ecf0`: base 0.04, 0.07, 0.08 CPU-seconds, new 0.07, 0.08, 0.08, measured before the final two commits,
+which change only failure paths and docs. That difference is inside the 0.01 s sampling of `ps`.
+
+Not verified: the menu was built and its Session Details item invoked by `--menu-check`, but no one clicked
+the real status item in this run. Notification delivery and `SMAppService` registration were only reported
+by status (`notifications are off`, login item `notFound` for the probe copy), not exercised.
+
+Known limits, recorded rather than fixed: a failing source that ages past the horizon stays failing until
+re-read or no longer listed; an unreadable nested directory is skipped without a notice; a click on a
+notification still resolves by bare session id.
+
+Review evidence caveat: Codex's final approval came from a 12 s turn scoped by the planner's follow-up to the
+three round-1 defects, after a first turn that ended with no file. Its only full read of the diff was round 1.
+DeepSeek re-read the full diff at the final revision. The Codex TUI showed `GPT-6-Sol` during the plan gate and
+`GPT-6-Luna` by code gate round 2; the planner did not change it.
+
+### Final verdicts, diff revision 905be7c6e0b5976226dbfad9693b832c60fa61fa, base b14ecf0
+
+- `deepseek-impl-r3`: IMPL-APPROVED
+- `codex-impl-r3`: IMPL-APPROVED
+- PLANNER (claude): IMPL-APPROVED
+
+## Dispatch ledger
+
+The row `impl-note` is a planner mistake (a stray test call) and corresponds to no task. `codex-impl-r2` was
+marked superseded on the belief its send never landed; the seat did receive the later r3 prompt.
+
+```
+2026-11-08T08:43:01Z	deepseek-audit-r1	deepseek	base b14ecf0	sent
+2026-11-08T08:43:20Z	deepseek-audit-r1	deepseek	dialog: external dir SCRATCH	question scratch access
+2026-11-08T08:43:20Z	deepseek-audit-r1	deepseek	dialog: external dir SCRATCH	answered allow once
+2026-11-08T08:43:20Z	deepseek-audit-r1	deepseek	base b14ecf0	delivered
+2026-11-08T08:45:51Z	codex-audit-r1	codex	base b14ecf0	sent
+2026-11-08T08:45:55Z	codex-audit-r1	codex	base b14ecf0	delivered
+2026-11-08T08:48:16Z	codex-audit-r1	codex	base b14ecf0	verdict AUDIT-DONE
+2026-11-08T08:50:19Z	deepseek-audit-r1	deepseek	base b14ecf0	verdict AUDIT-DONE
+2026-11-08T08:54:03Z	deepseek-plan-r1	deepseek	plan v0.1	sent
+2026-11-08T08:54:05Z	codex-plan-r1	codex	plan v0.1	sent
+2026-11-08T08:54:16Z	deepseek-plan-r1	deepseek	plan v0.1	delivered
+2026-11-08T08:54:16Z	codex-plan-r1	codex	plan v0.1	delivered
+2026-11-08T08:57:17Z	codex-plan-r1	codex	plan v0.1	verdict PLAN-REJECTED
+2026-11-08T08:58:32Z	deepseek-plan-r1	deepseek	plan v0.1	verdict PLAN-REJECTED
+2026-11-08T08:59:53Z	deepseek-plan-r2	deepseek	plan v0.2	sent
+2026-11-08T08:59:55Z	codex-plan-r2	codex	plan v0.2	sent
+2026-11-08T09:00:00Z	deepseek-plan-r2	deepseek	plan v0.2	delivered
+2026-11-08T09:00:00Z	codex-plan-r2	codex	plan v0.2	delivered
+2026-11-08T09:01:57Z	codex-plan-r2	codex	plan v0.2	verdict PLAN-REJECTED
+2026-11-08T09:03:57Z	deepseek-plan-r2	deepseek	plan v0.2	verdict PLAN-REJECTED
+2026-11-08T09:03:58Z	deepseek-plan-r3	deepseek	plan v0.3	sent
+2026-11-08T09:03:59Z	codex-plan-r3	codex	plan v0.3	sent
+2026-11-08T09:04:05Z	deepseek-plan-r3	deepseek	plan v0.3	delivered
+2026-11-08T09:04:05Z	codex-plan-r3	codex	plan v0.3	delivered
+2026-11-08T09:05:58Z	codex-plan-r3	codex	plan v0.3	verdict PLAN-APPROVED
+2026-11-08T09:06:26Z	deepseek-plan-r3	deepseek	plan v0.3	verdict PLAN-REJECTED
+2026-11-08T09:06:26Z	deepseek-plan-r4	deepseek	plan v0.4	sent
+2026-11-08T09:06:28Z	codex-plan-r4	codex	plan v0.4	sent
+2026-11-08T09:06:34Z	deepseek-plan-r4	deepseek	plan v0.4	delivered
+2026-11-08T09:06:34Z	codex-plan-r4	codex	plan v0.4	delivered
+2026-11-08T09:07:31Z	deepseek-plan-r4	deepseek	plan v0.3 text, mis-sent as v0.4	superseded
+2026-11-08T09:08:09Z	codex-plan-r4	codex	plan v0.3 text, mis-sent as v0.4	superseded
+2026-11-08T09:08:09Z	deepseek-plan-r5	deepseek	plan v0.4 7e7ff91cb526e6ec	sent
+2026-11-08T09:08:11Z	codex-plan-r5	codex	plan v0.4 7e7ff91cb526e6ec	sent
+2026-11-08T09:08:17Z	deepseek-plan-r5	deepseek	plan v0.4 7e7ff91cb526e6ec	delivered
+2026-11-08T09:08:17Z	codex-plan-r5	codex	plan v0.4 7e7ff91cb526e6ec	delivered
+2026-11-08T09:09:01Z	codex-plan-r5	codex	plan v0.4 7e7ff91c	verdict PLAN-APPROVED
+2026-11-08T09:09:56Z	deepseek-plan-r5	deepseek	plan v0.4 7e7ff91c	verdict PLAN-APPROVED
+2026-11-08T09:11:05Z	planner-task0	planner	build and make test 254 green	done succeeded
+2026-11-08T09:11:05Z	deepseek-task1-a1	deepseek	plan v0.4, base b14ecf0	sent
+2026-11-08T09:11:12Z	deepseek-task1-a1	deepseek	plan v0.4, base b14ecf0	delivered
+2026-11-08T09:22:32Z	deepseek-task1-a1	deepseek	make test native 3/3, 259 tests	done succeeded
+2026-11-08T09:22:33Z	deepseek-task2-a1	deepseek	plan v0.4, base b14ecf0	sent
+2026-11-08T09:22:39Z	deepseek-task2-a1	deepseek	plan v0.4, base b14ecf0	delivered
+2026-11-08T09:32:51Z	deepseek-task2-a1	deepseek	make test native 271 tests; planner fixed empty-listing stamp and horizon clear	done succeeded
+2026-11-08T09:32:52Z	deepseek-task3-a1	deepseek	plan v0.4, base b14ecf0	sent
+2026-11-08T09:32:58Z	deepseek-task3-a1	deepseek	plan v0.4, base b14ecf0	delivered
+2026-11-08T09:36:31Z	deepseek-task3-a1	deepseek	make test native 281 tests	done succeeded
+2026-11-08T09:36:31Z	deepseek-task4-a1	deepseek	plan v0.4, base b14ecf0	sent
+2026-11-08T09:36:38Z	deepseek-task4-a1	deepseek	plan v0.4, base b14ecf0	delivered
+2026-11-08T09:43:04Z	deepseek-task4-a1	deepseek	make test native 306 tests	done succeeded
+2026-11-08T09:44:06Z	deepseek-task5b-a1	deepseek	plan v0.4, base b14ecf0	sent
+2026-11-08T09:44:13Z	deepseek-task5b-a1	deepseek	plan v0.4, base b14ecf0	delivered
+2026-11-08T09:52:44Z	planner-task5	planner	P1-P5 P7 pass, controls fail as predicted; P6 running	done succeeded
+2026-11-08T09:52:44Z	deepseek-task5b-a1	deepseek	fixture: 24 sessions, six agents, P2 pass	done succeeded
+2026-11-08T09:52:45Z	deepseek-task6-a1	deepseek	plan v0.4, base b14ecf0	sent
+2026-11-08T09:52:51Z	deepseek-task6-a1	deepseek	plan v0.4, base b14ecf0	delivered
+2026-11-08T09:56:38Z	deepseek-task6-a1	deepseek	docs spot-checked against source	done succeeded
+2026-11-08T10:00:43Z	deepseek-impl-r1	deepseek	base b14ecf0 rev ea1457c	sent
+2026-11-08T10:00:45Z	codex-impl-r1	codex	base b14ecf0 rev ea1457c	sent
+2026-11-08T10:00:51Z	deepseek-impl-r1	deepseek	base b14ecf0 rev ea1457c	delivered
+2026-11-08T10:00:51Z	codex-impl-r1	codex	base b14ecf0 rev ea1457c	delivered
+2026-11-08T10:03:47Z	codex-impl-r1	codex	base b14ecf0 rev ea1457c	verdict IMPL-REJECTED
+2026-11-08T10:06:30Z	deepseek-impl-r1	deepseek	base b14ecf0 rev ea1457c	verdict IMPL-REJECTED
+2026-11-08T10:07:23Z	impl-note	planner	x	done succeeded
+2026-11-08T10:07:44Z	impl-note	planner	mistaken row, no such task	abandoned
+2026-11-08T10:15:15Z	deepseek-impl-r2	deepseek	base b14ecf0 rev a531ed9	sent
+2026-11-08T10:15:38Z	codex-impl-r2	codex	base b14ecf0 rev a531ed9	sent
+2026-11-08T10:15:44Z	deepseek-impl-r2	deepseek	base b14ecf0 rev a531ed9	delivered
+2026-11-08T10:15:44Z	codex-impl-r2	codex	base b14ecf0 rev a531ed9	delivered
+2026-11-08T10:18:12Z	deepseek-impl-r2	deepseek	base b14ecf0 rev a531ed9	verdict IMPL-APPROVED
+2026-11-08T10:18:12Z	codex-impl-r2	codex	not delivered: Codex composer stayed empty, no turn started	superseded
+2026-11-08T10:22:53Z	deepseek-impl-r3	deepseek	base b14ecf0 rev 905be7c	sent
+2026-11-08T10:23:15Z	codex-impl-r3	codex	base b14ecf0 rev 905be7c	sent
+2026-11-08T10:23:25Z	deepseek-impl-r3	deepseek	base b14ecf0 rev 905be7c	delivered
+2026-11-08T10:24:03Z	codex-impl-r3	codex	base b14ecf0 rev 905be7c	followup one resend: seat ended turn with no reply file
+2026-11-08T10:24:11Z	codex-impl-r3	codex	base b14ecf0 rev 905be7c	delivered
+2026-11-08T10:25:24Z	deepseek-impl-r3	deepseek	base b14ecf0 rev 905be7c	verdict IMPL-APPROVED
+2026-11-08T10:25:24Z	codex-impl-r3	codex	base b14ecf0 rev 905be7c	verdict IMPL-APPROVED
+2026-11-08T10:25:24Z	planner-gate	planner	base b14ecf0 rev 905be7c	done succeeded
+2026-11-08T10:25:24Z	seat:deepseek	deepseek	-	disposition left
+2026-11-08T10:25:24Z	seat:codex	codex	-	disposition left
+```
