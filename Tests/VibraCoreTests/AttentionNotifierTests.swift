@@ -492,4 +492,18 @@ struct AttentionNotifierTests {
         )
         #expect(sink.withdrawnIDs == ["scheduled-task:hourly-sync"])
     }
+
+    @Test func aPromptDerivedTitleNeverReachesTheBody() {
+        let (notifier, sink) = make()
+        let canary = "VIBRA_TITLE_CANARY_MUST_NOT_LEAK"
+        var titled = session("a", .awaitingInput, cwd: "/fake/payments")
+        // OpenCode and Claude UI titles are derived from message text; the
+        // menu's tooltip may show one, a notification must not.
+        titled.title = canary
+        notifier.notifyIfNeeded(previous: [], current: [titled], now: t0)
+
+        let body = sink.delivered.first?.body ?? ""
+        #expect(body == "payments is waiting for you")
+        #expect(!body.contains(canary))
+    }
 }
