@@ -24,6 +24,9 @@ public final class JSONLTreeScanner: @unchecked Sendable {
 
     public init() {}
 
+    /// Throws only when `root` itself exists and cannot be listed. An unreadable
+    /// directory below it is a partial result, so one bad project does not stop
+    /// its siblings from updating.
     public func files(under root: URL) throws -> [URL] {
         lock.lock()
         defer { lock.unlock() }
@@ -47,7 +50,12 @@ public final class JSONLTreeScanner: @unchecked Sendable {
             } else {
                 // Stat before reading: an entry added in between moves the
                 // mtime past the one cached here, so the next scan re-reads.
-                listing = try Self.read(directory, seconds: seconds, nanoseconds: nanoseconds)
+                do {
+                    listing = try Self.read(directory, seconds: seconds, nanoseconds: nanoseconds)
+                } catch {
+                    if directory.path == root.path { throw error }
+                    continue
+                }
                 listings[path] = listing
             }
             files.append(contentsOf: listing.files)

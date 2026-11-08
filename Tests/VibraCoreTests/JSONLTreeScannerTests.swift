@@ -50,7 +50,22 @@ struct JSONLTreeScannerTests {
         #expect(names(try scanner.files(under: root)) == ["one.jsonl"])
     }
 
-    @Test func anUnlistableDirectoryThrowsInsteadOfLookingEmpty() throws {
+    @Test func anUnlistableRootThrowsInsteadOfLookingEmpty() throws {
+        let root = try scratchTree()
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let scanner = JSONLTreeScanner()
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.path)
+
+        #expect(throws: SourceListError.self) { try scanner.files(under: root) }
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
+        #expect(names(try scanner.files(under: root)) == ["one.jsonl", "two.jsonl"])
+    }
+
+    @Test func anUnlistableSubdirectoryIsAPartialResult() throws {
         let root = try scratchTree()
         let locked = root.appendingPathComponent("proj/sub")
         defer {
@@ -60,10 +75,15 @@ struct JSONLTreeScannerTests {
         let scanner = JSONLTreeScanner()
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
 
-        #expect(throws: SourceListError.self) { try scanner.files(under: root) }
+        #expect(names(try scanner.files(under: root)) == ["one.jsonl"])
+
+        // A readable sibling keeps updating beside it.
+        let sibling = root.appendingPathComponent("proj/three.jsonl")
+        try Data("{}\n".utf8).write(to: sibling)
+        #expect(names(try scanner.files(under: root)) == ["one.jsonl", "three.jsonl"])
 
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
-        #expect(names(try scanner.files(under: root)) == ["one.jsonl", "two.jsonl"])
+        #expect(names(try scanner.files(under: root)) == ["one.jsonl", "three.jsonl", "two.jsonl"])
     }
 
     @Test func aMissingRootIsEmptyNotAFailure() throws {

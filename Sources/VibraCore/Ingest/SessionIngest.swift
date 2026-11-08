@@ -125,8 +125,6 @@ public actor SessionIngest {
                 // Skip stale sources without opening them. Cheap: we already
                 // have the mtime from the stat done in sources().
                 if let horizon, now.timeIntervalSince(source.modified) > horizon {
-                    // Never read again, so nothing would ever clear a failure.
-                    clearProblem(for: source.url, of: kind)
                     continue
                 }
                 seen.insert(source.url)

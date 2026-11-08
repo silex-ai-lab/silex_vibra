@@ -153,7 +153,7 @@ Homebrew 版本位于 `$(brew --prefix vibra)/Vibra.app`，手动安装的版本
 
 1. 打开 Vibra。**Setup** 窗口会显示在每个 Agent 上发现了什么、通知状态，
    以及 **Launch Vibra at login** 选项；关闭它，或点击 **Start Using Vibra**。
-   如果你最近 12 小时都没用过 Agent，菜单随后会显示 `No active sessions`。这是正常的。
+   如果你最近 12 小时都没用过 Agent，菜单随后会显示 `No active sessions`；这台 Mac 上还没有任何 Agent 数据时会显示 `No sessions yet`。两者都正常。
 2. 在终端里启动一个交互式 **Claude Code** 或 **Codex** 会话，
    给它一个任务。它那一行会显示 🔵 working（工作中）。
 3. 等这一回合结束。该行变为 🟠 your turn（轮到你），菜单栏显示 `1!`。

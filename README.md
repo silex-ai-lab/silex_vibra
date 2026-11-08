@@ -164,7 +164,8 @@ notarized. See [Troubleshooting](docs/troubleshooting.md#troubleshooting).
 1. Open Vibra. The **Setup** window shows what it found for each agent, the
    notification state, and a **Launch Vibra at login** option; close it, or
    press **Start Using Vibra**. If you have not used an agent in the last 12
-   hours, the menu then reads `No active sessions`. That is expected.
+   hours, the menu then reads `No active sessions`; on a Mac with no agent data
+   yet it reads `No sessions yet`. Both are expected.
 2. In a terminal, start an interactive **Claude Code** or **Codex** session and
    give it a task. Its row shows 🔵 working.
 3. Let the turn finish. The row turns 🟠 your turn and the menu bar shows `1!`.

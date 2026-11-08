@@ -159,7 +159,8 @@ Homebrew 版は `$(brew --prefix vibra)/Vibra.app`、手動インストール版
 1. Vibra を開きます。**Setup** ウィンドウに、各エージェントで見つかったもの、
    通知の状態、**Launch Vibra at login** の選択肢が表示されます。閉じるか
    **Start Using Vibra** を押してください。過去 12 時間にエージェントを使って
-   いなければ、メニューに `No active sessions` と表示されます。これは想定どおりです。
+   いなければ、メニューに `No active sessions` と表示され、この Mac にまだエージェントのデータが
+   なければ `No sessions yet` と表示されます。どちらも想定どおりです。
 2. ターミナルで対話型の **Claude Code** または **Codex** セッションを開始し、
    タスクを与えます。その行に 🔵 working（作業中）と表示されます。
 3. ターンが終わるのを待ちます。行が 🟠 your turn（あなたの番）になり、メニューバーに `1!` と表示されます。
