@@ -52,9 +52,11 @@ enum CommandClassifier {
     /// Wrappers dropped from the front of a segment. A value is how many
     /// words follow the wrapper and go with it.
     private static let wrappers: [String: Int] = [
-        "env": 0, "time": 0, "command": 0, "timeout": 1, "npx": 0, "bunx": 0,
+        "env": 0, "time": 0, "command": 0, "timeout": 1, "npx": 0, "bunx": 0, "do": 0, "then": 0,
     ]
-    private static let wrapperPairs: [[String]] = [["pnpm", "exec"], ["uv", "run"], ["poetry", "run"]]
+    /// Their options can take values (`--with x`), so any later word may start
+    /// the program.
+    private static let runWrappers: [[String]] = [["uv", "run"], ["poetry", "run"]]
 
     static func classify(script: String) -> (kind: CheckKind, exitVisible: Bool)? {
         let segments = split(script)
@@ -63,6 +65,7 @@ enum CommandClassifier {
         var allVisible = true
         for (index, segment) in segments.enumerated() {
             if segment.words.first == "set", segment.words.contains("pipefail") { pipefail = true }
+            if index > 0, segments[index - 1].separator == .pipe { continue }
             guard let kind = checkKind(of: segment.words) else { continue }
             kinds.append(kind)
             let tail = segments[index...].compactMap(\.separator)
@@ -85,15 +88,21 @@ enum CommandClassifier {
             } else if let extra = wrappers[basename(first)] {
                 words.removeFirst(min(words.count, 1 + extra))
                 if first == "npx" || first == "bunx" { while words.first?.hasPrefix("-") == true { words.removeFirst() } }
-            } else if words.count > 1, wrapperPairs.contains([basename(first), words[1]]) {
+            } else if words.count > 1, [basename(first), words[1]] == ["pnpm", "exec"] {
                 words.removeFirst(2)
+            } else if words.count > 1, runWrappers.contains([basename(first), words[1]]) {
+                return words.indices.dropFirst(2).lazy.compactMap { match(Array(words[$0...])) }.first
             } else {
                 break
             }
         }
-        guard let last = words.last else { return nil }
-        words[words.count - 1] = String(last.reversed().drop { $0 == ")" }.reversed())
-        let normalized = [basename(words[0])] + words.dropFirst()
+        return match(words)
+    }
+
+    private static func match(_ rawWords: [String]) -> CheckKind? {
+        let words = rawWords.map { String($0.reversed().drop { $0 == ")" }.reversed()) }
+        guard let first = words.first else { return nil }
+        let normalized = [basename(first)] + words.dropFirst()
         return runners.first { runner in
             normalized.starts(with: runner.prefix)
                 && runner.requires.map { normalized.dropFirst(runner.prefix.count).contains($0) } ?? true
@@ -176,7 +185,9 @@ enum CommandClassifier {
         endWord()
         if !current.words.isEmpty { segments.append(current) }
         while let last = segments.last, last.words.isEmpty { segments.removeLast() }
-        if !segments.isEmpty { segments[segments.count - 1].separator = nil }
+        if let last = segments.last, last.separator != .background {
+            segments[segments.count - 1].separator = nil
+        }
         return segments
     }
 }

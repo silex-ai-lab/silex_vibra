@@ -68,7 +68,7 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
     }
 
     private static let editTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
-    private static let rejection = "The user doesn"
+    private static let rejection = "The user doesn't want to proceed"
 
     private var pending: [String: Pending] = [:]
     private var tracked: Set<String> = []

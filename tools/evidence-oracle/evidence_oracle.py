@@ -307,24 +307,18 @@ def verdict(events, saw):
 
 def claude_sessions(home, cut):
     root = f"{home}/.claude/projects"
-    best = {}
+    groups = collections.defaultdict(list)
     for f in glob.glob(f"{root}/**/*.jsonl", recursive=True):
-        if "subagents" in os.path.relpath(f, root).split(os.sep)[:-1] or os.path.getmtime(f) < cut:
+        if "subagents" in os.path.relpath(f, root).split(os.sep)[:-1]:
             continue
-        sid = None
-        for line in open(f, errors="replace"):
-            try:
-                sid = json.loads(line).get("sessionId")
-            except Exception:
-                continue
-            if sid:
-                break
-        sid = sid or os.path.basename(f)[:-6]
-        if sid not in best or os.path.getmtime(f) > os.path.getmtime(best[sid]):
-            best[sid] = f
-    for sid, f in best.items():
-        stem_dir = os.path.join(os.path.dirname(f), sid, "subagents")
-        yield [f] + sorted(glob.glob(f"{stem_dir}/**/*.jsonl", recursive=True))
+        groups[os.path.basename(f)[:-6]].append(f)
+    for sid, files in groups.items():
+        if max(os.path.getmtime(f) for f in files) < cut:
+            continue
+        subs = []
+        for f in files:
+            subs += glob.glob(os.path.join(os.path.dirname(f), sid, "subagents", "**", "*.jsonl"), recursive=True)
+        yield files + sorted(subs)
 
 
 def first_meta(path):
@@ -339,20 +333,31 @@ def first_meta(path):
     return None
 
 
+def started_at(path):
+    for line in open(path, errors="replace"):
+        try:
+            stamp = json.loads(line).get("timestamp")
+        except Exception:
+            continue
+        if stamp:
+            return when(stamp)
+    return 0.0
+
+
 def codex_sessions(home, cut):
-    roots, children = {}, collections.defaultdict(list)
+    roots, related = {}, collections.defaultdict(list)
     for f in glob.glob(f"{home}/.codex/sessions/**/rollout-*.jsonl", recursive=True):
         meta = first_meta(f)
         if not meta or not meta.get("session_id"):
             continue
         sid = meta["session_id"]
-        if isinstance(meta.get("source"), dict) and "subagent" in meta["source"]:
-            children[sid].append(f)
-        elif os.path.getmtime(f) >= cut:
-            if sid not in roots or os.path.getmtime(f) > os.path.getmtime(roots[sid]):
-                roots[sid] = f
+        related[sid].append(f)
+        is_sub = isinstance(meta.get("source"), dict) and "subagent" in meta["source"]
+        if not is_sub and os.path.getmtime(f) >= cut and (sid not in roots or os.path.getmtime(f) > os.path.getmtime(roots[sid])):
+            roots[sid] = f
     for sid, f in roots.items():
-        yield [f] + sorted(children[sid])
+        start = started_at(f)
+        yield [f] + sorted(x for x in related[sid] if x != f and (x.endswith(f"{sid}.jsonl") or os.path.getmtime(x) >= start))
 
 
 def run(home, days, agreement):

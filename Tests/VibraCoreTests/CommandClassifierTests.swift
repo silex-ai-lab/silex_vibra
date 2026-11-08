@@ -7,6 +7,34 @@ struct CommandClassifierTests {
     }
 
     @Test(arguments: [
+        "uv run --with x --python 3.12 pytest -q",
+        "timeout 600 uv run --extra dev python -m pytest",
+        "poetry run --quiet pytest",
+        "(cd x && swift test) 2>&1",
+    ])
+    func runnersBehindOptionsAndSubshellsAreFound(script: String) {
+        #expect(classify(script)?.kind == .test)
+        #expect(classify(script)?.exitVisible == true)
+    }
+
+    @Test func aRunWrapperAroundAnotherProgramIsNotACheck() {
+        #expect(classify("uv run script.py") == nil)
+    }
+
+    @Test func aLoopBodyIsACheckWithAMaskedExitStatus() {
+        #expect(classify("for x in a; do swift test; done")?.kind == .test)
+        #expect(classify("for x in a; do swift test; done")?.exitVisible == false)
+    }
+
+    @Test func theReceivingSideOfAPipeIsNotACheck() {
+        #expect(classify("cat list | pytest") == nil)
+    }
+
+    @Test func aBackgroundedCheckHasNoVisibleExitStatus() {
+        #expect(classify("swift test &")?.exitVisible == false)
+    }
+
+    @Test(arguments: [
         ("swift test", CheckKind.test), ("make test", .test), ("make check", .test),
         ("xcodebuild test -scheme X", .test), ("pytest -q", .test), ("python3 -m pytest", .test),
         ("python -m unittest", .test), ("npm test", .test), ("pnpm run test", .test),
