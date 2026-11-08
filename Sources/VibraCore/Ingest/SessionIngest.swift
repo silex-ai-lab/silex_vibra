@@ -249,7 +249,12 @@ public actor SessionIngest {
         }
 
         health = currentHealth()
-        return sessions.sorted { $0.lastActivity > $1.lastActivity }
+        // Session ids come from agents' own files, and two files can claim one
+        // id. Everything downstream is keyed by SessionKey, so the newest wins here.
+        var claimed: Set<SessionKey> = []
+        return sessions
+            .sorted { $0.lastActivity > $1.lastActivity }
+            .filter { claimed.insert($0.key).inserted }
     }
 
     /// Discards all cached state. Used when FSEvents reports dropped events

@@ -180,6 +180,9 @@ struct CodexUsageSampler: UsageSampler {
 /// cumulative, so folding REPLACES the stored usage rather than adding to it.
 struct CodexCheckpoint: AdapterCheckpoint {
     var sessionID: String?
+    /// `session_meta.source.subagent`: a thread Codex spawned inside a session.
+    /// Its `session_id` is the root session's, and only its `id` is its own.
+    var isSubagent = false
     var cwd: String?
     var model: String?
     /// `session_meta.originator`: "codex-tui" (interactive CLI), "codex_exec"
@@ -215,7 +218,10 @@ struct CodexCheckpoint: AdapterCheckpoint {
 
         switch type {
         case "session_meta":
-            if sessionID == nil { sessionID = payload["session_id"] as? String }
+            if sessionID == nil {
+                sessionID = payload["session_id"] as? String
+                isSubagent = (payload["source"] as? [String: Any])?["subagent"] != nil
+            }
             if cwd == nil { cwd = payload["cwd"] as? String }
             if model == nil { model = Self.findModel(in: payload) }
             if originator == nil { originator = payload["originator"] as? String }
@@ -239,7 +245,7 @@ struct CodexCheckpoint: AdapterCheckpoint {
     }
 
     func buildSession(agent: AgentKind, fallbackDate: Date) -> Session? {
-        guard let id = sessionID else { return nil }
+        guard let id = sessionID, !isSubagent else { return nil }
 
         let started = earliest ?? fallbackDate
         let last = latest ?? started

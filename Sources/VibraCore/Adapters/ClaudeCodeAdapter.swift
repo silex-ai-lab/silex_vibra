@@ -80,7 +80,9 @@ public struct ClaudeCodeAdapter: AgentAdapter {
             checkpoint.fold(line)
         }
 
-        let session = checkpoint.buildSession(
+        // A subagent transcript carries its parent's session id. It still counts
+        // for usage, but it is not a session anyone can return to.
+        let session = isSubagentSource(source.url) ? nil : checkpoint.buildSession(
             agent: kind,
             fallbackID: source.url.deletingPathExtension().lastPathComponent,
             fallbackDate: source.modified
@@ -119,7 +121,7 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         if let file {
             files = [file]
         } else if let projectsRoot {
-            files = try jsonlFiles(under: projectsRoot)
+            files = try jsonlFiles(under: projectsRoot).filter { !isSubagentSource($0) }
         } else {
             files = []
         }
