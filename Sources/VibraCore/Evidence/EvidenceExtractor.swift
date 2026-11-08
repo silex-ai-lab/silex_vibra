@@ -27,6 +27,16 @@ private let documentationExtensions: Set<String> = [
 ]
 private let scratchPrefixes = ["/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/"]
 
+/// `String.contains` is the hot cost on a 100 MB transcript, so this searches
+/// the UTF-8 bytes directly.
+func lineContains(_ line: String, _ needle: String) -> Bool {
+    var needle = needle
+    return needle.withUTF8 { n in
+        var line = line
+        return line.withUTF8 { memmem($0.baseAddress, $0.count, n.baseAddress, n.count) != nil }
+    }
+}
+
 func isCodePath(_ path: String) -> Bool {
     if scratchPrefixes.contains(where: path.hasPrefix) { return false }
     return !documentationExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased())
@@ -66,8 +76,11 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
 
     mutating func fold(_ lines: [String]) {
         for line in lines {
-            let isUse = line.contains("\"tool_use\"")
-            guard isUse || line.contains("\"tool_result\""),
+            // Most of a transcript's bytes are results of calls that were
+            // never tracked, so a result is parsed only when its id is waiting.
+            guard lineContains(line, "\"tool_use\"")
+                    || (!pending.isEmpty && lineContains(line, "\"tool_result\"")
+                        && pending.keys.contains(where: { lineContains(line, $0) })),
                   let record = jsonObject(line),
                   let blocks = (record["message"] as? [String: Any])?["content"] as? [[String: Any]]
             else { continue }
@@ -142,7 +155,8 @@ struct CodexEvidenceExtractor: EvidenceExtractor {
     private var result = EvidenceFold()
 
     mutating func fold(_ lines: [String]) {
-        for line in lines where line.contains("\"item_completed\"") {
+        for line in lines where lineContains(line, "\"item_completed\"")
+            && (lineContains(line, "\"CommandExecution\"") || lineContains(line, "\"FileChange\"")) {
             guard let record = jsonObject(line),
                   record["type"] as? String == "event_msg",
                   let payload = record["payload"] as? [String: Any],
