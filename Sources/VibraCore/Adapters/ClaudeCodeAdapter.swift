@@ -49,7 +49,7 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         if let file {
             files = [file]
         } else if let projectsRoot {
-            files = scanner.files(under: projectsRoot)
+            files = try scanner.files(under: projectsRoot)
         } else {
             files = []
         }
@@ -436,6 +436,12 @@ func jsonlFiles(under root: URL) throws -> [URL] {
         at: root,
         includingPropertiesForKeys: [.isRegularFileKey]
     ) else {
+        // Nil means the root could not be enumerated. A root that is gone is
+        // not an error; one that is still there is.
+        var info = stat()
+        guard lstat(root.path, &info) != 0 || info.st_mode & S_IFMT != S_IFDIR else {
+            throw SourceListError()
+        }
         return []
     }
     var files: [URL] = []

@@ -81,7 +81,7 @@ struct HermesAdapterTests {
         #expect(turn.usage == TokenUsage(input: 100, output: 20, cacheCreation: 1, cacheRead: 5))
     }
 
-    @Test func schemaMismatchYieldsNothing() throws {
+    @Test func schemaMismatchThrowsAndTheSafeEntryYieldsNothing() throws {
         let dir = testScratchDirectory().appendingPathComponent("hermes-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -92,8 +92,10 @@ struct HermesAdapterTests {
             "CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, finish_reason TEXT, timestamp REAL, is_live INT);",
             "INSERT INTO sessions VALUES ('x','cli','m',1,NULL,'/tmp','main',NULL,0,0,0,0,0,NULL);",
         ])
-        #expect(try HermesAdapter(dbURL: db).discoverSessions().isEmpty)
-        #expect(HermesAdapter(dbURL: db).storedQuestions(since: .distantPast).isEmpty)
+        let adapter = HermesAdapter(dbURL: db)
+        #expect(throws: SourceSchemaError.self) { try adapter.discoverSessions() }
+        #expect(adapter.discoverSessionsSafely().isEmpty)
+        #expect(adapter.storedQuestions(since: .distantPast).isEmpty)
     }
 
     // MARK: - SQL discipline

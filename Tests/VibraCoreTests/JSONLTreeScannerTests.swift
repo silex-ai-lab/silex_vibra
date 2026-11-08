@@ -19,15 +19,15 @@ struct JSONLTreeScannerTests {
         let root = try scratchTree()
         defer { try? FileManager.default.removeItem(at: root) }
         let scanner = JSONLTreeScanner()
-        #expect(names(scanner.files(under: root)) == names(try jsonlFiles(under: root)))
-        #expect(names(scanner.files(under: root)) == ["one.jsonl", "two.jsonl"])
+        #expect(names(try scanner.files(under: root)) == names(try jsonlFiles(under: root)))
+        #expect(names(try scanner.files(under: root)) == ["one.jsonl", "two.jsonl"])
     }
 
     @Test func seesFilesAddedAndRemovedBetweenScans() throws {
         let root = try scratchTree()
         defer { try? FileManager.default.removeItem(at: root) }
         let scanner = JSONLTreeScanner()
-        _ = scanner.files(under: root)
+        _ = try scanner.files(under: root)
 
         // A new transcript in a nested directory, a new directory, and a
         // deletion: each moves only its own parent's mtime.
@@ -37,16 +37,37 @@ struct JSONLTreeScannerTests {
         try Data("e\n".utf8).write(to: root.appendingPathComponent("other/four.jsonl"))
         try FileManager.default.removeItem(at: root.appendingPathComponent("proj/one.jsonl"))
 
-        #expect(names(scanner.files(under: root)) == ["two.jsonl", "three.jsonl", "four.jsonl"])
+        #expect(names(try scanner.files(under: root)) == ["two.jsonl", "three.jsonl", "four.jsonl"])
     }
 
     @Test func aRemovedDirectoryDropsItsFiles() throws {
         let root = try scratchTree()
         defer { try? FileManager.default.removeItem(at: root) }
         let scanner = JSONLTreeScanner()
-        _ = scanner.files(under: root)
+        _ = try scanner.files(under: root)
 
         try FileManager.default.removeItem(at: root.appendingPathComponent("proj/sub"))
-        #expect(names(scanner.files(under: root)) == ["one.jsonl"])
+        #expect(names(try scanner.files(under: root)) == ["one.jsonl"])
+    }
+
+    @Test func anUnlistableDirectoryThrowsInsteadOfLookingEmpty() throws {
+        let root = try scratchTree()
+        let locked = root.appendingPathComponent("proj/sub")
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let scanner = JSONLTreeScanner()
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+
+        #expect(throws: SourceListError.self) { try scanner.files(under: root) }
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+        #expect(names(try scanner.files(under: root)) == ["one.jsonl", "two.jsonl"])
+    }
+
+    @Test func aMissingRootIsEmptyNotAFailure() throws {
+        let root = testScratchDirectory().appendingPathComponent(UUID().uuidString)
+        #expect(try JSONLTreeScanner().files(under: root).isEmpty)
     }
 }

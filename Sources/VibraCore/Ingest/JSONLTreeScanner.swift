@@ -24,7 +24,7 @@ public final class JSONLTreeScanner: @unchecked Sendable {
 
     public init() {}
 
-    public func files(under root: URL) -> [URL] {
+    public func files(under root: URL) throws -> [URL] {
         lock.lock()
         defer { lock.unlock() }
 
@@ -47,7 +47,7 @@ public final class JSONLTreeScanner: @unchecked Sendable {
             } else {
                 // Stat before reading: an entry added in between moves the
                 // mtime past the one cached here, so the next scan re-reads.
-                listing = Self.read(directory, seconds: seconds, nanoseconds: nanoseconds)
+                listing = try Self.read(directory, seconds: seconds, nanoseconds: nanoseconds)
                 listings[path] = listing
             }
             files.append(contentsOf: listing.files)
@@ -60,11 +60,23 @@ public final class JSONLTreeScanner: @unchecked Sendable {
         return files
     }
 
-    private static func read(_ directory: URL, seconds: Int, nanoseconds: Int) -> Listing {
-        let entries = (try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]
-        )) ?? []
+    private static func read(_ directory: URL, seconds: Int, nanoseconds: Int) throws -> Listing {
+        let entries: [URL]
+        do {
+            entries = try FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+            )
+        } catch {
+            // A directory deleted between the stat and the listing is a normal
+            // race and yields nothing. One that is still there and cannot be
+            // listed is the failure the health line exists for.
+            var info = stat()
+            guard lstat(directory.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else {
+                return Listing(seconds: seconds, nanoseconds: nanoseconds, files: [], subdirectories: [])
+            }
+            throw SourceListError()
+        }
         var files: [URL] = []
         var subdirectories: [URL] = []
         for entry in entries {

@@ -105,7 +105,7 @@ public struct CursorAdapter: AgentAdapter {
         // rather than failing the refresh.
         sqlite3_busy_timeout(db, 200)
 
-        guard verifySchema(db) else { return [] }
+        guard try verifySchema(db) else { throw SourceSchemaError() }
 
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, Self.sessionSelectSQL, -1, &statement, nil) == SQLITE_OK,
@@ -223,12 +223,12 @@ public struct CursorAdapter: AgentAdapter {
         )
     }
 
-    /// A newer Cursor with a different schema yields no sessions rather than a
-    /// broader query.
-    private func verifySchema(_ db: OpaquePointer?) -> Bool {
+    /// A newer Cursor with a different schema throws rather than running a
+    /// broader query; a PRAGMA that cannot be prepared is a read failure.
+    private func verifySchema(_ db: OpaquePointer?) throws -> Bool {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, "PRAGMA table_info(composerHeaders)", -1, &statement, nil) == SQLITE_OK
-        else { return false }
+        else { throw CursorError.unavailable }
         defer { sqlite3_finalize(statement) }
         var present = Set<String>()
         while sqlite3_step(statement) == SQLITE_ROW {

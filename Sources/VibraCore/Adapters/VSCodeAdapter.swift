@@ -44,7 +44,7 @@ public struct VSCodeAdapter: AgentAdapter {
     // MARK: - Incremental ingest
 
     public func sources() throws -> [SourceDescriptor] {
-        chatSessionFiles().compactMap { SourceDescriptor.describing($0) }
+        try chatSessionFiles().compactMap { SourceDescriptor.describing($0) }
     }
 
     public func update(
@@ -76,7 +76,7 @@ public struct VSCodeAdapter: AgentAdapter {
 
     public func discoverSessions() throws -> [Session] {
         var sessions: [Session] = []
-        for file in chatSessionFiles() {
+        for file in try chatSessionFiles() {
             var checkpoint = VSCodeChatCheckpoint()
             var offset: UInt64 = 0
             let reader = IncrementalLineReader()
@@ -97,23 +97,33 @@ public struct VSCodeAdapter: AgentAdapter {
 
     // MARK: - Files
 
-    private func chatSessionFiles() -> [URL] {
-        let fm = FileManager.default
+    private func chatSessionFiles() throws -> [URL] {
         var files: [URL] = []
         for user in userDirectories {
             let empty = user.appendingPathComponent("globalStorage/emptyWindowChatSessions")
-            files += jsonlChildren(of: empty)
+            files += try jsonlChildren(of: empty)
             let workspaces = user.appendingPathComponent("workspaceStorage")
-            for workspace in (try? fm.contentsOfDirectory(at: workspaces, includingPropertiesForKeys: nil)) ?? [] {
-                files += jsonlChildren(of: workspace.appendingPathComponent("chatSessions"))
+            for workspace in try children(of: workspaces) {
+                files += try jsonlChildren(of: workspace.appendingPathComponent("chatSessions"))
             }
         }
         return files
     }
 
-    private func jsonlChildren(of dir: URL) -> [URL] {
-        let children = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
-        return children.filter { $0.pathExtension == "jsonl" }
+    private func jsonlChildren(of dir: URL) throws -> [URL] {
+        try children(of: dir).filter { $0.pathExtension == "jsonl" }
+    }
+
+    /// Children of `dir`, or nothing when it does not exist. A directory that
+    /// exists but cannot be listed is an error, not an empty result.
+    private func children(of dir: URL) throws -> [URL] {
+        do {
+            return try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        } catch {
+            var info = stat()
+            guard lstat(dir.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { return [] }
+            throw SourceListError()
+        }
     }
 
     /// The folder of the window a chat belongs to, from the `workspace.json`

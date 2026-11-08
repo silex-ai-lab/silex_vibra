@@ -47,7 +47,7 @@ public struct CodexAdapter: AgentAdapter {
         if let file {
             files = [file]
         } else if let sessionsRoot {
-            files = scanner.files(under: sessionsRoot)
+            files = try scanner.files(under: sessionsRoot)
                 .filter { $0.lastPathComponent.hasPrefix("rollout-") }
         } else {
             files = []

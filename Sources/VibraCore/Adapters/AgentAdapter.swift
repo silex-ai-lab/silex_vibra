@@ -94,6 +94,18 @@ public extension AgentAdapter {
     }
 }
 
+/// A store whose schema does not match the columns this build reads. Carries no
+/// text: the health line says "parse failed", never a SQL error or a path.
+public struct SourceSchemaError: Error, Equatable {
+    public init() {}
+}
+
+/// A directory that exists but cannot be listed. Also text-free: the adapter
+/// name and the problem kind are all the health line may say.
+public struct SourceListError: Error, Equatable {
+    public init() {}
+}
+
 /// Standard locations the adapters read. Overridable so tests can point at
 /// fixtures instead of the developer's real, live agent state.
 public enum VibraPaths {
