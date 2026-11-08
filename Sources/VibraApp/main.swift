@@ -449,6 +449,16 @@ if CommandLine.arguments.contains("--dump-menu") {
     exit(done ? 0 : 1)
 }
 
+// `Vibra --setup-close-check` closes the setup window and reports whether that
+// finished setup. Use with VIBRA_PREFS_DOMAIN so it writes no real preference.
+if CommandLine.arguments.contains("--setup-close-check") {
+    _ = NSApplication.shared
+    NSApp.setActivationPolicy(.accessory)
+    let complete = SetupWindowController().runCloseCheck()
+    print("setup complete after close: \(complete)")
+    exit(complete ? 0 : 1)
+}
+
 // `Vibra --menu-check` builds the real menu, then invokes its first Session
 // Details item, and reports the window that opened. Never session content.
 if CommandLine.arguments.contains("--menu-check") {

@@ -48,9 +48,7 @@ final class SetupWindowController: NSObject, RenderableWindow, NSWindowDelegate 
 
     func show() {
         ensureWindow()
-        agentsLabel.stringValue = detections()
-            .map { "\($0.kind.displayName): \($0.isPresent ? "seen recently" : "no sessions yet")" }
-            .joined(separator: "\n")
+        agentsLabel.stringValue = detections().map { Self.summary(of: $0) }.joined(separator: "\n")
         refreshLoginState()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -58,6 +56,28 @@ final class SetupWindowController: NSObject, RenderableWindow, NSWindowDelegate 
             await refreshNotificationState()
             onRendered?()
         }
+    }
+
+    /// Never "not installed": absent means no state on disk, which is also
+    /// true of an agent installed but not used yet.
+    private static func summary(of detection: AgentDetection) -> String {
+        let status: String
+        if detection.isActive(within: 12 * 3600) {
+            status = "seen recently"
+        } else if detection.isPresent {
+            status = "no recent sessions"
+        } else {
+            status = "no sessions yet"
+        }
+        return "\(detection.kind.displayName): \(status)"
+    }
+
+    /// `--setup-close-check`: whether closing the window finishes setup.
+    func runCloseCheck() -> Bool {
+        ensureWindow()
+        window?.makeKeyAndOrderFront(nil)
+        window?.close()
+        return FirstRun.isComplete(in: settings)
     }
 
     private func refreshNotificationState() async {
