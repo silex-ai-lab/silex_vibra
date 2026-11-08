@@ -308,6 +308,27 @@ struct IngestHealthTests {
         #expect(await ingest.health == first, "an idle pass must not change health")
     }
 
+    @Test func aFailingSourceStaysFailingPastTheHorizon() async throws {
+        let dir = try scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("aged.jsonl")
+        try writeTranscript(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: file.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.path) }
+
+        let adapter = FakeAdapter()
+        adapter.configure(available: true, source: file)
+        let ingest = SessionIngest(adapters: [adapter], horizon: 3600)
+        _ = await ingest.refresh()
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-7200)], ofItemAtPath: file.path)
+        _ = await ingest.refresh()
+        guard case .failing(.readFailed, _)? = await ingest.health[.hermes] else {
+            Issue.record("a source past the horizon is still listed and was never re-read")
+            return
+        }
+    }
+
     @Test func aWarmRefreshReadsZeroBytesAndLeavesHealthAlone() async throws {
         let dir = try scratchDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }

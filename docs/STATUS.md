@@ -132,7 +132,7 @@ VS Code Copilot Chat, see the table below.)*
 | RSS (running app) | **43–76 MB**, varies between runs | < 60 MB | ⚠️ borderline |
 | Cold start | 0.64s, 13 MB read | — | ✅ |
 | Unchanged refresh | 0.03s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 306 in 41 suites | — | ✅ |
+| Tests | 308 in 41 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
 
 Reproduce with `make bench` and `make test`.

@@ -46,7 +46,9 @@ for that agent stay listed. A file that becomes unreadable without changing is
 not noticed until something forces a read: a source is read when it is new or
 has been appended to, so `touch` the file (or wait for the agent to write to it)
 to make Vibra try again. Deleting the file clears the notice on the next
-refresh.
+refresh. An unreadable folder inside a projects or workspace tree is skipped
+without a notice, so the rest keep updating; only the top-level folder reports
+a listing failure.
 
 **Codex sessions used to say "That session has no terminal," even while open.**
 Newer Codex terminal clients can share a managed background server. That server

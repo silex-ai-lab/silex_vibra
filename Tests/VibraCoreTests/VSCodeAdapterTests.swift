@@ -23,6 +23,22 @@ struct VSCodeAdapterTests {
         return (user, chats)
     }
 
+    @Test func anUnreadableWorkspaceDoesNotStopTheOthers() throws {
+        let (user, chats) = try makeUserDirectory()
+        let locked = user.appendingPathComponent("workspaceStorage/locked/chatSessions")
+        try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+            try? FileManager.default.removeItem(at: user)
+        }
+        let file = chats.appendingPathComponent("readable.jsonl")
+        try write([snapshot("readable")], to: file)
+
+        let sources = try VSCodeAdapter(userDirectories: [user]).sources()
+        #expect(sources.map(\.url.lastPathComponent) == ["readable.jsonl"])
+    }
+
     private func request(_ id: String, at ms: Int, state: Int?) -> String {
         let modelState = state.map { #","modelState":{"value":\#($0)}"# } ?? ""
         return #"{"requestId":"\#(id)","timestamp":\#(ms),"modelId":"copilot/gpt-5","message":{"text":"\#(Self.canary)"},"response":[{"value":"\#(Self.canary)"}],"promptTokens":100,"completionTokens":20\#(modelState)}"#

@@ -104,7 +104,8 @@ public struct VSCodeAdapter: AgentAdapter {
             files += try jsonlChildren(of: empty)
             let workspaces = user.appendingPathComponent("workspaceStorage")
             for workspace in try children(of: workspaces) {
-                files += try jsonlChildren(of: workspace.appendingPathComponent("chatSessions"))
+                // One unreadable workspace must not stop the others updating.
+                files += (try? jsonlChildren(of: workspace.appendingPathComponent("chatSessions"))) ?? []
             }
         }
         return files
