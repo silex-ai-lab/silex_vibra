@@ -73,8 +73,10 @@ public final class AttentionNotifier {
             lastNotified[key] = now
             outstanding[session.notificationKey] = session.id
 
+            // Never `displayName`: that can be a title the agent derived from
+            // the prompt, and a notification is not the place to quote one.
             let label = session.scheduledTask.map { "\($0) (\(session.projectName))" }
-                ?? session.displayName
+                ?? session.projectName
             sink.deliver(
                 AttentionNotification(
                     key: session.notificationKey,

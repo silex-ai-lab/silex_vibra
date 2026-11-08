@@ -289,8 +289,6 @@ if CommandLine.arguments.contains("--agents") {
                      d.kind.displayName as NSString, mark as NSString,
                      d.sourceCount, last as NSString, active as NSString))
     }
-    let polled = AdapterRegistry.detected().map(\.kind.displayName).joined(separator: ", ")
-    print("\nPolled: \(polled.isEmpty ? "(none)" : polled)")
     exit(0)
 }
 
@@ -406,7 +404,7 @@ if CommandLine.arguments.contains("--query") {
             "unknown agent \(agentFilter); one of: \(AgentKind.allCases.map(\.rawValue).joined(separator: ", "))\n".utf8))
         exit(1)
     }
-    let store = SessionStore(adapters: AdapterRegistry.detected())
+    let store = SessionStore(adapters: AdapterRegistry.all())
     nonisolated(unsafe) var status: Int32? = nil
     Task { @MainActor in
         await store.requestRefresh()
@@ -424,6 +422,54 @@ if CommandLine.arguments.contains("--query") {
         } else {
             status = 1
         }
+    }
+    let deadline = Date().addingTimeInterval(300)
+    while status == nil && Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(status ?? 1)
+}
+
+// `Vibra --dump-menu` prints the menu's structure for the sessions on disk.
+// Keys, states and codes only - never a title, path or branch.
+if CommandLine.arguments.contains("--dump-menu") {
+    let store = SessionStore(adapters: AdapterRegistry.all())
+    nonisolated(unsafe) var done = false
+    Task { @MainActor in
+        await store.requestRefresh()
+        let now = Date()
+        let model = SessionMenuModel.build(store.snapshot, now: now)
+        for line in model.diagnosticLines(store.snapshot, now: now) { print(line) }
+        done = true
+    }
+    let deadline = Date().addingTimeInterval(300)
+    while !done && Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(done ? 0 : 1)
+}
+
+// `Vibra --setup-close-check` closes the setup window and reports whether that
+// finished setup. Use with VIBRA_PREFS_DOMAIN so it writes no real preference.
+if CommandLine.arguments.contains("--setup-close-check") {
+    _ = NSApplication.shared
+    NSApp.setActivationPolicy(.accessory)
+    let complete = SetupWindowController().runCloseCheck()
+    print("setup complete after close: \(complete)")
+    exit(complete ? 0 : 1)
+}
+
+// `Vibra --menu-check` builds the real menu, then invokes its first Session
+// Details item, and reports the window that opened. Never session content.
+if CommandLine.arguments.contains("--menu-check") {
+    _ = NSApplication.shared
+    NSApp.setActivationPolicy(.accessory)
+    let store = SessionStore(adapters: AdapterRegistry.all())
+    let controller = MenuBarController(store: store)
+    nonisolated(unsafe) var status: Int32? = nil
+    Task { @MainActor in
+        await store.requestRefresh()
+        status = controller.runMenuCheck() ? 0 : 1
     }
     let deadline = Date().addingTimeInterval(300)
     while status == nil && Date() < deadline {
@@ -456,7 +502,32 @@ if CommandLine.arguments.contains("--history-stats") {
 // launches the GUI, opens that window, optionally writes the window's own
 // rendered pixels to a PNG, and reports what it rendered. Used to confirm the
 // window actually draws.
-let showWindow = ["--show-report", "--show-history", "--show-settings"]
+/// A detail window for `--show-detail <session id>`, built from the sessions on
+/// disk. With `--vanished` the session is left out of the snapshot, the state
+/// the window keeps after a session exits. An unknown id exits with status 1.
+@MainActor
+func detailDiagnostic(sessionID: String?) -> any RenderableWindow {
+    let store = SessionStore(adapters: AdapterRegistry.all())
+    nonisolated(unsafe) var done = false
+    Task { @MainActor in
+        await store.requestRefresh()
+        done = true
+    }
+    while !done { RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05)) }
+    guard let session = store.sessions.first(where: { $0.id == sessionID }) else {
+        print("no session with that id")
+        exit(1)
+    }
+    var snapshot = store.snapshot
+    if CommandLine.arguments.contains("--vanished") {
+        snapshot.sessions.removeAll { $0.key == session.key }
+    }
+    let controller = SessionDetailWindowController(onReturn: { _ in }, onHistory: { _ in })
+    controller.prepare(session: session, snapshot: snapshot)
+    return controller
+}
+
+let showWindow = ["--show-report", "--show-history", "--show-settings", "--show-setup", "--show-detail"]
     .first { CommandLine.arguments.contains($0) }
 if let showWindow {
     let snapshotPath = argument(after: "--snapshot")
@@ -465,6 +536,8 @@ if let showWindow {
     switch showWindow {
     case "--show-history": controller = HistoryWindowController(adapters: AdapterRegistry.all())
     case "--show-settings": controller = SettingsWindowController()
+    case "--show-setup": controller = SetupWindowController()
+    case "--show-detail": controller = detailDiagnostic(sessionID: argument(after: "--show-detail"))
     default: controller = ReportWindowController(adapters: AdapterRegistry.all())
     }
     let delegate = ReportOnlyDelegate(controller: controller, snapshotPath: snapshotPath)

@@ -3,6 +3,13 @@ import Testing
 @testable import VibraCore
 
 struct VibraSettingsTests {
+    @Test func firstRunIsCompleteOnlyAfterItIsMarked() {
+        let store = DictionarySettingsStore()
+        #expect(!FirstRun.isComplete(in: store))
+        FirstRun.markComplete(in: store)
+        #expect(FirstRun.isComplete(in: store))
+    }
+
     @Test func defaultsEqualTheShippedConstants() {
         let s = VibraSettings.load(from: DictionarySettingsStore())
         #expect(s == .defaults)

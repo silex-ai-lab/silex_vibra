@@ -113,7 +113,7 @@ public struct OpenCodeAdapter: AgentAdapter {
         }
         defer { sqlite3_close(db) }
 
-        guard verifySchema(db) else { return [] }
+        guard try verifySchema(db) else { throw SourceSchemaError() }
 
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, Self.sessionSelectSQL, -1, &statement, nil) == SQLITE_OK,
@@ -170,12 +170,12 @@ public struct OpenCodeAdapter: AgentAdapter {
     // MARK: - Schema verification
 
     /// Confirms every allowlisted column exists before querying. A mismatch
-    /// (e.g. a newer OpenCode schema) yields `false` and the caller returns `[]`
-    /// rather than falling back to a broader query.
-    private func verifySchema(_ db: OpaquePointer?) -> Bool {
+    /// (e.g. a newer OpenCode schema) throws rather than falling back to a
+    /// broader query; a PRAGMA that cannot even be prepared is a read failure.
+    private func verifySchema(_ db: OpaquePointer?) throws -> Bool {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, "PRAGMA table_info(session)", -1, &statement, nil) == SQLITE_OK else {
-            return false
+            throw OpenCodeError.unavailable
         }
         defer { sqlite3_finalize(statement) }
 

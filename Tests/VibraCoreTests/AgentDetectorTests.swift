@@ -29,14 +29,12 @@ struct AgentDetectorTests {
 
     private let now = Date(timeIntervalSince1970: 2_000_000)
 
-    @Test func absentAgentIsNotPolled() {
-        let adapters: [any AgentAdapter] = [
-            FakeAdapter(kind: .claudeCode, isAvailable: true, fakeSources: [descriptor("a", modified: now)]),
-            FakeAdapter(kind: .codex, isAvailable: false, fakeSources: []),
-        ]
-        let detector = AgentDetector(adapters: adapters)
-        #expect(detector.activeAdapters().map(\.kind) == [.claudeCode],
-                "an agent with no state on disk must not be polled")
+    @Test func absentAgentIsSkippedByIngestUntilItAppears() async {
+        let appears = FakeAdapter(kind: .codex, isAvailable: false, fakeSources: [])
+        let ingest = SessionIngest(adapters: [appears])
+        let sessions = await ingest.refresh()
+        #expect(sessions.isEmpty, "an agent with no state on disk contributes nothing")
+        #expect(await ingest.lastRefreshBytesRead == 0, "and costs no read")
     }
 
     @Test func detectionReportsSourceCountAndLatestWrite() {

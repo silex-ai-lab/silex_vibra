@@ -348,9 +348,12 @@ still passes with detection wired in.
 
 ### Acceptance — met
 
-`--agents` reports presence, source count and last write per agent. An adapter
-with no state on disk is dropped from the poll set entirely, and a mutation
-that polls everything regardless of presence fails the suite.
+`--agents` reports presence, source count and last write per agent. Every
+adapter is registered now; ingest skips an agent with no state on disk with one
+`isAvailable` stat per pass, so an agent first used after launch is discovered
+without a relaunch. The test is `absentAgentIsSkippedByIngestUntilItAppears`:
+an absent adapter contributes nothing and costs no read, and the zero-byte warm
+refresh `make bench` asserts still holds with all six registered.
 
 ## P2.2 — More adapters — **DONE: Cursor (2026-09-21), VS Code Copilot Chat (2026-09-22)**
 

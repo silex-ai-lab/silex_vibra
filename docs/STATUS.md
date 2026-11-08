@@ -35,6 +35,9 @@ itself; clicking their "waiting for you" notifications clears them silently.
 `ProcessLocator.canJump` pins the mapping per agent (exhaustive over
 `AgentKind`), 165 tests green; README troubleshooting entry. The alert is
 unchanged for Claude Code/Codex, where "the process has exited" is news.
+*Superseded 2026-11-08:* a row with no jump path is no longer disabled —
+clicking it opens its details, and clicking its notification opens the details
+too. The mapping is `ReturnRoute` now, and `canJump` is gone.
 
 **2026-09-27 — History window UI, wave 2 (`the reference dashboard` borrow).** Adds each
 question's transcript path row (Copy Path / Open) and its session id in the
@@ -58,7 +61,8 @@ reviewer seats). Record:
 **2026-09-27 — History window UI, wave 1 (`the reference dashboard` borrow).** Merged to
 `main` and pushed: `568b008` (approved plan) and `4a9005c` (code), diff
 `a530ab8..4a9005c`. Adds per-agent counts in the menu headers
-(`Claude Code · 3` style), a side-by-side History detail pane (read-only,
+(`Claude Code · 3` style, superseded 2026-11-08 by the cross-agent `Needs You`
+and `Running` sections), a side-by-side History detail pane (read-only,
 selectable question text, in-place Copy, close/reopen clears it), tab-separated
 Copy of the visible rows, per-agent counts in the filter popup, and an
 empty-state label. Verified **2026-09-27**: `swift build` clean, `make test`
@@ -128,7 +132,7 @@ VS Code Copilot Chat, see the table below.)*
 | RSS (running app) | **43–76 MB**, varies between runs | < 60 MB | ⚠️ borderline |
 | Cold start | 0.64s, 13 MB read | — | ✅ |
 | Unchanged refresh | 0.03s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 66 in 13 suites | — | ✅ |
+| Tests | 308 in 41 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
 
 Reproduce with `make bench` and `make test`.

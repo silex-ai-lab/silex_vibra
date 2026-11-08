@@ -49,7 +49,7 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         if let file {
             files = [file]
         } else if let projectsRoot {
-            files = scanner.files(under: projectsRoot)
+            files = try scanner.files(under: projectsRoot)
         } else {
             files = []
         }
@@ -80,7 +80,9 @@ public struct ClaudeCodeAdapter: AgentAdapter {
             checkpoint.fold(line)
         }
 
-        let session = checkpoint.buildSession(
+        // A subagent transcript carries its parent's session id. It still counts
+        // for usage, but it is not a session anyone can return to.
+        let session = isSubagentSource(source.url) ? nil : checkpoint.buildSession(
             agent: kind,
             fallbackID: source.url.deletingPathExtension().lastPathComponent,
             fallbackDate: source.modified
@@ -119,7 +121,7 @@ public struct ClaudeCodeAdapter: AgentAdapter {
         if let file {
             files = [file]
         } else if let projectsRoot {
-            files = try jsonlFiles(under: projectsRoot)
+            files = try jsonlFiles(under: projectsRoot).filter { !isSubagentSource($0) }
         } else {
             files = []
         }
@@ -436,6 +438,12 @@ func jsonlFiles(under root: URL) throws -> [URL] {
         at: root,
         includingPropertiesForKeys: [.isRegularFileKey]
     ) else {
+        // Nil means the root could not be enumerated. A root that is gone is
+        // not an error; one that is still there is.
+        var info = stat()
+        guard lstat(root.path, &info) != 0 || info.st_mode & S_IFMT != S_IFDIR else {
+            throw SourceListError()
+        }
         return []
     }
     var files: [URL] = []

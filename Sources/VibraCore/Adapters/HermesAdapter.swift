@@ -90,9 +90,11 @@ public struct HermesAdapter: AgentAdapter {
         guard isAvailable else { return [] }
         let db = try open()
         defer { sqlite3_close(db) }
-        guard columns(db, "sessions").isSuperset(of: Self.sessionColumns),
-              columns(db, "messages").isSuperset(of: Self.messageStatusColumns)
-        else { return [] }
+        let sessionColumnsSeen = try columns(db, "sessions")
+        let messageColumnsSeen = try columns(db, "messages")
+        guard sessionColumnsSeen.isSuperset(of: Self.sessionColumns),
+              messageColumnsSeen.isSuperset(of: Self.messageStatusColumns)
+        else { throw SourceSchemaError() }
 
         var sessions: [Session] = []
         try query(db, Self.sessionsSQL) { row in
@@ -153,8 +155,10 @@ public struct HermesAdapter: AgentAdapter {
     public func storedQuestions(since cutoff: Date) -> [QuestionRecord] {
         guard isAvailable, let db = try? open() else { return [] }
         defer { sqlite3_close(db) }
-        guard columns(db, "sessions").isSuperset(of: ["id", "cwd", "archived", "source"]),
-              columns(db, "messages").isSuperset(of: ["session_id", "timestamp", "content", "role", "active"])
+        guard let sessionColumnsSeen = try? columns(db, "sessions"),
+              let messageColumnsSeen = try? columns(db, "messages"),
+              sessionColumnsSeen.isSuperset(of: ["id", "cwd", "archived", "source"]),
+              messageColumnsSeen.isSuperset(of: ["session_id", "timestamp", "content", "role", "active"])
         else { return [] }
 
         var records: [QuestionRecord] = []
@@ -184,10 +188,10 @@ public struct HermesAdapter: AgentAdapter {
         return db
     }
 
-    private func columns(_ db: OpaquePointer?, _ table: String) -> Set<String> {
+    private func columns(_ db: OpaquePointer?, _ table: String) throws -> Set<String> {
         let sql = table == "sessions" ? Self.schemaSQL[0] : Self.schemaSQL[1]
         var present = Set<String>()
-        try? query(db, sql) { row in
+        try query(db, sql) { row in
             if let name = text(row, 1) { present.insert(name) }
         }
         return present

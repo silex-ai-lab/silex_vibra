@@ -33,12 +33,22 @@ The `tty owner:` line reads `emulator iTerm2 - jumpable` for a normal tab and
 from walking the process ancestry, so it is a fact about your machine rather
 than a guess.
 
-**An OpenCode or Hermes row is grayed out and does nothing when clicked.**
-Neither agent publishes a link between its session and its process, and a
-directory does not identify a session — so there is no exact jump to make, and
-Vibra will not guess at one. The row still reports the session's state and
-tokens, and its tooltip says why there is no jump. Clicking a "waiting for
-you" notification for such a session just clears the notification.
+**An OpenCode or Hermes row cannot be jumped to.** Neither agent publishes a
+link between its session and its process, and a directory does not identify a
+session — so there is no exact jump to make, and Vibra will not guess at one.
+Clicking the row opens its details instead, and its tooltip says why there is no
+jump. Clicking a "waiting for you" notification for such a session opens the
+details and clears the notification.
+
+**A source cannot be read.** The menu shows a notice — `Couldn't read <Agent>
+data (last read 12m ago)`, or `(never read)` — and the sessions already known
+for that agent stay listed. A file that becomes unreadable without changing is
+not noticed until something forces a read: a source is read when it is new or
+has been appended to, so `touch` the file (or wait for the agent to write to it)
+to make Vibra try again. Deleting the file clears the notice on the next
+refresh. An unreadable folder inside a projects or workspace tree is skipped
+without a notice, so the rest keep updating; only the top-level folder reports
+a listing failure.
 
 **Codex sessions used to say "That session has no terminal," even while open.**
 Newer Codex terminal clients can share a managed background server. That server
@@ -100,6 +110,10 @@ Then re-run the command above; it should print `RESULT: notification posted`
 and show a banner. If Vibra is missing from that list, launch it once
 (`open /Applications/Vibra.app`) and look again.
 
+The first-run **Setup** window reports the same authorization status and has
+the **Enable Notifications** and **Send Test** buttons, so a refused build says
+so there rather than after a missed alert. **Setup…** in the menu reopens it.
+
 Everything else works without this — notifications are an optional convenience
 layered on the menu bar, which is the real interface.
 
@@ -109,9 +123,10 @@ layered on the menu bar, which is the real interface.
   15.7.3: an ad-hoc signed bundle gets `authorization granted: false` with
   `"Notifications are not allowed for this application"`. The app still
   registers its bundle id with Notification Center, so you can enable it by
-  hand — see below. The durable fix is a Developer ID signature, not a code
-  change. The menu bar shows everything a notification would have said, so
-  `Notifier` treats refusal as normal and never fails.
+  hand — see below — and the Setup window shows the same status. The durable fix
+  is a Developer ID signature, not a code change. The menu bar shows everything
+  a notification would have said, so `Notifier` treats refusal as normal and
+  never fails.
 - **Terminal jump-back needs Automation permission.** Clicking a session focuses
   the iTerm2 or Terminal tab it runs in, which means asking that app which tab
   owns the session's tty — an Apple Event, so macOS gates it behind

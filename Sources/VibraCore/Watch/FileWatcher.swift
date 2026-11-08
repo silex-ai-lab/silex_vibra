@@ -77,14 +77,24 @@ public struct JSONLIncrementalReader {
 public final class FileWatcher: @unchecked Sendable {
     public typealias ChangeHandler = @Sendable ([URL]) -> Void
 
+    /// Creates a stream for `roots` but does not attach or start it. Internal
+    /// and injectable so a test can make an arm fail and check the retry.
+    typealias StreamFactory = @Sendable ([URL]) -> FSEventStreamRef?
+
     private let watchedDirectories: [URL]
     private let pollURLs: [URL]
     private let onChange: ChangeHandler
+    private let createStream: StreamFactory?
 
     private let queue = DispatchQueue(label: "vibra.filewatcher", qos: .utility)
     private var stream: FSEventStreamRef?
+    /// What the running stream actually covers: path -> identity. A path alone
+    /// cannot tell a recreated root from the one the stream was armed on.
+    private var armedRoots: [String: RootIdentity] = [:]
     private var pollTimer: DispatchSourceTimer?
-    private var lastPollSignatures: [URL: [PollStamp]] = [:]
+    /// A present key with a nil value means "polled, and absent". A missing key
+    /// means "never polled": the first poll only seeds.
+    private var lastPollSignatures: [URL: [PollStamp]?] = [:]
 
     public init(
         watchedDirectories: [URL],
@@ -94,6 +104,19 @@ public final class FileWatcher: @unchecked Sendable {
         self.watchedDirectories = watchedDirectories
         self.pollURLs = pollURLs
         self.onChange = onChange
+        self.createStream = nil
+    }
+
+    init(
+        watchedDirectories: [URL],
+        pollURLs: [URL] = [],
+        createStream: StreamFactory?,
+        onChange: @escaping ChangeHandler
+    ) {
+        self.watchedDirectories = watchedDirectories
+        self.pollURLs = pollURLs
+        self.onChange = onChange
+        self.createStream = createStream
     }
 
     /// Starts watching. Fires an initial "rescan everything" callback so a
@@ -101,7 +124,7 @@ public final class FileWatcher: @unchecked Sendable {
     public func start() {
         queue.async { [self] in
             self.onChange(self.watchedDirectories)
-            self.startFSEvents()
+            self.rearmStreams()
             self.startPolling()
         }
     }
@@ -110,11 +133,10 @@ public final class FileWatcher: @unchecked Sendable {
     public func stop() {
         queue.sync {
             if let stream {
-                FSEventStreamStop(stream)
-                FSEventStreamInvalidate(stream)
-                FSEventStreamRelease(stream)
+                Self.release(stream)
                 self.stream = nil
             }
+            self.armedRoots = [:]
             self.pollTimer?.cancel()
             self.pollTimer = nil
         }
@@ -124,9 +146,25 @@ public final class FileWatcher: @unchecked Sendable {
 
     // MARK: - FSEvents
 
-    private func startFSEvents() {
-        guard !watchedDirectories.isEmpty else { return }
-        let paths = watchedDirectories.map(\.path) as CFArray
+    /// Identity of a watched directory, from `stat`.
+    struct RootIdentity: Equatable {
+        let device: UInt64
+        let inode: UInt64
+
+        static func describing(_ url: URL) -> RootIdentity? {
+            var info = stat()
+            guard stat(url.path, &info) == 0 else { return nil }
+            return RootIdentity(
+                device: UInt64(UInt32(bitPattern: info.st_dev)),
+                inode: UInt64(info.st_ino)
+            )
+        }
+    }
+
+    /// Creates a stream for `roots`. Not started: `arm` attaches it to the
+    /// queue and starts it, so a failed arm leaves the old stream running.
+    private func createStreamObject(for roots: [URL]) -> FSEventStreamRef? {
+        let paths = roots.map(\.path) as CFArray
 
         // The C callback cannot capture self, so it reaches the watcher through
         // an unmanaged pointer in the stream context. The app owns the watcher
@@ -142,7 +180,7 @@ public final class FileWatcher: @unchecked Sendable {
         let flags = FSEventStreamCreateFlags(
             kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer
         )
-        guard let stream = FSEventStreamCreate(
+        return FSEventStreamCreate(
             kCFAllocatorDefault,
             vibraFSEventCallback,
             &context,
@@ -150,17 +188,98 @@ public final class FileWatcher: @unchecked Sendable {
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
             0.25,
             flags
-        ) else { return }
+        )
+    }
 
-        FSEventStreamSetDispatchQueue(stream, queue)
-        FSEventStreamStart(stream)
-        self.stream = stream
+    /// Starts a stream over exactly `desired`, then stops the old one: new
+    /// before old, so no event can fall between them. On failure nothing is
+    /// armed, so `armedRoots` stays behind and the next tick retries.
+    private func arm(_ desired: [String: RootIdentity]) -> Bool {
+        let roots = desired.keys.sorted().map { URL(fileURLWithPath: $0) }
+        let newStream: FSEventStreamRef?
+        if let createStream {
+            newStream = createStream(roots)
+        } else {
+            newStream = createStreamObject(for: roots)
+        }
+        guard let newStream else { return false }
+
+        FSEventStreamSetDispatchQueue(newStream, queue)
+        guard FSEventStreamStart(newStream) else {
+            FSEventStreamInvalidate(newStream)
+            FSEventStreamRelease(newStream)
+            return false
+        }
+        if let stream { Self.release(stream) }
+        stream = newStream
+        return true
+    }
+
+    /// Arms, re-arms or tears down the stream to match the roots that exist
+    /// now. Called once per poll tick, so a root created after launch is
+    /// covered within a second: a stream created on a path that does not
+    /// exist yet delivers nothing for the life of the process.
+    private func rearmStreams() {
+        let desired = Self.rootIdentities(of: watchedDirectories)
+        guard desired != armedRoots else { return }
+        let changed = Self.changedRoots(from: armedRoots, to: desired)
+
+        guard !desired.isEmpty else {
+            if let stream {
+                Self.release(stream)
+                self.stream = nil
+            }
+            armedRoots = [:]
+            onChange(changed)
+            return
+        }
+        guard arm(desired) else { return }
+        armedRoots = desired
+        onChange(changed)
+    }
+
+    private static func rootIdentities(of roots: [URL]) -> [String: RootIdentity] {
+        var identities: [String: RootIdentity] = [:]
+        for root in roots {
+            if let identity = RootIdentity.describing(root) {
+                identities[root.path] = identity
+            }
+        }
+        return identities
+    }
+
+    /// The identity the running stream is armed on for `path`. Internal for
+    /// tests: FSEvents keeps delivering for a replaced directory at the same
+    /// path, so a re-arm is otherwise invisible from the outside.
+    func armedIdentity(of path: String) -> RootIdentity? {
+        queue.sync { armedRoots[path] }
+    }
+
+    /// Paths added, removed, or pointing at a different directory than before.
+    private static func changedRoots(
+        from old: [String: RootIdentity],
+        to new: [String: RootIdentity]
+    ) -> [URL] {
+        var changed: [URL] = []
+        for (path, identity) in new where old[path] != identity {
+            changed.append(URL(fileURLWithPath: path))
+        }
+        for path in old.keys where new[path] == nil {
+            changed.append(URL(fileURLWithPath: path))
+        }
+        return changed.sorted { $0.path < $1.path }
+    }
+
+    private static func release(_ stream: FSEventStreamRef) {
+        FSEventStreamStop(stream)
+        FSEventStreamInvalidate(stream)
+        FSEventStreamRelease(stream)
     }
 
     // MARK: - Polling
 
     private func startPolling() {
-        guard !pollURLs.isEmpty else { return }
+        guard !pollURLs.isEmpty || !watchedDirectories.isEmpty else { return }
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now(), repeating: 1.0)
         timer.setEventHandler { [weak self] in self?.pollAll() }
@@ -170,6 +289,7 @@ public final class FileWatcher: @unchecked Sendable {
 
     private func pollAll() {
         for url in pollURLs { pollOnce(url) }
+        rearmStreams()
     }
 
     /// One file's (mtime, size), or nil when it does not exist.
@@ -195,14 +315,20 @@ public final class FileWatcher: @unchecked Sendable {
         return [main, stamp(url.path + "-wal") ?? PollStamp(mtime: 0, size: 0)]
     }
 
-    /// Fires `onChange` when the signature differs from the previous poll.
+    /// Fires on an absent -> present or present -> absent transition. The first
+    /// poll for a URL only seeds: a database already there at launch is not
+    /// news, but one created afterwards is.
     /// Internal so a test can drive it without a timer.
     func pollOnce(_ url: URL) {
-        guard let signature = Self.pollSignature(of: url) else { return }
-        if let last = lastPollSignatures[url], last != signature {
+        let signature = Self.pollSignature(of: url)
+        guard let previous = lastPollSignatures[url] else {
+            lastPollSignatures[url] = .some(signature)
+            return
+        }
+        lastPollSignatures[url] = .some(signature)
+        if previous != signature {
             onChange([url])
         }
-        lastPollSignatures[url] = signature
     }
 
     /// Called from the C callback. If FSEvents dropped events, we cannot know

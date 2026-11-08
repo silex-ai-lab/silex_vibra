@@ -156,8 +156,11 @@ Homebrew 앱은 `$(brew --prefix vibra)/Vibra.app`에 있으며 직접 설치한
 
 ### 첫 2분
 
-1. Vibra를 엽니다. 최근 12시간 동안 에이전트를 쓰지 않았다면 `No active sessions`로
-   표시됩니다. 정상입니다.
+1. Vibra를 엽니다. **Setup** 창에 각 에이전트에서 찾은 내용, 알림 상태,
+   **Launch Vibra at login** 옵션이 표시됩니다. 창을 닫거나 **Start Using Vibra**를
+   누르세요. 최근 12시간 동안 에이전트를 쓰지 않았다면 메뉴에 `No active sessions`로
+   표시되고, 이 Mac에 아직 에이전트 데이터가 없으면 `No sessions yet`으로 표시됩니다.
+   둘 다 정상입니다.
 2. 터미널에서 대화형 **Claude Code** 또는 **Codex** 세션을 시작하고 작업을
    맡기세요. 해당 행에 🔵 working(작업 중)이 표시됩니다.
 3. 턴이 끝날 때까지 두세요. 행이 🟠 your turn(당신 차례)으로 바뀌고 메뉴 막대에
@@ -184,7 +187,7 @@ Homebrew 앱은 `$(brew --prefix vibra)/Vibra.app`에 있으며 직접 설치한
 
 행을 클릭하면 Claude Code와 Codex는 터미널 탭(iTerm2, Terminal, herdr)이나 호스트 앱으로,
 VS Code는 해당 창으로 이동하고, Cursor는 앞으로 가져옵니다. OpenCode와 Hermes 세션은
-이동할 수 없습니다.
+이동할 수 없습니다. 해당 행을 클릭하면 상세 정보가 열립니다.
 
 ### 색상의 의미
 

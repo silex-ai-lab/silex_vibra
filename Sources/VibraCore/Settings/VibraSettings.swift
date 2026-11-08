@@ -13,7 +13,14 @@ public protocol SettingsStore: Sendable {
 /// `swift run`) its domain is the process name, so the CLI and the installed
 /// app would read different numbers and `--query` would misreport the app.
 public struct PreferencesStore: SettingsStore {
-    public static let domain = "ai.silexlab.vibra"
+    /// `VIBRA_PREFS_DOMAIN` overrides it, like `VIBRA_HOME` overrides the data
+    /// root, so a diagnostic run can use preferences of its own.
+    public static let domain: String = {
+        if let override = ProcessInfo.processInfo.environment["VIBRA_PREFS_DOMAIN"], !override.isEmpty {
+            return override
+        }
+        return "ai.silexlab.vibra"
+    }()
     public let domain: String
 
     public init(domain: String = PreferencesStore.domain) {
@@ -29,6 +36,19 @@ public struct PreferencesStore: SettingsStore {
     public func set(_ value: Any?, forKey key: String) {
         CFPreferencesSetAppValue(key as CFString, value as CFPropertyList?, domain as CFString)
         CFPreferencesAppSynchronize(domain as CFString)
+    }
+}
+
+/// Whether the first-run window has been shown and closed.
+public enum FirstRun {
+    public static let key = "onboardingCompleted"
+
+    public static func isComplete(in store: any SettingsStore = PreferencesStore()) -> Bool {
+        store.value(forKey: key) as? Bool == true
+    }
+
+    public static func markComplete(in store: any SettingsStore = PreferencesStore()) {
+        store.set(true, forKey: key)
     }
 }
 

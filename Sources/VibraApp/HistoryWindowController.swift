@@ -90,9 +90,8 @@ final class HistoryWindowController: NSObject, RenderableWindow, NSWindowDelegat
 
     var onRendered: (() -> Void)?
 
-    /// Agents whose history v1 reads. Stated in the window rather than
-    /// implying the list is complete.
-    private static let covered: [AgentKind] = [.claudeCode, .codex, .hermes]
+    /// Stated in the window rather than implying the list is complete.
+    private static let covered = HistoryCoverage.agents
 
     init(adapters: [any AgentAdapter], liveSession: @escaping (String) -> Session? = { _ in nil }) {
         self.adapters = adapters

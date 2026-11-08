@@ -161,8 +161,11 @@ notarized. See [Troubleshooting](docs/troubleshooting.md#troubleshooting).
 
 ### Your first two minutes
 
-1. Open Vibra. If you have not used an agent in the last 12 hours, it reads
-   `No active sessions`. That is expected.
+1. Open Vibra. The **Setup** window shows what it found for each agent, the
+   notification state, and a **Launch Vibra at login** option; close it, or
+   press **Start Using Vibra**. If you have not used an agent in the last 12
+   hours, the menu then reads `No active sessions`; on a Mac with no agent data
+   yet it reads `No sessions yet`. Both are expected.
 2. In a terminal, start an interactive **Claude Code** or **Codex** session and
    give it a task. Its row shows 🔵 working.
 3. Let the turn finish. The row turns 🟠 your turn and the menu bar shows `1!`.
@@ -187,7 +190,8 @@ shown (for example, Codex and Hermes have no approval state).
 
 Clicking a row jumps to the terminal tab (iTerm2, Terminal, herdr) or hosting
 app for Claude Code and Codex, to the VS Code window, or brings Cursor forward.
-OpenCode and Hermes sessions cannot be jumped to.
+OpenCode and Hermes sessions cannot be jumped to: clicking one opens its details
+instead.
 
 ### What the colours mean
 
