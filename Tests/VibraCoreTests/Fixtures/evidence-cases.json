@@ -38,17 +38,17 @@
 {
 "script": "set -o pipefail; swift test | tail -5",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "set -o pipefail && swift test | tail -5",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "set -euo pipefail\nswift test | tail -5",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "set -o pipefail; swift test | tail -5; echo done",
@@ -73,7 +73,7 @@
 {
 "script": "setopt pipefail; swift test | tail",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "echo pipefail; swift test | tail",
@@ -158,12 +158,12 @@
 {
 "script": "a || b; swift test",
 "kind": "test",
-"proof": "full"
+"proof": "none"
 },
 {
 "script": "cd x; swift test",
 "kind": "test",
-"proof": "full"
+"proof": "none"
 },
 {
 "script": "swift test &&\necho ok",
@@ -253,17 +253,17 @@
 {
 "script": "python3 - <<'EOF'\nprint(1)\nEOF\nswift test",
 "kind": "test",
-"proof": "full"
+"proof": "none"
 },
 {
 "script": "cat <<-EOF\n\tswift build\n\tEOF\nswift test",
 "kind": "test",
-"proof": "full"
+"proof": "none"
 },
 {
 "script": "cat <<\"A B\"\nx\nA B\nswift test",
 "kind": "test",
-"proof": "full"
+"proof": "none"
 },
 {
 "script": "cat <<EOF\nswift test",
@@ -283,7 +283,7 @@
 {
 "script": "grep x <<< y\nswift test",
 "kind": "test",
-"proof": "full"
+"proof": "none"
 },
 {
 "script": "swift test && x=$((1<<2))\ntrue",
@@ -331,7 +331,7 @@
 "proof": "full"
 },
 {
-"script": "A='x y' uv run --q pytest",
+"script": "A='x y' uv run --quiet pytest",
 "kind": "test",
 "proof": "full"
 },
@@ -368,12 +368,12 @@
 {
 "script": "(cd x && swift test)",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "(cd x && swift test) 2>&1",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "time (A=1 python -m unittest x | tail -1)",
@@ -554,6 +554,281 @@
 "script": "xcodebuild -scheme X build",
 "kind": "build",
 "proof": "full"
+},
+{
+"script": "[ -f .stamp ] || (cd pkg; swift test)",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "! (cd pkg; swift test)",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "[ -f nope ] && (cd pkg; swift test)",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "[ -f .stamp ] && exit 0; swift test",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "if [ -f .stamp ]; then exit 0; fi\nswift test",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "exit 0\nswift test",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "exit 0 && swift test",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "set -e; cd nope; swift test",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "set -euo pipefail\ncd nope\nswift test",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "cd nope || exit 1; swift test",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "false && set -o pipefail; swift test | tee log",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "(\nset -o pipefail\n)\nswift test | tee log",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "swift test --filter 'a(b)'",
+"kind": "test",
+"proof": "none"
+},
+{
+"script": "pytest -V",
+"kind": null,
+"proof": null
+},
+{
+"script": "tsc -v",
+"kind": null,
+"proof": null
+},
+{
+"script": "eslint -v",
+"kind": null,
+"proof": null
+},
+{
+"script": "mypy -V",
+"kind": null,
+"proof": null
+},
+{
+"script": "xcodebuild -usage",
+"kind": null,
+"proof": null
+},
+{
+"script": "xcodebuild -showdestinations",
+"kind": null,
+"proof": null
+},
+{
+"script": "swift test list",
+"kind": null,
+"proof": null
+},
+{
+"script": "swift test --list-tests",
+"kind": null,
+"proof": null
+},
+{
+"script": "cargo test -- --list",
+"kind": null,
+"proof": null
+},
+{
+"script": "pytest --fixtures",
+"kind": null,
+"proof": null
+},
+{
+"script": "pytest --markers",
+"kind": null,
+"proof": null
+},
+{
+"script": "pytest --setup-plan",
+"kind": null,
+"proof": null
+},
+{
+"script": "go test -c",
+"kind": null,
+"proof": null
+},
+{
+"script": "go test -n",
+"kind": null,
+"proof": null
+},
+{
+"script": "go build -n",
+"kind": null,
+"proof": null
+},
+{
+"script": "make test -n",
+"kind": null,
+"proof": null
+},
+{
+"script": "make build --just-print",
+"kind": null,
+"proof": null
+},
+{
+"script": "jest --showConfig",
+"kind": null,
+"proof": null
+},
+{
+"script": "vitest list",
+"kind": null,
+"proof": null
+},
+{
+"script": "tsc --showConfig",
+"kind": null,
+"proof": null
+},
+{
+"script": "eslint --print-config a.js",
+"kind": null,
+"proof": null
+},
+{
+"script": "ruff check --show-files",
+"kind": null,
+"proof": null
+},
+{
+"script": "tsc --init",
+"kind": null,
+"proof": null
+},
+{
+"script": "eslint --init",
+"kind": null,
+"proof": null
+},
+{
+"script": "xcodebuild -resolvePackageDependencies",
+"kind": null,
+"proof": null
+},
+{
+"script": "npm test --if-present",
+"kind": null,
+"proof": null
+},
+{
+"script": "jest --passWithNoTests",
+"kind": null,
+"proof": null
+},
+{
+"script": "ruff check --exit-zero",
+"kind": null,
+"proof": null
+},
+{
+"script": "pytest -n 4",
+"kind": "test",
+"proof": "full"
+},
+{
+"script": "echo \"$(echo \"a; swift test\")\"",
+"kind": null,
+"proof": null
+},
+{
+"script": "echo $'a\\'b; swift test'",
+"kind": null,
+"proof": null
+},
+{
+"script": "git commit -m \"$(printf \"fix && pytest\")\"",
+"kind": null,
+"proof": null
+},
+{
+"script": "go) test -f go.mod",
+"kind": null,
+"proof": null
+},
+{
+"script": "pytest) echo skip",
+"kind": null,
+"proof": null
+},
+{
+"script": "uv run -P pytest python app.py",
+"kind": null,
+"proof": null
+},
+{
+"script": "uv run --refresh-package mypy python app.py",
+"kind": null,
+"proof": null
+},
+{
+"script": "npx -p eslint foo",
+"kind": null,
+"proof": null
+},
+{
+"script": "uv run --no-sync --with x pytest",
+"kind": "test",
+"proof": "full"
+},
+{
+"script": "uv run --unknown x pytest",
+"kind": null,
+"proof": null
+},
+{
+"script": "uv run --with=x pytest",
+"kind": "test",
+"proof": "full"
+},
+{
+"script": "cat <<EOF\n  EOF\nswift test\nEOF",
+"kind": null,
+"proof": null
+},
+{
+"script": "cat <<-EOF\n\tEOF\nswift test",
+"kind": "test",
+"proof": "none"
 }
 ],
 "summary": [
@@ -695,7 +970,7 @@
 {
 "tail": "Build complete! (3.21s)\nerror: Exited with signal code 11",
 "kind": "test",
-"verdict": null
+"verdict": false
 },
 {
 "tail": "Executed 0 tests, with 0 failures (0 unexpected) in 0 seconds",
@@ -740,6 +1015,26 @@
 {
 "tail": "Build complete!\nmake: *** [test] Error 1",
 "kind": "build",
+"verdict": false
+},
+{
+"tail": "ok 1 - a",
+"kind": "test",
+"verdict": null
+},
+{
+"tail": "ok  \tgithub.com/x/y\t(cached)",
+"kind": "test",
+"verdict": true
+},
+{
+"tail": "Build complete!\nSegmentation fault",
+"kind": "build",
+"verdict": false
+},
+{
+"tail": "Executed 5 tests, with 0 failures\nerror: Exited with unexpected signal code 11",
+"kind": "test",
 "verdict": false
 }
 ]

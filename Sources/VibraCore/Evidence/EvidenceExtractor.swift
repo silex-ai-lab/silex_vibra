@@ -42,17 +42,37 @@ func isCodePath(_ path: String) -> Bool {
     return !documentationExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased())
 }
 
-/// An exit status decides only as far as `proof` allows. Anything it cannot
-/// settle goes to the runner's own summary, and an undecided summary is unknown.
-func checkResult(proof: ExitProof, exitCode: Int?, outputTail: String, kind: CheckKind) -> CheckResult {
-    if let exitCode {
-        if exitCode == 0, proof != .none { return .passed(.exitStatus) }
-        if exitCode != 0, proof == .full { return .failed(.exitStatus) }
-    }
-    switch RunnerSummary.verdict(outputTail: outputTail, kind: kind) {
-    case true?: return .passed(.runnerSummary)
-    case false?: return .failed(.runnerSummary)
-    case nil: return .unknown
+/// What a finished tool call reported about its process.
+enum ObservedExit: Sendable {
+    case zero, nonZero
+    /// The tool failed, with no exit status: a timeout, an abort.
+    case errored
+    case notReported
+    /// Still running when the result was written.
+    case notFinished
+}
+
+/// An exit status decides only as far as `proof` allows. Whatever it leaves
+/// open goes to the runner's summary, and a call that did not exit cleanly can
+/// confirm a failure from one but never a pass: a partial summary does not
+/// contradict the status.
+func checkResult(proof: ExitProof, exit: ObservedExit, outputTail: String, kind: CheckKind) -> CheckResult {
+    let summary = RunnerSummary.verdict(outputTail: outputTail, kind: kind)
+    switch exit {
+    case .notFinished:
+        return .unknown
+    case .nonZero where proof == .full:
+        return .failed(.exitStatus)
+    case .nonZero, .errored:
+        return summary == false ? .failed(.runnerSummary) : .unknown
+    case .zero where proof != .none:
+        return .passed(.exitStatus)
+    case .zero, .notReported:
+        switch summary {
+        case true?: return .passed(.runnerSummary)
+        case false?: return .failed(.runnerSummary)
+        case nil: return .unknown
+        }
     }
 }
 
@@ -71,9 +91,11 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
     }
 
     private static let editTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
-    private static let neverRan = "The user doesn't want to"
-    /// A successful result with these texts carries no exit status yet.
-    private static let notFinished = ["Command running in background", "Command was"]
+    /// Error results for a call that never started.
+    private static let neverRan = [
+        "The user doesn't want to", "Permission to use", "Permission for this action", "Claude requested permissions",
+        "Not started:", "[Tool call did not complete", "<tool_use_error>",
+    ]
 
     private var pending: [String: Pending] = [:]
     private var tracked: Set<String> = []
@@ -124,24 +146,31 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
     private mutating func close(_ block: [String: Any]) {
         guard let id = block["tool_use_id"] as? String, let call = pending.removeValue(forKey: id) else { return }
         let text = Self.text(of: block["content"])
-        guard !text.hasPrefix(Self.neverRan) else { return }
         let isError = block["is_error"] as? Bool ?? false
+        guard !(isError && Self.neverRan.contains(where: text.hasPrefix)) else { return }
         switch call {
         case .edit(let at):
             if !isError { result.events.append(.codeChange(at)) }
         case .check(let kind, let proof, let at):
             let outcome = checkResult(
-                proof: proof, exitCode: Self.exitCode(isError: isError, text: text), outputTail: text, kind: kind)
+                proof: proof, exit: Self.observedExit(isError: isError, text: text), outputTail: text, kind: kind)
             result.events.append(.check(ObservedCheck(at: at, kind: kind, result: outcome)))
         }
     }
 
-    /// `is_error` also marks denials, timeouts and tool errors. Only a result
-    /// that opens with "Exit code N" reports what the process returned.
-    private static func exitCode(isError: Bool, text: String) -> Int? {
-        guard isError else { return notFinished.contains(where: text.hasPrefix) ? nil : 0 }
-        guard text.hasPrefix("Exit code ") else { return nil }
-        return Int(text.dropFirst("Exit code ".count).prefix { $0 == "-" || $0.isNumber })
+    /// `is_error` also marks timeouts and aborts. Only a result that opens with
+    /// "Exit code N" reports what the process returned. The background note can
+    /// follow partial output, so it is searched for rather than matched at the start.
+    private static func observedExit(isError: Bool, text: String) -> ObservedExit {
+        if text.hasPrefix("Command running in background") || text.hasPrefix("Command was manually backgrounded")
+            || text.contains("Command was moved to the background") {
+            return .notFinished
+        }
+        guard isError else { return .zero }
+        guard text.hasPrefix("Exit code "),
+              let code = Int(text.dropFirst("Exit code ".count).prefix { $0 == "-" || $0.isNumber })
+        else { return .errored }
+        return code == 0 ? .zero : .nonZero
     }
 
     private static func text(of content: Any?) -> String {
@@ -190,15 +219,14 @@ struct CodexEvidenceExtractor: EvidenceExtractor {
     private mutating func command(_ item: [String: Any], completedAt stamp: Date) {
         guard let argv = item["command"] as? [String] else { return }
         result.sawToolRecords = true
+        guard ["completed", "failed"].contains(item["status"] as? String) else { return }
         let script = argv.count >= 3 && ["-lc", "-c"].contains(argv[1]) ? argv[2] : argv.joined(separator: " ")
         guard let found = CommandClassifier.classify(script: script) else { return }
         let duration = item["duration"] as? [String: Any]
         let seconds = Double(jsonInt(duration?["secs"])) + Double(jsonInt(duration?["nanos"])) / 1e9
+        let exit: ObservedExit = (item["exit_code"] as? NSNumber).map { $0.intValue == 0 ? .zero : .nonZero } ?? .notReported
         let outcome = checkResult(
-            proof: found.proof,
-            exitCode: (item["exit_code"] as? NSNumber)?.intValue,
-            outputTail: item["aggregated_output"] as? String ?? "",
-            kind: found.kind)
+            proof: found.proof, exit: exit, outputTail: item["aggregated_output"] as? String ?? "", kind: found.kind)
         result.events.append(.check(ObservedCheck(at: stamp.addingTimeInterval(-seconds), kind: found.kind, result: outcome)))
     }
 

@@ -87,10 +87,10 @@ public enum DeliveryEvidence: Sendable, Equatable {
         case .changedWithoutCheck(let change):
             return "Code changed \(ago(change)). No test, build or lint command seen in this session. \(Self.limit)"
         case .changedAfterLastCheck(let change, let check):
-            return "Code changed \(ago(change)), after the last \(check.kind.rawValue) command ran \(ago(check.at)). "
+            return "Code changed \(ago(change)), after the last \(check.kind.rawValue) command was issued \(ago(check.at)). "
                 + "No check seen since. \(Self.limit)"
         case .checkedAfterLastChange(let check):
-            return "\(check.kind.rawValue.capitalized) command ran \(ago(check.at)), after the last code change. "
+            return "\(check.kind.rawValue.capitalized) command issued \(ago(check.at)), after the last code change. "
                 + "\(check.result.sentence) \(Self.limit)"
         }
     }
@@ -100,9 +100,9 @@ extension CheckResult {
     fileprivate var sentence: String {
         switch self {
         case .passed(.exitStatus): "It exited with status 0."
-        case .passed(.runnerSummary): "Its own summary reported a pass. Exit status was not visible."
+        case .passed(.runnerSummary): "Its own summary reported a pass."
         case .failed(.exitStatus): "It exited with a non-zero status."
-        case .failed(.runnerSummary): "Its own summary reported a failure. Exit status was not visible."
+        case .failed(.runnerSummary): "Its own summary reported a failure."
         case .unknown: "Result not visible."
         }
     }

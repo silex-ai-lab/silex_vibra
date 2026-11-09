@@ -15,13 +15,13 @@ from datetime import datetime
 
 FAIL = re.compile(
     r"Test run with \d+ tests?.*failed|with [1-9]\d* issues?|Executed \d+ tests?, with [1-9]\d* failure|\b[1-9]\d* failed\b"
-    r"|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED",
+    r"|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED|Segmentation fault|signal code \d+",
     re.M,
 )
 PASS = {
     "test": re.compile(
         r"Test run with [1-9]\d* tests?.*passed|Executed [1-9]\d* tests?, with 0 failures|\b[1-9]\d* passed\b"
-        r"|test result: ok\. [1-9]\d* passed|^ok\s+\S+|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED",
+        r"|test result: ok\. [1-9]\d* passed|^ok\s+\S+\s+(\d+\.\d+s|\(cached\))|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED",
         re.M,
     ),
     "build": re.compile(r"Build complete!|BUILD SUCCEEDED"),
@@ -31,13 +31,20 @@ TAIL = 6000
 EDITS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 DOC_EXT = {"md", "mdx", "txt", "rst", "png", "jpg", "jpeg", "gif", "svg", "pdf"}
 TEMP = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
-NEVER_RAN = "The user doesn't want to"
-NOT_FINISHED = ("Command running in background", "Command was")
-INFORMATIONAL = {"--version", "-version", "--help", "-h", "--show-bin-path", "--collect-only", "--co", "-list",
-                 "-showBuildSettings", "-showsdks", "--listTests", "--no-run", "--dry-run"}
+NEVER_RAN = ("The user doesn't want to", "Permission to use", "Permission for this action",
+             "Claude requested permissions", "Not started:", "[Tool call did not complete", "<tool_use_error>")
+NOT_A_CHECK = {"--version", "-version", "-V", "--help", "-h", "-usage", "--show-bin-path", "--collect-only", "--co",
+               "-list", "--list", "--list-tests", "--listTests", "-showBuildSettings", "-showsdks", "-showdestinations",
+               "-showTestPlans", "-resolvePackageDependencies", "--no-run", "--dry-run", "-dry-run", "--just-print",
+               "--fixtures", "--markers", "--setup-plan", "--setup-only", "--showConfig", "--print-config", "--init",
+               "--show-files", "--show-settings", "--exit-zero", "--if-present", "--passWithNoTests"}
+NOT_A_CHECK_FOR = {"make": {"-n", "-q"}, "go": {"-n", "-c"}, "tsc": {"-v"}, "eslint": {"-v"}, "swift": {"list"}, "vitest": {"list"}}
 RUN_VALUE_OPTIONS = {"--with", "--with-editable", "--with-requirements", "--python", "-p", "--extra", "--group",
-                     "--only-group", "--project", "--directory", "--package", "--env-file", "--index",
-                     "--default-index", "--index-url"}
+                     "--only-group", "--project", "--directory", "--package", "--env-file", "--index", "--default-index"}
+RUN_ALONE_OPTIONS = {"--no-project", "--no-sync", "-q", "--quiet", "-v", "--verbose", "--offline", "--frozen", "--locked",
+                     "--isolated", "--all-extras", "--all-groups", "--no-dev", "--dev", "--active", "--exact"}
+CONTROL = {"exit", "return", "trap", "set", "setopt", "eval", "exec", "source", ".", "function", "case", "if", "then",
+           "else", "elif", "fi", "for", "while", "until", "do", "done", "{", "}", "!"}
 WORD_WRAPPERS = {"env", "time", "command", "npx", "bunx", "do", "then", "if", "elif", "else", "while", "until"}
 RANK = {"test": 0, "build": 1, "lint": 2}
 PM = {"npm", "pnpm", "yarn", "bun"}
@@ -69,15 +76,18 @@ def after_backtick(script, i):
 
 
 def heredoc_word(script, i):
+    strips = script[i:i + 1] == "-"
     m = re.match(r"""-?[ \t]*((?:'[^']*'|"[^"]*"|[^\s;|&<>()])*)""", script[i:])
-    return re.sub(r"""['"\\]""", "", m.group(1))
+    return re.sub(r"""['"\\]""", "", m.group(1)), strips
 
 
-def after_heredoc(script, i, word):
+def after_heredoc(script, i, delimiter):
+    word, strips = delimiter
     while i < len(script):
         end = script.find("\n", i)
         end = len(script) if end < 0 else end
-        if script[i:end].strip(" \t") == word:
+        line = script[i:end]
+        if (line.lstrip("\t") if strips else line) == word:
             return min(end + 1, len(script))
         i = end + 1
     return len(script)
@@ -104,6 +114,10 @@ def tokenize(script):
         nxt = script[i + 1] if i + 1 < n else ""
         prev = script[i - 1] if i else ""
         if quote:
+            if quote == '"' and c == "$" and nxt == "(":
+                end = after_paren(script, i + 1)
+                word, i = word + script[i:end], end
+                continue
             if c == quote:
                 quote = None
             elif c == "\\" and quote == '"' and nxt:
@@ -135,6 +149,12 @@ def tokenize(script):
             i += 1
             if heredoc is not None:
                 i, heredoc = after_heredoc(script, i, heredoc), None
+        elif c == "$" and nxt == "'":
+            j = i + 2
+            while j < n and script[j] != "'":
+                j += 2 if script[j] == "\\" else 1
+            end = min(j + 1, n)
+            word, has, i = word + script[i:end], True, end
         elif (c == "$" or c in "<>") and nxt == "(":
             end = after_paren(script, i + 1)
             word, has, i = word + script[i:end], True, end
@@ -190,8 +210,10 @@ def base(word):
 
 
 def match_runner(raw):
+    if not raw or ")" in raw[0]:
+        return None
     toks = [t.rstrip(")") for t in raw]
-    if not toks or INFORMATIONAL & set(toks):
+    if NOT_A_CHECK & set(toks) or NOT_A_CHECK_FOR.get(base(raw[0]), set()) & set(toks):
         return None
     name, a, b = base(toks[0]), toks[1] if len(toks) > 1 else "", toks[2] if len(toks) > 2 else ""
     if name == "swift" and a in ("test", "build"):
@@ -233,6 +255,8 @@ def runner(words):
             toks = toks[1:]
             if was in ("npx", "bunx"):
                 while toks and toks[0].startswith("-"):
+                    if toks[0] not in ("-y", "--yes"):
+                        return None
                     toks = toks[1:]
         elif base(head) == "timeout":
             toks = toks[2:]
@@ -241,58 +265,40 @@ def runner(words):
         elif base(head) in ("uv", "poetry") and toks[1:2] == ["run"]:
             j = 2
             while j < len(toks) and toks[j].startswith("-"):
-                j += 2 if toks[j] in RUN_VALUE_OPTIONS else 1
+                option = toks[j].split("=", 1)[0]
+                if option in RUN_VALUE_OPTIONS:
+                    j += 1 if "=" in toks[j] else 2
+                elif option in RUN_ALONE_OPTIONS:
+                    j += 1
+                else:
+                    return None
             return match_runner(toks[j:])
         else:
             break
     return match_runner(toks)
 
 
-def pipefail_after(words, current):
-    if words == ["setopt", "pipefail"]:
-        return True
-    if words == ["unsetopt", "pipefail"]:
-        return False
-    if words[:1] == ["set"] and "pipefail" in words:
-        at = words.index("pipefail")
-        if at > 1 and words[at - 1][:1] in ("-", "+") and words[at - 1].endswith("o"):
-            return words[at - 1][0] == "-"
-    return current
-
-
-def proof_of(segs, i, pipefail):
-    proof = "full"
-    j = i - 1
-    while j >= 0 and segs[j][1] in ("&&", "||", "|"):
-        if segs[j][1] == "||":
+def proof_of(segs):
+    for words, _ in segs:
+        if not words or words[0] in CONTROL or any(ch in w for w in words for ch in "()`"):
             return "none"
-        proof = "zeroOnly"
-        j -= 1
-    for words, sep in segs[i:]:
-        if sep is None:
-            continue
-        if sep == "&&" or (sep == "|" and pipefail):
-            proof = "zeroOnly"
-        else:
-            return "none"
-    return proof
+    seps = [sep for _, sep in segs if sep]
+    if not seps:
+        return "full"
+    return "zeroOnly" if all(sep == "&&" for sep in seps) and segs[-1][1] is None else "none"
 
 
 def classify(script):
     """(kind, exit proof) or None."""
     segs = tokenize(script)
-    found, pipefail = [], False
+    kinds = []
     for i, (words, _) in enumerate(segs):
-        pipefail = pipefail_after(words, pipefail)
         if i and segs[i - 1][1] == "|":
             continue
         kind = runner(words)
         if kind:
-            found.append((kind, proof_of(segs, i, pipefail)))
-    if not found:
-        return None
-    order = ["none", "zeroOnly", "full"]
-    return min((k for k, _ in found), key=RANK.get), min((p for _, p in found), key=order.index)
+            kinds.append(kind)
+    return (min(kinds, key=RANK.get), proof_of(segs)) if kinds else None
 
 
 def summary(text, kind):
@@ -307,13 +313,20 @@ def summary(text, kind):
 
 
 def result_of(proof, code, text, kind, truth, agent):
-    if code is not None and proof == "full":
-        truth.append((code != 0, summary(text, kind), agent))
+    """code: 0, a non-zero int, "errored", "unfinished" or None."""
+    v = summary(text, kind)
+    if code == "unfinished":
+        return "unknown"
+    if code in (0, None) or code == "errored":
+        pass
+    if isinstance(code, int) and proof == "full":
+        truth.append((code != 0, v, agent))
     if code == 0 and proof != "none":
         return "passed.exitStatus"
-    if code not in (0, None) and proof == "full":
+    if isinstance(code, int) and code != 0 and proof == "full":
         return "failed.exitStatus"
-    v = summary(text, kind)
+    if code == "errored" or (isinstance(code, int) and code != 0):
+        return "failed.runnerSummary" if v is False else "unknown"
     return "unknown" if v is None else ("passed.runnerSummary" if v else "failed.runnerSummary")
 
 
@@ -336,10 +349,12 @@ def counts_as_change(path):
 
 
 def claude_exit(err, text):
+    if text.startswith(("Command running in background", "Command was manually backgrounded")) or "Command was moved to the background" in text:
+        return "unfinished"
     if not err:
-        return None if text.startswith(NOT_FINISHED) else 0
+        return 0
     m = re.match(r"Exit code (-?\d+)", text)
-    return int(m.group(1)) if m else None
+    return int(m.group(1)) if m else "errored"
 
 
 def fold_claude(path, truth):
@@ -365,7 +380,7 @@ def fold_claude(path, truth):
     for i in order:
         name, inp, stamp = uses[i]
         err, text = results.get(i, (False, None))
-        if text is not None and text.startswith(NEVER_RAN):
+        if text is not None and err and text.startswith(NEVER_RAN):
             if name == "Bash" and isinstance(inp.get("command"), str) or name in EDITS:
                 saw = True
             continue
@@ -409,6 +424,8 @@ def fold_codex(path, truth):
             continue
         if it.get("type") == "CommandExecution" and isinstance(it.get("command"), list):
             saw = True
+            if it.get("status") not in ("completed", "failed"):
+                continue
             cmd = it["command"]
             script = cmd[2] if len(cmd) >= 3 and cmd[1] in ("-lc", "-c") else " ".join(map(str, cmd))
             c = classify(script)

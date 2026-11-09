@@ -15,10 +15,10 @@ enum RunnerSummary {
     static let tailBytes = 6000
 
     private static let fail = regex(
-        #"Test run with \d+ tests?.*failed|with [1-9]\d* issues?|Executed \d+ tests?, with [1-9]\d* failure|\b[1-9]\d* failed\b|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED"#)
+        #"Test run with \d+ tests?.*failed|with [1-9]\d* issues?|Executed \d+ tests?, with [1-9]\d* failure|\b[1-9]\d* failed\b|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED|Segmentation fault|signal code \d+"#)
     private static let pass: [CheckKind: NSRegularExpression] = [
         .test: regex(
-            #"Test run with [1-9]\d* tests?.*passed|Executed [1-9]\d* tests?, with 0 failures|\b[1-9]\d* passed\b|test result: ok\. [1-9]\d* passed|^ok\s+\S+|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED"#),
+            #"Test run with [1-9]\d* tests?.*passed|Executed [1-9]\d* tests?, with 0 failures|\b[1-9]\d* passed\b|test result: ok\. [1-9]\d* passed|^ok\s+\S+\s+(\d+\.\d+s|\(cached\))|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED"#),
         .build: regex(#"Build complete!|BUILD SUCCEEDED"#),
         .lint: regex(#"All checks passed|Success: no issues"#),
     ]

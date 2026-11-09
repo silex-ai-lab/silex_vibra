@@ -1,16 +1,16 @@
 import Foundation
 
 /// What a command line's exit status can prove about the checks in it.
-enum ExitProof: Int, Comparable, Sendable {
-    /// Nothing. A pipe, `||`, or a later command owns the status.
-    case none
-    /// Zero proves every command in the chain ran and passed. Non-zero only
-    /// says something in the chain failed, maybe before the check ran.
-    case zeroOnly
-    /// The check alone sets the status.
+///
+/// Anything outside two narrow shapes proves nothing, because a parser cannot
+/// follow `exit`, subshells, `set -e` or functions far enough to promise more.
+enum ExitProof: Sendable {
+    /// One simple command, so the check alone sets the status.
     case full
-
-    static func < (a: ExitProof, b: ExitProof) -> Bool { a.rawValue < b.rawValue }
+    /// Simple commands joined only by `&&`. Zero proves every one ran and
+    /// passed. Non-zero does not say which one failed.
+    case zeroOnly
+    case none
 }
 
 /// Decides whether a shell command line runs a test, build or lint command,
@@ -62,10 +62,17 @@ enum CommandClassifier {
         }
     }
 
-    /// These report on the tool and exit 0 without checking anything.
-    private static let informational: Set<String> = [
-        "--version", "-version", "--help", "-h", "--show-bin-path", "--collect-only", "--co", "-list",
-        "-showBuildSettings", "-showsdks", "--listTests", "--no-run", "--dry-run",
+    /// These report on the tool, or exit 0 without checking anything.
+    private static let notAChecking: Set<String> = [
+        "--version", "-version", "-V", "--help", "-h", "-usage", "--show-bin-path", "--collect-only", "--co",
+        "-list", "--list", "--list-tests", "--listTests", "-showBuildSettings", "-showsdks", "-showdestinations",
+        "-showTestPlans", "-resolvePackageDependencies", "--no-run", "--dry-run", "-dry-run", "--just-print",
+        "--fixtures", "--markers", "--setup-plan", "--setup-only", "--showConfig", "--print-config", "--init",
+        "--show-files", "--show-settings", "--exit-zero", "--if-present", "--passWithNoTests",
+    ]
+    /// The same words mean something else to other tools: `pytest -n 4` runs.
+    private static let notACheckingFor: [String: Set<String>] = [
+        "make": ["-n", "-q"], "go": ["-n", "-c"], "tsc": ["-v"], "eslint": ["-v"], "swift": ["list"], "vitest": ["list"],
     ]
 
     /// Wrappers dropped from the front of a segment. A value is how many
@@ -77,50 +84,38 @@ enum CommandClassifier {
     private static let runWrappers: [[String]] = [["uv", "run"], ["poetry", "run"]]
     private static let runOptionsTakingValue: Set<String> = [
         "--with", "--with-editable", "--with-requirements", "--python", "-p", "--extra", "--group",
-        "--only-group", "--project", "--directory", "--package", "--env-file", "--index",
-        "--default-index", "--index-url",
+        "--only-group", "--project", "--directory", "--package", "--env-file", "--index", "--default-index",
+    ]
+    private static let runOptionsAlone: Set<String> = [
+        "--no-project", "--no-sync", "-q", "--quiet", "-v", "--verbose", "--offline", "--frozen", "--locked",
+        "--isolated", "--all-extras", "--all-groups", "--no-dev", "--dev", "--active", "--exact",
+    ]
+    /// These change what a command does, or end the shell before it runs.
+    private static let controlWords: Set<String> = [
+        "exit", "return", "trap", "set", "setopt", "eval", "exec", "source", ".", "function", "case", "if", "then",
+        "else", "elif", "fi", "for", "while", "until", "do", "done", "{", "}", "!",
     ]
 
     static func classify(script: String) -> (kind: CheckKind, proof: ExitProof)? {
         let segments = split(script)
-        var pipefail = false
         var kinds: [CheckKind] = []
-        var weakest = ExitProof.full
         for (index, segment) in segments.enumerated() {
-            pipefail = pipefailState(after: segment.words, current: pipefail)
             if index > 0, segments[index - 1].separator == .pipe { continue }
-            guard let kind = checkKind(of: segment.words) else { continue }
-            kinds.append(kind)
-            weakest = min(weakest, proof(of: index, in: segments, pipefail: pipefail))
+            if let kind = checkKind(of: segment.words) { kinds.append(kind) }
         }
         guard let strongest = CheckKind.allCases.first(where: kinds.contains) else { return nil }
-        return (strongest, weakest)
+        return (strongest, proof(of: segments))
     }
 
-    private static func pipefailState(after words: [String], current: Bool) -> Bool {
-        if words == ["setopt", "pipefail"] { return true }
-        if words == ["unsetopt", "pipefail"] { return false }
-        guard words.first == "set", let at = words.firstIndex(of: "pipefail"), at > 1,
-              let flag = words[at - 1].first, flag == "-" || flag == "+", words[at - 1].hasSuffix("o")
-        else { return current }
-        return flag == "-"
-    }
-
-    private static func proof(of index: Int, in segments: [Segment], pipefail: Bool) -> ExitProof {
-        var result = ExitProof.full
-        for earlier in segments[..<index].reversed() {
-            guard let separator = earlier.separator, [.and, .or, .pipe].contains(separator) else { break }
-            if separator == .or { return .none }
-            result = .zeroOnly
+    private static func proof(of segments: [Segment]) -> ExitProof {
+        let simple = segments.allSatisfy { segment in
+            guard let first = segment.words.first, !controlWords.contains(first) else { return false }
+            return !segment.words.contains { $0.contains("(") || $0.contains(")") || $0.contains("`") }
         }
-        for separator in segments[index...].compactMap(\.separator) {
-            switch separator {
-            case .and: result = min(result, .zeroOnly)
-            case .pipe where pipefail: result = min(result, .zeroOnly)
-            case .pipe, .or, .semicolon, .newline, .background: return .none
-            }
-        }
-        return result
+        guard simple else { return .none }
+        let separators = segments.compactMap(\.separator)
+        if separators.isEmpty { return .full }
+        return separators.allSatisfy { $0 == .and } && segments.last?.separator == nil ? .zeroOnly : .none
     }
 
     private static func checkKind(of rawWords: [String]) -> CheckKind? {
@@ -133,7 +128,12 @@ enum CommandClassifier {
                 words.removeFirst()
             } else if let extra = wrappers[basename(first)] {
                 words.removeFirst(min(words.count, 1 + extra))
-                if first == "npx" || first == "bunx" { while words.first?.hasPrefix("-") == true { words.removeFirst() } }
+                if first == "npx" || first == "bunx" {
+                    while let option = words.first, option.hasPrefix("-") {
+                        guard option == "-y" || option == "--yes" else { return nil }
+                        words.removeFirst()
+                    }
+                }
             } else if words.count > 1, [basename(first), words[1]] == ["pnpm", "exec"] {
                 words.removeFirst(2)
             } else if words.count > 1, runWrappers.contains([basename(first), words[1]]) {
@@ -145,18 +145,29 @@ enum CommandClassifier {
         return match(words)
     }
 
+    /// An option this does not know may take a value that looks like a
+    /// program, so it ends the search with no program.
     private static func afterRunOptions(_ words: [String]) -> [String] {
         var index = 0
         while index < words.count, words[index].hasPrefix("-") {
-            index += runOptionsTakingValue.contains(words[index]) ? 2 : 1
+            let name = words[index].split(separator: "=", maxSplits: 1).first.map(String.init) ?? words[index]
+            if runOptionsTakingValue.contains(name) {
+                index += words[index].contains("=") ? 1 : 2
+            } else if runOptionsAlone.contains(name) {
+                index += 1
+            } else {
+                return []
+            }
         }
         return Array(words.dropFirst(index))
     }
 
     private static func match(_ rawWords: [String]) -> CheckKind? {
+        guard let rawFirst = rawWords.first, !rawFirst.contains(")") else { return nil }
         let words = rawWords.map { String($0.reversed().drop { $0 == ")" }.reversed()) }
-        guard let first = words.first, informational.isDisjoint(with: words) else { return nil }
-        let normalized = [basename(first)] + words.dropFirst()
+        let name = basename(rawFirst)
+        guard notAChecking.isDisjoint(with: words), notACheckingFor[name]?.isDisjoint(with: words) ?? true else { return nil }
+        let normalized = [name] + words.dropFirst()
         return runners.first { runner in
             normalized.starts(with: runner.prefix)
                 && runner.requires.map { normalized.dropFirst(runner.prefix.count).contains($0) } ?? true
@@ -168,8 +179,9 @@ enum CommandClassifier {
         return name.range(of: #"^python[0-9.]*$"#, options: .regularExpression) != nil ? "python" : name
     }
 
-    private static func delimiter(in chars: [Character], after start: Int) -> String {
+    private static func delimiter(in chars: [Character], after start: Int) -> (word: String, stripsTabs: Bool) {
         var i = start
+        let stripsTabs = i < chars.count && chars[i] == "-"
         while i < chars.count, chars[i] == "-" || chars[i] == " " || chars[i] == "\t" { i += 1 }
         var word = ""
         var quote: Character?
@@ -186,16 +198,20 @@ enum CommandClassifier {
             }
             i += 1
         }
-        return word
+        return (word, stripsTabs)
     }
 
     /// The index just past the delimiter's own line, or the end when it never closes.
-    private static func indexAfterHeredoc(in chars: [Character], from start: Int, delimiter: String) -> Int {
+    private static func indexAfterHeredoc(
+        in chars: [Character], from start: Int, delimiter: (word: String, stripsTabs: Bool)
+    ) -> Int {
         var lineStart = start
         while lineStart < chars.count {
             let lineEnd = chars[lineStart...].firstIndex(of: "\n") ?? chars.count
-            let line = String(chars[lineStart..<lineEnd]).trimmingCharacters(in: .whitespaces)
-            if line == delimiter { return min(lineEnd + 1, chars.count) }
+            let line = String(chars[lineStart..<lineEnd])
+            if (delimiter.stripsTabs ? String(line.drop { $0 == "\t" }) : line) == delimiter.word {
+                return min(lineEnd + 1, chars.count)
+            }
             lineStart = lineEnd + 1
         }
         return chars.count
@@ -238,7 +254,7 @@ enum CommandClassifier {
         var word = ""
         var hasWord = false
         var quote: Character?
-        var heredocDelimiter: String?
+        var heredocDelimiter: (word: String, stripsTabs: Bool)?
         let chars = Array(script)
         var i = 0
 
@@ -263,6 +279,10 @@ enum CommandClassifier {
             let c = chars[i]
             let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
             if let q = quote {
+                if q == "\"", c == "$", next == "(" {
+                    take(through: indexAfterSubstitution(in: chars, open: i + 1))
+                    continue
+                }
                 if c == q { quote = nil }
                 else if c == "\\", q == "\"", let next { word.append(next); i += 1 }
                 else { word.append(c) }
@@ -287,6 +307,11 @@ enum CommandClassifier {
                     i = indexAfterHeredoc(in: chars, from: i + 1, delimiter: delimiter)
                     continue
                 }
+            case "$" where next == "'":
+                var end = i + 2
+                while end < chars.count, chars[end] != "'" { end += chars[end] == "\\" ? 2 : 1 }
+                take(through: min(end + 1, chars.count))
+                continue
             case "$" where next == "(":
                 take(through: indexAfterSubstitution(in: chars, open: i + 1))
                 continue

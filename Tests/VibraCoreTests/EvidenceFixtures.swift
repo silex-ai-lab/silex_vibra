@@ -60,6 +60,7 @@ enum EvidenceFixtures {
         var item: [String: Any] = [
             "type": "CommandExecution", "command": ["zsh", "-lc", script],
             "aggregated_output": output, "duration": ["secs": durationSeconds, "nanos": 0],
+            "status": exit == nil || exit == 0 ? "completed" : "failed",
         ]
         if let exit { item["exit_code"] = exit }
         return codexItem(item, at: seconds)

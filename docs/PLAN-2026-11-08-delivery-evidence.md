@@ -125,13 +125,9 @@ public enum DeliveryEvidence: Sendable, Equatable {
 }
 ```
 
-**Rules.**
+**Rules.** Section 9 states them. In brief, an exit status is believed only in
+narrow shapes, and an unknown result is never rounded up.
 
-- A non-zero exit visible to Vibra is always `failed(.exitStatus)`.
-- Exit 0 counts as `passed(.exitStatus)` only when the check is the whole
-  command, or `pipefail` is set.
-- Otherwise read the last 6 KB of output through a runner summary table. No
-  match is `unknown`, and `unknown` is never rounded up.
 - Documentation edits (`.md`, `.txt`, images) do not count as code changes.
 
 **Wording.** The row states what was seen and never says "done" or "verified".
@@ -231,13 +227,14 @@ third element. `CommandClassifier` splits the script outside quotes.
   `npm|pnpm|yarn|bun [run] build`, `cargo build`, `cargo check`, `go build`,
   `tsc`. Lint is `make lint`, `npm|pnpm|yarn|bun [run] lint|typecheck`,
   `cargo clippy`, `go vet`, `ruff check`, `mypy`, `eslint`.
-- Exit proof has three levels. `full`: the check alone sets the status. `zeroOnly`:
-  an `&&` chain, or a pipe under `pipefail`, where 0 proves every part passed and
-  non-zero does not say which part failed. `none`: a pipe, a later `||`, `;`,
-  newline or `&`, or an earlier `||` in the same list, where the check may not
-  have run. `set -o pipefail` and `setopt pipefail` set it, `set +o` clears it.
+- Exit proof has three levels. `full`: one simple command. `zeroOnly`: simple
+  commands joined only by `&&`, where 0 proves every part ran and passed and
+  non-zero does not say which failed. `none`: everything else, including pipes,
+  `;`, newlines, subshells, `pipefail`, and any line using `exit`, `set`, `if`
+  or similar. Two review rounds found that a parser cannot follow those far
+  enough, and only 23 of 1349 real checks relied on exit status anyway.
 - Several checks in one command report the strongest kind (test, then build,
-  then lint) and the weakest proof.
+  then lint).
 - Command substitution stays inside its word and is never a check. Flags that
   only report on the tool (`--version`, `--help`, `--collect-only`, `--no-run`
   and similar) are not checks.
@@ -247,17 +244,21 @@ third element. `CommandClassifier` splits the script outside quotes.
 | Exit status | `full` | `zeroOnly` | `none` |
 |---|---|---|---|
 | Zero | passed | passed | runner summary |
-| Non-zero | failed | runner summary | runner summary |
-| Not available | runner summary | runner summary | runner summary |
+| Non-zero or tool error | failed (`full`, non-zero only) | failure from summary, else unknown | failure from summary, else unknown |
+| Not reported | runner summary | runner summary | runner summary |
+| Still running | unknown | unknown | unknown |
 
-A runner summary with no decision is `unknown`.
+A call that did not exit cleanly can confirm a failure from a runner summary and
+can never read as a pass, because a partial summary does not contradict the
+status.
 
 Claude Code's `is_error` is an exit status only when the result opens with
-`Exit code N`. About 14% of `is_error` Bash results do not, for example
-permission denials and tool errors (65 of 437). A result that opens with `The
-user doesn't want to` means the call never ran, so it produces no event. A call
-with `run_in_background` has `none`, and its immediate result is not an exit
-status (333 real results). A result opening `Command was` is treated the same.
+`Exit code N`. About 14% of `is_error` Bash results do not (65 of 437). A result
+opening with `The user doesn't want to`, a permission refusal or a tool-call
+error means the call never started, so it produces no event. A call with
+`run_in_background`, or a result carrying the moved-to-background note, has no
+exit status yet. The row says a command was issued, because that is all the
+transcript shows for sure.
 
 The last output line that matches a runner summary decides, and on that line
 failure beats pass. A pass after an earlier failure line is `unknown`, because

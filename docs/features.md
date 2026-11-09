@@ -28,13 +28,14 @@ history Vibra reads), **Open Project Folder** and **Copy Path**. A session that
 exits keeps the details it had and says `No longer active`.
 
 For Claude Code and Codex the window also has a **Code checks** row. It says
-whether a test, build or lint command ran after the session's last code change,
-counting the session's subagents, and what that command returned. An exit
-status counts only as far as it can prove something. In `cd x && swift test`, 0
-proves a pass and non-zero does not say which part failed. When a pipe, `||` or
-a later command hides the status, or the check ran in the background, the
-runner's own summary line decides, and if it does not, the result reads as
-unknown. The row describes what this session did. It does not say a task is done, and edits made through shell
+whether the session issued a test, build or lint command after its last code
+change, counting subagents, and what that command returned. An exit status
+counts only for one simple command, or simple commands joined by `&&`, where 0
+proves a pass and non-zero does not say which part failed. Anything else, such
+as a pipe, a subshell or a background run, falls to the runner's own summary
+line, and a call that did not exit cleanly can never read as a pass from one. If
+nothing decides, the result reads as not visible. The row describes what this
+session did. It does not say a task is done, and edits made through shell
 commands are not counted. `Vibra --evidence-stats [--days N]` prints the same
 results as counts, with no commands or paths.
 

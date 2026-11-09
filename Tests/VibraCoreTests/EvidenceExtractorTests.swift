@@ -94,10 +94,38 @@ struct EvidenceExtractorTests {
         #expect(fold.events == [check(.test, .unknown, at: 1)])
     }
 
-    @Test(arguments: ["Permission denied by policy", "<tool_use_error>nope</tool_use_error>", "Command timed out"])
+    @Test(arguments: ["Permission denied by policy", "Command timed out"])
     func claudeAnErrorWithoutAnExitCodeIsNotAFailure(text: String) {
         let fold = claude([F.claudeBash("a", "swift test", at: 1), F.claudeResult("a", text: text, isError: true, at: 2)])
         #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test func claudeNoteAfterPartialOutputIsStillNotFinished() {
+        let fold = claude([
+            F.claudeBash("a", "swift test", at: 1),
+            F.claudeResult("a", text: "Building...\n12 passed\nCommand was moved to the background (ID: x)", at: 2),
+        ])
+        #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test(arguments: ["Exit code 1\nTests: 5 passed, 5 total", "Command timed out after 2m\n12 passed"])
+    func claudeASummaryCannotOverruleACallThatDidNotExitCleanly(text: String) {
+        let fold = claude([F.claudeBash("a", "cd x && npx jest", at: 1), F.claudeResult("a", text: text, isError: true, at: 2)])
+        #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test func claudeASummaryCanConfirmAFailureBehindAChain() {
+        let fold = claude([
+            F.claudeBash("a", "cd x && swift test", at: 1),
+            F.claudeResult("a", text: "Exit code 1\nTest run with 3 tests failed", isError: true, at: 2),
+        ])
+        #expect(fold.events == [check(.test, .failed(.runnerSummary), at: 1)])
+    }
+
+    @Test(arguments: ["Permission to use Bash has been denied.", "Not started: same command", "[Tool call did not complete"])
+    func claudeACallThatNeverStartedLeavesNoEvent(text: String) {
+        let fold = claude([F.claudeBash("a", "swift test", at: 1), F.claudeResult("a", text: text, isError: true, at: 2)])
+        #expect(fold.events.isEmpty)
     }
 
     @Test func claudeChainFailureDoesNotBlameTheCheck() {
@@ -216,7 +244,7 @@ struct EvidenceExtractorTests {
 
     @Test func codexShellWrapperScriptIsTheThirdElement() {
         let line = F.codexItem([
-            "type": "CommandExecution", "command": ["zsh", "-lc", "cd x && swift test"],
+            "type": "CommandExecution", "status": "completed", "command": ["zsh", "-lc", "cd x && swift test"],
             "exit_code": 0, "aggregated_output": "", "duration": ["secs": 0, "nanos": 0],
         ], at: 5)
         #expect(codex([line]).events == [check(.test, .passed(.exitStatus), at: 5)])
