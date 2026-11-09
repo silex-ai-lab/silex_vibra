@@ -317,7 +317,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         let item = rows[row]
         let text: String
         switch id {
-        case "when": text = item.incident.completedAt.formatted(date: .abbreviated, time: .shortened)
+        case "when": text = item.incident.completedAt.formatted(date: .numeric, time: .shortened)
         case "who": text = IncidentText.owner(item.incident)
         case "what": text = IncidentText.title(item.incident)
         default: text = item.disposition.state
@@ -346,7 +346,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         importStatus.font = .systemFont(ofSize: 11)
         importStatus.textColor = .secondaryLabelColor
 
-        for (id, heading, width) in [("when", "When", 150.0), ("who", "Agent", 110.0), ("what", "Finding", 310.0), ("state", "Answer", 90.0)] {
+        for (id, heading, width) in [("when", "When", 130.0), ("who", "Agent", 90.0), ("what", "Finding", 390.0), ("state", "Answer", 70.0)] {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
             column.title = heading
             column.width = width
