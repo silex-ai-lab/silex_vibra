@@ -188,7 +188,7 @@ states, never message content. It exits with code `2` if it finds none.
 live record yet (the guide says if a fixture test covers it). **—**: never
 shown (for example, Codex and Hermes have no approval state).
 
-Clicking a row jumps to the terminal tab (iTerm2, Terminal, herdr) or hosting
+Clicking a row jumps to the terminal tab (iTerm2, Terminal, herdr, Orca) or hosting
 app for Claude Code and Codex, to the VS Code window, or brings Cursor forward.
 OpenCode and Hermes sessions cannot be jumped to: clicking one opens its details
 instead.
