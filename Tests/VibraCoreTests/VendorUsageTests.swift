@@ -191,6 +191,40 @@ struct VendorUsageTests {
         #expect(throws: VendorImportError.noSingleKey) { try VendorUsage.parse(try page(5), now: now) }
     }
 
+    private func openAIPage(_ rows: [[String: Any]]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: [
+            "object": "page", "has_more": false, "next_page": NSNull(),
+            "data": [["start_time": 1_754_006_400, "results": rows] as [String: Any]],
+        ] as [String: Any])
+    }
+
+    private let afterPage = Date(timeIntervalSince1970: 1_754_179_200)
+
+    @Test func aCountNoUsageCouldReachIsRefusedNotAddedUp() throws {
+        for bad: Any in [Int.max, -1, 1.5, 1e30] {
+            let page = try openAIPage([["input_tokens": bad, "output_tokens": 1, "api_key_id": "k"]])
+            #expect(throws: VendorImportError.self) { try VendorUsage.parse(page, now: afterPage) }
+        }
+    }
+
+    @Test func manyLargeRowsAreRefusedNotOverflowed() throws {
+        let row: [String: Any] = ["input_tokens": 1_000_000_000_000_000, "output_tokens": 0, "api_key_id": "k"]
+        let page = try openAIPage(Array(repeating: row, count: 10_000))
+        #expect(throws: VendorImportError.countTooLarge) { try VendorUsage.parse(page, now: afterPage) }
+    }
+
+    @Test func hugeLocalCountsSaturateInsteadOfTrapping() throws {
+        let stamp = Date(timeIntervalSince1970: 1_754_006_400)
+        let huge = TokenUsage(input: Int.max, output: Int.max, cacheCreation: 0, cacheRead: 0)
+        let samples = [UsageSample(timestamp: stamp, model: "m", usage: huge), UsageSample(timestamp: stamp, model: "m", usage: huge)]
+        #expect(VendorUsage.localDays(from: samples, provider: .openai).map(\.tokens) == [Int.max])
+
+        let day = try #require(UTCDay(iso: "2025-08-01"))
+        let local = [LocalDay(day: day, tokens: Int.max), LocalDay(day: day, tokens: Int.max)]
+        let file = VendorUsageFile(provider: .openai, apiKeyID: "k", days: [VendorDay(day: day, tokens: 5)])
+        #expect(VendorUsage.reconcile(file, local: local, now: afterPage).incidents.isEmpty)
+    }
+
     @Test func scopeNamesEveryDayIncludingOnesWithNoFinding() throws {
         let day = try #require(UTCDay(iso: "2025-08-01"))
         let earlier = try #require(UTCDay(iso: "2025-07-01"))

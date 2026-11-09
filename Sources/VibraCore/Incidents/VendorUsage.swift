@@ -50,6 +50,8 @@ public enum VendorImportError: Error, Equatable, CustomStringConvertible {
     case noSingleKey
     /// The oldest bucket is older than `VendorUsage.maxAgeDays`.
     case tooOld
+    /// A total cannot be represented, which no real usage page reaches.
+    case countTooLarge
 
     public var description: String {
         switch self {
@@ -63,6 +65,8 @@ public enum VendorImportError: Error, Equatable, CustomStringConvertible {
             "Every result with usage must name one API key. Fetch the page grouped by api_key_id for your own key."
         case .tooOld:
             "The oldest day in this file is more than \(VendorUsage.maxAgeDays) days old."
+        case .countTooLarge:
+            "A total in this file is too large to be real usage."
         }
     }
 }
@@ -95,7 +99,7 @@ public enum VendorUsage {
         "an Anthropic page (`data[].starting_at` with `data[].results[].{api_key_id, "
         + "uncached_input_tokens, cache_read_input_tokens, cache_creation, output_tokens}`) or an OpenAI page "
         + "(`object: page` with `data[].{start_time, results[].{api_key_id, input_tokens, "
-        + "output_tokens, input_cached_tokens}}`)"
+        + "output_tokens, optional input_cached_tokens}}`)"
 
     // MARK: - Parse
 
@@ -148,14 +152,16 @@ public enum VendorUsage {
             for result in results {
                 let key = try self.key(of: result)
                 let sum = isOpenAI ? try openAITokens(result) : try anthropicTokens(result)
-                tokens += sum
+                tokens = try adding(tokens, sum)
+                // A key on a zero row counts too, so a corrected re-import keeps
+                // its identity. Under the shown filter a page holds one key.
                 if let key, !key.isEmpty {
                     keys.insert(key)
                 } else if sum > 0 {
                     throw VendorImportError.noSingleKey
                 }
             }
-            totals[day, default: 0] += tokens
+            totals[day] = try adding(totals[day] ?? 0, tokens)
         }
 
         guard keys.count <= 1 else { throw VendorImportError.noSingleKey }
@@ -204,11 +210,29 @@ public enum VendorUsage {
         return input + output
     }
 
+    /// A file is untrusted, so a count must be a whole number in this range.
+    /// Several capped fields can then be summed without overflow.
+    private static let maxCount = 1_000_000_000_000_000.0
+
     private static func number(_ value: Any?) -> Int? {
         guard let value, let number = value as? NSNumber else { return nil }
         // A JSON boolean bridges to NSNumber; a token count is never a flag.
         if CFGetTypeID(number) == CFBooleanGetTypeID() { return nil }
+        let exact = number.doubleValue
+        guard exact >= 0, exact <= maxCount, exact.rounded(.down) == exact else { return nil }
         return number.intValue
+    }
+
+    private static func adding(_ first: Int, _ second: Int) throws -> Int {
+        let (sum, overflow) = first.addingReportingOverflow(second)
+        if overflow { throw VendorImportError.countTooLarge }
+        return sum
+    }
+
+    /// Local counts come from transcripts, so they saturate instead of trapping.
+    private static func saturating(_ first: Int, _ second: Int) -> Int {
+        let (sum, overflow) = max(0, first).addingReportingOverflow(max(0, second))
+        return overflow ? Int.max : sum
     }
 
     // MARK: - Window
@@ -235,15 +259,16 @@ public enum VendorUsage {
         for sample in samples {
             guard let timestamp = sample.timestamp else { continue }
             let usage = sample.usage
-            let tokens = switch provider {
+            let parts = switch provider {
             case .anthropic:
                 // `input`, not `TokenUsage.total`, is the uncached input.
-                usage.input + usage.cacheRead + usage.cacheCreation + usage.output
+                [usage.input, usage.cacheRead, usage.cacheCreation, usage.output]
             case .openai:
                 // OpenAI's `input` already includes the cached share.
-                usage.input + usage.output
+                [usage.input, usage.output]
             }
-            totals[UTCDay(date: timestamp), default: 0] += tokens
+            let day = UTCDay(date: timestamp)
+            totals[day] = parts.reduce(totals[day] ?? 0, saturating)
         }
         return totals.keys.sorted().map { LocalDay(day: $0, tokens: totals[$0] ?? 0) }
     }
@@ -253,7 +278,7 @@ public enum VendorUsage {
     public static func reconcile(_ file: VendorUsageFile, local: [LocalDay], now: Date) -> VendorReconciliation {
         var localTokens: [UTCDay: Int] = [:]
         for entry in local {
-            localTokens[entry.day, default: 0] += entry.tokens
+            localTokens[entry.day] = saturating(localTokens[entry.day] ?? 0, entry.tokens)
         }
         let earliest = local.map(\.day).min()
         let today = UTCDay(date: now)

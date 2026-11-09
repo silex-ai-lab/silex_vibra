@@ -80,7 +80,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         let open = rows.filter { $0.disposition == .open && $0.incident.kind.rule.severity == .review }.count
         headline.stringValue = open == 1 ? "1 item to review" : "\(open) items to review"
         var notes = [
-            "Claude Code and Codex only. Credential reads are detected for named commands, and writes by the path as written.",
+            "Claude Code and Codex only. Credential reads are detected for named commands, not sed, awk, scripts or interpreters, and writes by the path as written.",
             "Stolen quota can be checked only for organization API usage, one key at a time. Pro, Max and ChatGPT plans appear in no file you can import.",
         ]
         if store.wasReset {

@@ -51,6 +51,8 @@ mutate "shrunk files are not re-read" "$monitor" '|| source.size < state.lastSiz
 mutate "every later write notifies" "$monitor" 'return previous <= date' 'return true'
 mutate "a stale denial blocks a fresh one" "$extractor" 'guard denials[index].stale else { return }' 'guard !denials[index].stale else { return }'
 mutate "empty roots keep the old roots" "$extractor" 'if let values = payload["workspace_roots"] as? [String] { roots = values }' 'if let values = payload["workspace_roots"] as? [String], !values.isEmpty { roots = values }'
+mutate "an out-of-range count is accepted" "$usage" 'guard exact >= 0, exact <= maxCount, exact.rounded(.down) == exact else { return nil }' ''
+mutate "bucket totals may overflow" "$usage" 'if overflow { throw VendorImportError.countTooLarge }' ''
 mutate "a zero row loses its key" "$usage" 'if let key, !key.isEmpty {' 'if sum > 0, let key, !key.isEmpty {'
 mutate "a re-import keeps old findings" "$monitor" 'for id in scope { vendor[id] = nil }' ''
 mutate "a discarded import still lands" "$monitor" 'guard isCurrent() else { return false }' ''
