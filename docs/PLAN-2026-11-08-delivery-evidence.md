@@ -1,7 +1,7 @@
 # Plan: feature review and Delivery Evidence Lite
 
 Status: approved by the owner on 2026-11-08, including the privacy change in
-section 5.
+section 5. Built. Sections 5 and 9 reflect three independent review rounds.
 Base: `main` at `c47e90d`.
 
 ## 1. What this plan decides
@@ -194,6 +194,10 @@ and the other four agents.
 - Precision of the gap is unmeasured. Work verified by another session, or by a
   script outside the runner list, reads as a gap. The row words it as what this
   session did, so it stays true.
+- A subagent's check counts as the session's, wherever it ran. A reviewer that
+  builds a scratch package can therefore decide the row.
+- The list of flags that do not really check is open-ended, and a masked line
+  reads other commands' output as the check's.
 - Whether anyone changes behavior because of this row is a product hypothesis.
   This plan tests correctness only.
 - Transcript formats change. Codex 0.166 already differs from the

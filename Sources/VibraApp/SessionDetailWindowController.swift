@@ -242,6 +242,8 @@ final class SessionDetailWindowController: NSObject, RenderableWindow {
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).width = 380
         grid.rowSpacing = 6
+        // Otherwise the window's spare height opens a gap inside the grid.
+        grid.setContentHuggingPriority(.required, for: .vertical)
         grid.columnSpacing = 10
 
         for (button, selector) in [
