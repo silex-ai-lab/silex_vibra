@@ -523,6 +523,40 @@ if CommandLine.arguments.contains("--evidence-stats") {
     exit(finished ? 0 : 1)
 }
 
+// `Vibra --incidents [--days N] [--json]` prints what the incident monitor
+// finds: enums, dates, counts and hashed ids, never a command, a path or a key.
+// It reads the user's answers and never writes, so it cannot silence an alert.
+if CommandLine.arguments.contains("--incidents") {
+    let days = max(1, argument(after: "--days").flatMap(Int.init) ?? 7)
+    let asJSON = CommandLine.arguments.contains("--json")
+    let adapters = AdapterRegistry.all()
+    nonisolated(unsafe) var finished = false
+    Task.detached {
+        let store = IncidentStore()
+        let monitor = IncidentMonitor(adapters: adapters, store: store, notifies: false, deliver: { _ in })
+        let started = Date()
+        let stats = await monitor.poll()
+        let cutoff = started.addingTimeInterval(-Double(days) * 86_400)
+        let rows = await monitor.rows().filter { $0.incident.completedAt >= cutoff }
+        if asJSON {
+            if let data = try? IncidentJSON.encode(rows) {
+                FileHandle.standardOutput.write(data)
+                print()
+            }
+        } else {
+            print(IncidentText.render(rows), terminator: "")
+        }
+        let seconds = String(format: "%.2f", Date().timeIntervalSince(started))
+        FileHandle.standardError.write(Data("read \(stats.bytesRead) bytes in \(seconds) s\n".utf8))
+        finished = true
+    }
+    let deadline = Date().addingTimeInterval(600)
+    while !finished && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(finished ? 0 : 1)
+}
+
 // `Vibra --show-report | --show-history | --show-settings [--snapshot <path>]`
 // launches the GUI, opens that window, optionally writes the window's own
 // rendered pixels to a PNG, and reports what it rendered. Used to confirm the

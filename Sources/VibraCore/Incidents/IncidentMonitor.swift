@@ -38,6 +38,7 @@ public actor IncidentMonitor {
     private let now: @Sendable () -> Date
     private let deliveryInterval: TimeInterval
     private let deliver: @Sendable (AttentionNotification) -> Void
+    private let notifies: Bool
 
     private var tracked: [URL: Tracked] = [:]
     private var found: [IncidentID: Found] = [:]
@@ -52,6 +53,7 @@ public actor IncidentMonitor {
         reader: IncrementalLineReader = IncrementalLineReader(),
         now: @escaping @Sendable () -> Date = { Date() },
         deliveryInterval: TimeInterval = 60,
+        notifies: Bool = true,
         deliver: @escaping @Sendable (AttentionNotification) -> Void
     ) {
         self.adapters = adapters
@@ -59,6 +61,7 @@ public actor IncidentMonitor {
         self.reader = reader
         self.now = now
         self.deliveryInterval = deliveryInterval
+        self.notifies = notifies
         self.deliver = deliver
     }
 
@@ -67,7 +70,7 @@ public actor IncidentMonitor {
         let date = now()
         if !started {
             started = true
-            _ = await store.initializeWatermark(date)
+            if notifies { _ = await store.initializeWatermark(date) }
         }
         let watermark = await store.watermark() ?? date
         let cutoff = date.addingTimeInterval(-Self.scanWindow)
@@ -83,7 +86,7 @@ public actor IncidentMonitor {
                 bytes += result.bytes
                 for item in result.extracted where merge(item, from: source.url) {
                     discovered += 1
-                    if item.incident.kind.rule.severity == .review, item.incident.completedAt > watermark {
+                    if notifies, item.incident.kind.rule.severity == .review, item.incident.completedAt > watermark {
                         pending[item.incident.id] = item.incident.completedAt
                     }
                 }
@@ -114,12 +117,21 @@ public actor IncidentMonitor {
         var extracted: [ExtractedIncident] = []
         var bytes = 0
         if changed {
-            while let batch = try? reader.read(url: source.url, from: state.offset) {
-                bytes += batch.bytesRead
-                let advanced = batch.nextOffset > state.offset
-                state.offset = batch.nextOffset
-                autoreleasepool { extracted += state.extractor.fold(batch.lines) }
-                if !advanced { break }
+            var reading = true
+            while reading {
+                // The read belongs inside the pool too: a Task's thread never
+                // drains one, so Foundation's buffers would pile up for the
+                // whole replay.
+                autoreleasepool {
+                    guard let batch = try? reader.read(url: source.url, from: state.offset) else {
+                        reading = false
+                        return
+                    }
+                    bytes += batch.bytesRead
+                    reading = batch.nextOffset > state.offset
+                    state.offset = batch.nextOffset
+                    extracted += state.extractor.fold(batch.lines)
+                }
             }
         }
         state.lastSize = source.size
@@ -182,6 +194,8 @@ public actor IncidentMonitor {
         for incident in incidents { vendor[incident.id] = incident }
     }
 
+    /// The answers and the watermark are the store's. A diagnostic reader
+    /// passes `notifies: false` so it can never silence an alert.
     /// Newest first, with the user's answers.
     public func rows() async -> [IncidentJSON.Row] {
         let answers = await store.dispositions()

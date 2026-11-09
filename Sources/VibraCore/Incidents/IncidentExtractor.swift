@@ -219,9 +219,35 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
         if !denials.isEmpty, lineContains(line, "\"user\"") { return true }
         if lineContains(line, "\"tool_result\"") {
             if Self.deniedPrefixes.contains(where: { lineContains(line, $0) }) { return true }
-            if pending.keys.contains(where: { lineContains(line, $0) }) { return true }
+            if !pending.isEmpty, answersPendingCall(line) { return true }
         }
         return false
+    }
+
+    /// Reads each `tool_use_id` straight out of the bytes. Searching a long
+    /// line once per waiting call was most of the replay's cost.
+    private func answersPendingCall(_ line: String) -> Bool {
+        var line = line
+        let needle = Array("\"tool_use_id\":".utf8)
+        return line.withUTF8 { bytes in
+            guard let base = bytes.baseAddress else { return false }
+            var offset = 0
+            while offset < bytes.count,
+                  let hit = memmem(base + offset, bytes.count - offset, needle, needle.count) {
+                var index = UnsafeRawPointer(hit) - UnsafeRawPointer(base) + needle.count
+                while index < bytes.count, bytes[index] == UInt8(ascii: " ") { index += 1 }
+                guard index < bytes.count, bytes[index] == UInt8(ascii: "\"") else {
+                    offset = index
+                    continue
+                }
+                let start = index + 1
+                var end = start
+                while end < bytes.count, bytes[end] != UInt8(ascii: "\"") { end += 1 }
+                if pending[String(decoding: bytes[start..<end], as: UTF8.self)] != nil { return true }
+                offset = end
+            }
+            return false
+        }
     }
 
     // MARK: Calls
@@ -320,7 +346,7 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
                 if !dotEnvReported {
                     dotEnvReported = true
                     out += emit(credential.kind, .credential(credential.credentialClass), evidence,
-                                at: call.at, completedAt: completedAt, anchor: id)
+                                at: call.at, completedAt: completedAt, anchor: "session-dotenv")
                 }
             } else {
                 out += emit(credential.kind, .credential(credential.credentialClass), evidence,
@@ -564,7 +590,7 @@ struct CodexIncidentExtractor: IncidentExtractor {
                 if !dotEnvReported {
                     dotEnvReported = true
                     out += emit(credential.kind, .credential(credential.credentialClass), evidence,
-                                at: at, completedAt: stamp, anchor: id)
+                                at: at, completedAt: stamp, anchor: "session-dotenv")
                 }
             } else {
                 out += emit(credential.kind, .credential(credential.credentialClass), evidence,
