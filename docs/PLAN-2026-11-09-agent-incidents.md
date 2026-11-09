@@ -747,3 +747,165 @@ Plan version v0.11. Literal final verdicts, read from the reply files:
 
 This section is a verdict record. It changes no plan text.
 
+## Outcome
+
+**Roster.** Standard, transport Orca. Planner Claude Code (`claude-opus-5-5`). Coder and reviewer DeepSeek V4.1 Flash through OpenCode 2.0.20 (`deepseek/deepseek-flash`). Third judge Codex CLI 0.167.0, whose footer showed GPT-6-Sol.
+
+**Plan gate.** v0.8 passed in eight rounds, and three confirmation rounds took it to v0.11 after real-data measurement changed the write finding and the replay budget.
+
+**Code gate.** Four rounds against base `d69677761494a595ff379bdfd87cfe23ac4055b7`. Final revision `62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83`, rechecked before this record.
+
+**What each seat caught.** DeepSeek found the plan's wrong token formula for Codex, the missing first-run watermark, the `.env.local` gap, contradictions inside the plan, the destination family that the UI could not show, and the mutation gate's uncompilable mutant. Codex found operand and execution overclaims, unbounded state, the age-out re-alert, the `+` refspec under a lease (shown on a bare repository), the session-wide answer that hid later writes, and six lifecycle and import defects plus integer overflow in code review. The planner found the redirect false positive, a memory defect of 540 to 830 MB in the replay, a sub-second watermark round trip, and the need to group writes (177 calls in 13 sessions).
+
+**Final verdicts on revision `62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83`.**
+
+- `DISPATCH deepseek-impl-r4`: IMPL-APPROVED
+- `DISPATCH codex-impl-r4`: IMPL-APPROVED
+- PLANNER (claude): IMPL-APPROVED
+
+**Evidence on the final revision.** 495 tests and four canaries pass. 25 mutations are all caught. The oracle and Swift agree on real data (5 rows, 0 differ). The replay read about 705 MB in 23.03 s to 23.27 s at 77 to 80 MB resident, three runs, release build. Cold refresh and `--report` are unchanged against the base.
+
+**Not exercised.** Notification delivery needs a signed bundle. The vendor import was tested on documented shapes, not on a real downloaded file.
+
+**Left for later (non-blocking).** A bucket dated after the current UTC day is compared rather than refused. The translated READMEs were not updated.
+
+## Dispatch ledger
+
+```
+2026-11-09T17:17:54Z	deepseek-plan-r1	deepseek	plan v0.1	sent
+2026-11-09T17:17:54Z	deepseek-plan-r1	deepseek	plan v0.1	delivered
+2026-11-09T17:18:15Z	deepseek-plan-r1	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T17:18:15Z	deepseek-plan-r1	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T17:28:40Z	deepseek-plan-r1	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T17:28:40Z	deepseek-plan-r1	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T17:28:51Z	deepseek-plan-r1	deepseek	plan v0.1	verdict PLAN-REJECTED
+2026-11-09T17:47:35Z	deepseek-plan-r2	deepseek	plan v0.2	sent
+2026-11-09T17:47:35Z	deepseek-plan-r2	deepseek	plan v0.2	delivered
+2026-11-09T17:47:37Z	codex-plan-r2	codex	plan v0.2	sent
+2026-11-09T17:47:38Z	codex-plan-r2	codex	plan v0.2	delivered
+2026-11-09T17:49:18Z	deepseek-plan-r2	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T17:49:18Z	deepseek-plan-r2	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T17:49:47Z	codex-plan-r2	codex	plan v0.2	verdict PLAN-REJECTED
+2026-11-09T17:52:52Z	deepseek-plan-r2	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T17:52:52Z	deepseek-plan-r2	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T17:54:12Z	deepseek-plan-r2	deepseek	plan v0.2	verdict PLAN-REJECTED
+2026-11-09T17:56:00Z	deepseek-plan-r3	deepseek	plan v0.3	sent
+2026-11-09T17:56:01Z	deepseek-plan-r3	deepseek	plan v0.3	delivered
+2026-11-09T17:56:03Z	codex-plan-r3	codex	plan v0.3	sent
+2026-11-09T17:56:03Z	codex-plan-r3	codex	plan v0.3	delivered
+2026-11-09T17:56:34Z	deepseek-plan-r3	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T17:56:34Z	deepseek-plan-r3	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T17:57:59Z	codex-plan-r3	codex	plan v0.3	verdict PLAN-REJECTED
+2026-11-09T17:59:01Z	deepseek-plan-r3	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T17:59:01Z	deepseek-plan-r3	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:00:09Z	deepseek-plan-r3	deepseek	plan v0.3	verdict PLAN-REJECTED
+2026-11-09T18:01:26Z	deepseek-plan-r4	deepseek	plan v0.4	sent
+2026-11-09T18:01:26Z	deepseek-plan-r4	deepseek	plan v0.4	delivered
+2026-11-09T18:01:28Z	codex-plan-r4	codex	plan v0.4	sent
+2026-11-09T18:01:28Z	codex-plan-r4	codex	plan v0.4	delivered
+2026-11-09T18:02:00Z	deepseek-plan-r4	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:02:00Z	deepseek-plan-r4	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:02:58Z	codex-plan-r4	codex	plan v0.4	verdict PLAN-REJECTED
+2026-11-09T18:04:31Z	deepseek-plan-r4	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:04:31Z	deepseek-plan-r4	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:05:37Z	deepseek-plan-r4	deepseek	plan v0.4	verdict PLAN-APPROVED
+2026-11-09T18:05:37Z	deepseek-plan-r5	deepseek	plan v0.5	sent
+2026-11-09T18:05:38Z	deepseek-plan-r5	deepseek	plan v0.5	delivered
+2026-11-09T18:05:40Z	codex-plan-r5	codex	plan v0.5	sent
+2026-11-09T18:05:40Z	codex-plan-r5	codex	plan v0.5	delivered
+2026-11-09T18:06:11Z	deepseek-plan-r5	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:06:11Z	deepseek-plan-r5	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:07:11Z	codex-plan-r5	codex	plan v0.5	verdict PLAN-REJECTED
+2026-11-09T18:08:44Z	deepseek-plan-r5	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:08:44Z	deepseek-plan-r5	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:09:31Z	deepseek-plan-r5	deepseek	plan v0.5	verdict PLAN-REJECTED
+2026-11-09T18:09:32Z	deepseek-plan-r6	deepseek	plan v0.6	sent
+2026-11-09T18:09:32Z	deepseek-plan-r6	deepseek	plan v0.6	delivered
+2026-11-09T18:09:34Z	codex-plan-r6	codex	plan v0.6	sent
+2026-11-09T18:09:34Z	codex-plan-r6	codex	plan v0.6	delivered
+2026-11-09T18:10:06Z	deepseek-plan-r6	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:10:06Z	deepseek-plan-r6	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:11:16Z	codex-plan-r6	codex	plan v0.6	verdict PLAN-REJECTED
+2026-11-09T18:11:47Z	deepseek-plan-r6	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:11:47Z	deepseek-plan-r6	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:12:32Z	deepseek-plan-r6	deepseek	plan v0.6	verdict PLAN-REJECTED
+2026-11-09T18:12:32Z	deepseek-plan-r7	deepseek	plan v0.7	sent
+2026-11-09T18:12:33Z	deepseek-plan-r7	deepseek	plan v0.7	delivered
+2026-11-09T18:12:34Z	codex-plan-r7	codex	plan v0.7	sent
+2026-11-09T18:12:35Z	codex-plan-r7	codex	plan v0.7	delivered
+2026-11-09T18:13:06Z	deepseek-plan-r7	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:13:06Z	deepseek-plan-r7	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:13:44Z	codex-plan-r7	codex	plan v0.7	verdict PLAN-REJECTED
+2026-11-09T18:14:14Z	deepseek-plan-r7	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:14:15Z	deepseek-plan-r7	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:14:48Z	deepseek-plan-r7	deepseek	plan v0.7	verdict PLAN-APPROVED
+2026-11-09T18:14:48Z	deepseek-plan-r8	deepseek	plan v0.8	sent
+2026-11-09T18:14:49Z	deepseek-plan-r8	deepseek	plan v0.8	delivered
+2026-11-09T18:14:50Z	codex-plan-r8	codex	plan v0.8	sent
+2026-11-09T18:14:51Z	codex-plan-r8	codex	plan v0.8	delivered
+2026-11-09T18:15:22Z	deepseek-plan-r8	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:15:22Z	deepseek-plan-r8	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:15:41Z	codex-plan-r8	codex	plan v0.8	verdict PLAN-APPROVED
+2026-11-09T18:16:11Z	deepseek-plan-r8	deepseek	external dir SCRATCH	question opencode permission for scratch dir
+2026-11-09T18:16:11Z	deepseek-plan-r8	deepseek	external dir SCRATCH	answered allow once by standing authorization
+2026-11-09T18:16:48Z	deepseek-plan-r8	deepseek	plan v0.8	verdict PLAN-APPROVED
+2026-11-09T18:18:51Z	planner-task1	planner	7 foundation tests pass, swift build green	done succeeded
+2026-11-09T18:18:52Z	deepseek-task2-a1	deepseek	plan v0.8, base d696777	sent
+2026-11-09T18:18:52Z	deepseek-task2-a1	deepseek	plan v0.8, base d696777	delivered
+2026-11-09T18:28:00Z	deepseek-task2-a1	deepseek	external dir vibra_vibra	question opencode permission for mistyped path outside repo
+2026-11-09T19:14:12Z	deepseek-task2-a1	deepseek	external dir vibra_vibra	answered user handled the dialog
+2026-11-09T19:15:57Z	deepseek-task2-a1	deepseek	plan v0.8: planner reran acceptance, fixed redirects, human record test, clusters	done succeeded
+2026-11-09T19:16:41Z	deepseek-task3-a1	deepseek	plan v0.8, base d696777	sent
+2026-11-09T19:16:42Z	deepseek-task3-a1	deepseek	plan v0.8, base d696777	delivered
+2026-11-09T19:25:12Z	deepseek-task3-a1	deepseek	plan v0.8: planner reran 30 tests, optional cached field fixed	done succeeded
+2026-11-09T19:25:13Z	deepseek-task4-a1	deepseek	plan v0.8, base d696777	sent
+2026-11-09T19:25:13Z	deepseek-task4-a1	deepseek	plan v0.8, base d696777	delivered
+2026-11-09T19:28:27Z	deepseek-task4-a1	deepseek	plan v0.8: planner reran 14 tests and read the draft	done succeeded
+2026-11-09T19:28:27Z	deepseek-plan-r9	deepseek	plan v0.9	sent
+2026-11-09T19:28:28Z	deepseek-plan-r9	deepseek	plan v0.9	delivered
+2026-11-09T19:28:30Z	codex-plan-r9	codex	plan v0.9	sent
+2026-11-09T19:28:30Z	codex-plan-r9	codex	plan v0.9	delivered
+2026-11-09T19:30:08Z	codex-plan-r9	codex	plan v0.9	verdict PLAN-REJECTED
+2026-11-09T19:32:29Z	deepseek-plan-r9	deepseek	plan v0.9	verdict PLAN-REJECTED
+2026-11-09T19:34:47Z	deepseek-plan-r10	deepseek	plan v0.10	sent
+2026-11-09T19:34:48Z	deepseek-plan-r10	deepseek	plan v0.10	delivered
+2026-11-09T19:34:49Z	codex-plan-r10	codex	plan v0.10	sent
+2026-11-09T19:34:50Z	codex-plan-r10	codex	plan v0.10	delivered
+2026-11-09T19:37:43Z	codex-plan-r10	codex	plan v0.10	verdict PLAN-APPROVED
+2026-11-09T19:37:43Z	deepseek-plan-r10	deepseek	plan v0.10	verdict PLAN-REJECTED
+2026-11-09T19:38:11Z	deepseek-plan-r11	deepseek	plan v0.11	sent
+2026-11-09T19:38:12Z	deepseek-plan-r11	deepseek	plan v0.11	delivered
+2026-11-09T19:38:13Z	codex-plan-r11	codex	plan v0.11	sent
+2026-11-09T19:38:14Z	codex-plan-r11	codex	plan v0.11	delivered
+2026-11-09T19:39:19Z	codex-plan-r11	codex	plan v0.11	verdict PLAN-APPROVED
+2026-11-09T19:40:19Z	deepseek-plan-r11	deepseek	plan v0.11	verdict PLAN-APPROVED
+2026-11-09T19:53:45Z	deepseek-impl-r1	deepseek	plan dfcdfdce930b82e5d2696ff19d5e29b0b0e2b5b9	sent
+2026-11-09T19:53:45Z	deepseek-impl-r1	deepseek	plan dfcdfdce930b82e5d2696ff19d5e29b0b0e2b5b9	delivered
+2026-11-09T19:53:47Z	codex-impl-r1	codex	plan dfcdfdce930b82e5d2696ff19d5e29b0b0e2b5b9	sent
+2026-11-09T19:53:47Z	codex-impl-r1	codex	plan dfcdfdce930b82e5d2696ff19d5e29b0b0e2b5b9	delivered
+2026-11-09T19:55:40Z	codex-impl-r1	codex	dfcdfdce930b82e5d2696ff19d5e29b0b0e2b5b9	verdict IMPL-REJECTED
+2026-11-09T20:01:47Z	deepseek-impl-r1	deepseek	dfcdfdce930b82e5d2696ff19d5e29b0b0e2b5b9	verdict IMPL-APPROVED
+2026-11-09T20:09:23Z	deepseek-impl-r2	deepseek	plan 71fbd8b3d1407bc17dac2fe62fbe4469e2afd7dd	sent
+2026-11-09T20:09:24Z	deepseek-impl-r2	deepseek	plan 71fbd8b3d1407bc17dac2fe62fbe4469e2afd7dd	delivered
+2026-11-09T20:09:26Z	codex-impl-r2	codex	plan 71fbd8b3d1407bc17dac2fe62fbe4469e2afd7dd	sent
+2026-11-09T20:09:26Z	codex-impl-r2	codex	plan 71fbd8b3d1407bc17dac2fe62fbe4469e2afd7dd	delivered
+2026-11-09T20:10:26Z	deepseek-impl-r2	deepseek	rm -rf and external dir vc-check	question opencode permission outside scratch
+2026-11-09T20:38:59Z	deepseek-impl-r2	deepseek	rm -rf and external dir vc-check	answered user handled the dialog
+2026-11-09T20:39:47Z	codex-impl-r2	codex	71fbd8b3d1407bc17dac2fe62fbe4469e2afd7dd	verdict IMPL-REJECTED
+2026-11-09T20:39:47Z	deepseek-impl-r2	deepseek	71fbd8b3d1407bc17dac2fe62fbe4469e2afd7dd	verdict IMPL-REJECTED
+2026-11-09T20:46:59Z	deepseek-impl-r3	deepseek	plan 56b8173e5846a285f3d2c7df5bc9fb0953eac9b6	sent
+2026-11-09T20:46:59Z	deepseek-impl-r3	deepseek	plan 56b8173e5846a285f3d2c7df5bc9fb0953eac9b6	delivered
+2026-11-09T20:47:01Z	codex-impl-r3	codex	plan 56b8173e5846a285f3d2c7df5bc9fb0953eac9b6	sent
+2026-11-09T20:47:02Z	codex-impl-r3	codex	plan 56b8173e5846a285f3d2c7df5bc9fb0953eac9b6	delivered
+2026-11-09T20:48:35Z	codex-impl-r3	codex	56b8173e5846a285f3d2c7df5bc9fb0953eac9b6	verdict IMPL-REJECTED
+2026-11-09T20:48:35Z	deepseek-impl-r3	deepseek	56b8173e5846a285f3d2c7df5bc9fb0953eac9b6	verdict IMPL-APPROVED
+2026-11-09T20:56:27Z	deepseek-impl-r4	deepseek	plan 62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83	sent
+2026-11-09T20:56:27Z	deepseek-impl-r4	deepseek	plan 62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83	delivered
+2026-11-09T20:56:29Z	codex-impl-r4	codex	plan 62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83	sent
+2026-11-09T20:56:29Z	codex-impl-r4	codex	plan 62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83	delivered
+2026-11-09T20:57:19Z	codex-impl-r4	codex	62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83	verdict IMPL-APPROVED
+2026-11-09T20:58:27Z	deepseek-impl-r4	deepseek	62f95a2ee78cced923bcd3c8ef98fb78b8cdcd83	verdict IMPL-APPROVED
+2026-11-09T20:58:27Z	seat:deepseek	deepseek	-	disposition left
+2026-11-09T20:58:27Z	seat:codex	codex	-	disposition left
+```
+
