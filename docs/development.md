@@ -157,6 +157,10 @@ This is **not** a substitute for Developer ID signing and notarization, which is
 what distributing a download would need — a fresh clone is still ad-hoc, so its
 notifications are refused by default and its jump-back needs a manual grant.
 
+## Notarized binary releases
+
+Use the separate [notarization workflow](notarization.md) to produce a Developer ID signed, stapled app ZIP. The developer build above remains ad-hoc by default. A source-built Homebrew install does not inherit a prebuilt ZIP's notarization.
+
 ## Testing note
 
 Run tests with `make test` or `swift run VibraTests` — **not** `swift test`.
