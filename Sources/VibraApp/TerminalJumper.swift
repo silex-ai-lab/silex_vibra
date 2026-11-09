@@ -98,6 +98,14 @@ enum TerminalJumper {
             return .noControllingTerminal
         }
 
+        let owner = ProcessInspector.ttyOwner(of: found.pid)
+        // Before the emulators: no emulator can hold this tty, so their
+        // Automation permission must not decide what the click reports.
+        if owner == .multiplexer("Orca") {
+            return focusOrca(pid: found.pid).map { .jumped(app: $0) }
+                ?? .noTerminalOwnsTTY(tty: tty, owner: owner)
+        }
+
         switch focusITerm(tty: tty) {
         case .focused: return .jumped(app: "iTerm2")
         case .refused: return .notPermitted(app: "iTerm2")
@@ -108,7 +116,6 @@ enum TerminalJumper {
         case .refused: return .notPermitted(app: "Terminal")
         case .notFound, .notRunning: break
         }
-        let owner = ProcessInspector.ttyOwner(of: found.pid)
         if owner == .multiplexer("herdr"), let app = focusHerdr(pid: found.pid) {
             return .jumped(app: app)
         }
@@ -217,6 +224,23 @@ enum TerminalJumper {
         return nil
     }
 
+    // MARK: - Orca
+
+    /// Switches a running Orca to the terminal `pid` was started in. Never
+    /// launches Orca. The CLI ships inside the app, so the running app names it
+    /// and a GUI app's short PATH does not matter.
+    static func focusOrca(pid: Int32) -> String? {
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: OrcaLocator.bundleID).first,
+              let appURL = app.bundleURL,
+              let handle = OrcaLocator.terminalHandle(of: pid),
+              runCLI(appURL.appendingPathComponent("Contents/Resources/bin/orca").path,
+                     ["terminal", "switch", "--terminal", handle, "--json"]) != nil
+        else { return nil }
+        // `app.activate()` returned true here and left another app in front.
+        NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration())
+        return "Orca"
+    }
+
     // MARK: - herdr
 
     /// Focuses the herdr pane running `pid`, then the terminal window showing
@@ -234,10 +258,10 @@ enum TerminalJumper {
         else { return nil }
         let session = route.session.map { ["--session", $0] } ?? []
 
-        guard let listing = runHerdr(herdr, session + ["pane", "list"]) else { return nil }
+        guard let listing = runCLI(herdr, session + ["pane", "list"]) else { return nil }
         var match: (paneID: String, tabID: String)?
         for pane in HerdrLocator.parsePaneList(listing) {
-            guard let info = runHerdr(herdr, session + ["pane", "process-info", "--pane", pane.paneID])
+            guard let info = runCLI(herdr, session + ["pane", "process-info", "--pane", pane.paneID])
             else { continue }
             if HerdrLocator.parseShellPID(info) == route.paneShellPID {
                 match = pane
@@ -249,8 +273,8 @@ enum TerminalJumper {
         // `agent focus` lands on the pane itself, splits included, and marks
         // it seen; it only accepts panes herdr recognises an agent in, so fall
         // back to the pane's tab. Both switch workspace as needed.
-        if runHerdr(herdr, session + ["agent", "focus", pane.paneID]) == nil {
-            guard runHerdr(herdr, session + ["tab", "focus", pane.tabID]) != nil else { return nil }
+        if runCLI(herdr, session + ["agent", "focus", pane.paneID]) == nil {
+            guard runCLI(herdr, session + ["tab", "focus", pane.tabID]) != nil else { return nil }
         }
 
         for clientTTY in HerdrLocator.clientTTYs(of: route.session, in: table) {
@@ -274,10 +298,9 @@ enum TerminalJumper {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    /// Runs one herdr CLI request and returns stdout, or nil on a non-zero
-    /// exit (herdr reports errors as JSON on stderr with status 1). Bounded:
-    /// a wedged server must not hang the click.
-    private static func runHerdr(_ executable: String, _ args: [String]) -> Data? {
+    /// Runs one herdr or Orca CLI request and returns stdout, or nil on a
+    /// non-zero exit. Bounded: a wedged server must not hang the click.
+    private static func runCLI(_ executable: String, _ args: [String]) -> Data? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = args

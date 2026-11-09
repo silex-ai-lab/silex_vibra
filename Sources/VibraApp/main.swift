@@ -314,6 +314,7 @@ if CommandLine.arguments.contains("--locate") {
                 switch ProcessInspector.ttyOwner(of: found.pid) {
                 case .emulator(let name):    owner = "emulator \(name) - jumpable"
                 case .multiplexer("herdr"):  owner = "multiplexer herdr - jumpable via herdr's CLI"
+                case .multiplexer("Orca"):   owner = "multiplexer Orca - jumpable via Orca's CLI"
                 case .multiplexer(let name): owner = "multiplexer \(name) - not jumpable"
                 case .unknown:               owner = "unknown"
                 }
