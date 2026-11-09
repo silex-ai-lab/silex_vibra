@@ -21,7 +21,7 @@ public enum VendorProvider: String, Codable, Sendable, CaseIterable {
 }
 
 public enum ToolClass: String, Codable, Sendable, CaseIterable {
-    case bash, edit, write, read, fileChange
+    case bash, edit, write, read, fileChange, other
 }
 
 public enum FindingEvidence: String, Codable, Sendable, CaseIterable {
