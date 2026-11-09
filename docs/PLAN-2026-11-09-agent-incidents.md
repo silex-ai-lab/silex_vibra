@@ -685,5 +685,7 @@ Plan version v0.8, eight rounds. Literal final verdicts, read from the reply fil
 - `DISPATCH codex-plan-r8`: PLAN-APPROVED
 - PLANNER (claude): PLAN-APPROVED
 
+Review base for Step 7: `d69677761494a595ff379bdfd87cfe23ac4055b7`.
+
 This section is a verdict record appended after the gate. It changes no plan text.
 
