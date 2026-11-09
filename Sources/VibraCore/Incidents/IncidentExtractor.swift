@@ -47,6 +47,17 @@ enum IncidentPaths {
             .contains(where: path.hasPrefix)
     }
 
+    /// A session and destination family share one write finding. `sibling`
+    /// is under the parent of the workspace, unless that parent is home or the
+    /// root, where it would mean everything.
+    static func writeFamily(of path: String, workspace root: String) -> String {
+        let parent = (root as NSString).deletingLastPathComponent
+        if parent != "/", parent != VibraPaths.home.path, isWithin(path, root: parent) {
+            return "session-write-outside-sibling"
+        }
+        return "session-write-outside-elsewhere"
+    }
+
     /// The agents' own state. One list, so a second root is one edit.
     static let agentStateRoots = ["~/.claude/projects"]
 
@@ -123,7 +134,7 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
         let backgrounded: Bool
         let credential: (kind: IncidentKind, credentialClass: CredentialClass)?
         let forcePush: Bool
-        let writeOutside: Bool
+        let writeFamily: String?
         var denialSerial: Int?
         var denialAt: Date?
     }
@@ -286,7 +297,7 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
         let backgrounded = input["run_in_background"] as? Bool == true
         var credential: (kind: IncidentKind, credentialClass: CredentialClass)?
         var forcePush = false
-        var writeOutside = false
+        var writeFamily: String?
 
         switch name {
         case "Bash":
@@ -307,14 +318,14 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
             if Self.editTools.contains(name) {
                 toolClass = name == "Write" ? .write : .edit
                 let path = (input["file_path"] ?? input["notebook_path"]) as? String
-                if let path { writeOutside = self.isOutsideWorkspace(path) }
+                if let path { writeFamily = self.outsideWriteFamily(path) }
             }
         }
 
         return Call(
             name: name, at: at, fingerprint: fingerprint, toolClass: toolClass, isShell: isShell,
             soleForeground: soleForeground, backgrounded: backgrounded, credential: credential,
-            forcePush: forcePush, writeOutside: writeOutside,
+            forcePush: forcePush, writeFamily: writeFamily,
             denialSerial: denialSerial, denialAt: denialAt)
     }
 
@@ -357,9 +368,9 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
             out += emit(.forcePushAttempt, .tool(.bash), evidence,
                         at: call.at, completedAt: completedAt, anchor: id)
         }
-        if call.writeOutside, !isError, let toolClass = call.toolClass {
+        if let family = call.writeFamily, !isError, let toolClass = call.toolClass {
             out += emit(.writeToPathOutsideWorkspace, .tool(toolClass), .toolResult,
-                        at: call.at, completedAt: completedAt, anchor: id)
+                        at: call.at, completedAt: completedAt, anchor: family)
         }
         return out
     }
@@ -392,14 +403,15 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
         return IncidentPaths.isWithin(path, root: root)
     }
 
-    private func isOutsideWorkspace(_ path: String) -> Bool {
+    /// Nil when the path is inside the workspace or otherwise not a finding.
+    private func outsideWriteFamily(_ path: String) -> String? {
         guard let cwd, let root = IncidentPaths.absolute(cwd, cwd: nil),
               let resolved = IncidentPaths.absolute(path, cwd: cwd)
-        else { return false }
-        if IncidentPaths.isWithin(resolved, root: root) { return false }
-        if IncidentPaths.isScratch(resolved) { return false }
-        if IncidentPaths.isAgentState(resolved) { return false }
-        return true
+        else { return nil }
+        if IncidentPaths.isWithin(resolved, root: root) { return nil }
+        if IncidentPaths.isScratch(resolved) { return nil }
+        if IncidentPaths.isAgentState(resolved) { return nil }
+        return IncidentPaths.writeFamily(of: resolved, workspace: root)
     }
 
     private static func basename(_ word: String) -> String {
@@ -609,11 +621,12 @@ struct CodexIncidentExtractor: IncidentExtractor {
               let changes = item["changes"] as? [String: Any]
         else { return [] }
         for key in changes.keys {
-            guard let path = IncidentPaths.absolute(key, cwd: cwd) else { continue }
-            if isOutsideWorkspace(path) {
-                return emit(.writeToPathOutsideWorkspace, .tool(.fileChange), .toolResult,
-                            at: stamp, completedAt: stamp, anchor: id)
-            }
+            guard let path = IncidentPaths.absolute(key, cwd: cwd),
+                  isOutsideWorkspace(path), let root = workspaceRoots.first
+            else { continue }
+            return emit(.writeToPathOutsideWorkspace, .tool(.fileChange), .toolResult,
+                        at: stamp, completedAt: stamp,
+                        anchor: IncidentPaths.writeFamily(of: path, workspace: root))
         }
         return []
     }

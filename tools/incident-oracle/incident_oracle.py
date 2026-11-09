@@ -425,8 +425,15 @@ def claude_call(call, call_id, is_error, session, denied, results):
     if name in EDIT_TOOLS and not is_error and cwd:
         path = normalize(args.get("file_path") or args.get("notebook_path"), cwd)
         if path and outside(path, [normalize(cwd, None)]):
-            results.add("claudeCode", session, "writeToPathOutsideWorkspace", call_id)
+            results.add("claudeCode", session, "writeToPathOutsideWorkspace", write_family(path, normalize(cwd, None)))
             results.write_categories[("claudeCode", write_category(path, cwd))] += 1
+
+
+def write_family(path, root):
+    parent = os.path.dirname(root)
+    if parent not in ("/", HOME) and within(path, parent):
+        return "sibling"
+    return "elsewhere"
 
 
 def outside(path, roots):
@@ -493,7 +500,7 @@ def codex_item(item, session, cwd, roots, results):
         for key in (item.get("changes") or {}):
             path = normalize(key, cwd)
             if path and outside(path, workspace):
-                results.add("codex", session, "writeToPathOutsideWorkspace", item_id)
+                results.add("codex", session, "writeToPathOutsideWorkspace", write_family(path, workspace[0]))
                 results.write_categories[("codex", write_category(path, cwd))] += 1
                 return
 
@@ -520,8 +527,8 @@ def main():
     for (agent, kind), count in sorted(counts.items()):
         print(f"oracle {agent} {kind} {count}")
     if options.write_breakdown:
-        sessions = {(a, s) for a, s, k, _ in results.ids if k == "writeToPathOutsideWorkspace"}
-        print(f"write sessions {len(sessions)}")
+        families = collections.Counter(anchor for _, _, k, anchor in results.ids if k == "writeToPathOutsideWorkspace")
+        print(f"write families {dict(families)}")
         for (agent, category), count in results.write_categories.most_common():
             print(f"write {agent} {category} {count}")
     if options.compare:

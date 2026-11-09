@@ -246,4 +246,57 @@ struct IncidentExtractorTests {
         #expect(incidents.count == 1)
         #expect(incidents.first?.incident.evidence == .commandLine)
     }
+
+    // MARK: - One finding per session and destination family
+
+    private func claudeWrite(_ id: String, _ path: String, at second: Int) -> [String] {
+        let stamp = String(format: "2026-11-08T10:00:%02d.000Z", second)
+        return [
+            Self.line([
+                "type": "assistant", "timestamp": stamp, "sessionId": "s1", "cwd": "/Users/demo/workplace/sample",
+                "message": ["role": "assistant", "content": [[
+                    "type": "tool_use", "id": id, "name": "Write", "input": ["file_path": path, "content": "x"],
+                ] as [String: Any]]] as [String: Any],
+            ]),
+            Self.line([
+                "type": "user", "timestamp": stamp, "sessionId": "s1", "cwd": "/Users/demo/workplace/sample",
+                "message": ["role": "user", "content": [["type": "tool_result", "tool_use_id": id, "content": "ok"]]] as [String: Any],
+            ]),
+        ]
+    }
+
+    private func codexChange(_ id: String, _ path: String) -> [String] {
+        [
+            Self.line(["type": "session_meta", "timestamp": "2026-11-08T10:00:00.000Z", "payload": ["session_id": "c1"]]),
+            Self.line(["type": "turn_context", "timestamp": "2026-11-08T10:00:00.000Z", "payload": [
+                "cwd": "/Users/demo/workplace/sample", "workspace_roots": ["/Users/demo/workplace/sample"],
+            ] as [String: Any]]),
+            Self.line(["type": "event_msg", "timestamp": "2026-11-08T10:00:05.000Z", "payload": [
+                "type": "item_completed",
+                "item": ["type": "FileChange", "id": id, "status": "completed", "changes": [path: [:] as [String: Any]]] as [String: Any],
+            ] as [String: Any]]),
+        ]
+    }
+
+    @Test func outsideWritesShareOneIdPerSessionAndFamily() {
+        var extractor = ClaudeIncidentExtractor()
+        let found = extractor.fold(
+            claudeWrite("u1", "/Users/demo/workplace/other/a.swift", at: 1)
+                + claudeWrite("u2", "/Users/demo/workplace/other/b.swift", at: 2)
+                + claudeWrite("u3", "/opt/elsewhere/c.swift", at: 3))
+        let ids = found.map(\.incident.id)
+        #expect(ids.count == 3)
+        #expect(ids[0] == ids[1])
+        #expect(ids[0] != ids[2])
+        #expect(Set(ids.map(\.hex)).count == 2)
+    }
+
+    @Test func codexOutsideWritesShareOneIdPerFamily() {
+        var extractor = CodexIncidentExtractor()
+        let sibling = extractor.fold(codexChange("i1", "/Users/demo/workplace/other/a.swift"))
+        let again = extractor.fold(codexChange("i2", "/Users/demo/workplace/other/b.swift"))
+        let elsewhere = extractor.fold(codexChange("i3", "/opt/elsewhere/c.swift"))
+        #expect(sibling.first?.incident.id == again.first?.incident.id)
+        #expect(sibling.first?.incident.id != elsewhere.first?.incident.id)
+    }
 }

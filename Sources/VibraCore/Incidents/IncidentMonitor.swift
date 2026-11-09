@@ -74,6 +74,7 @@ public actor IncidentMonitor {
         }
         let watermark = await store.watermark() ?? date
         let cutoff = date.addingTimeInterval(-Self.scanWindow)
+        let answers = await store.dispositions()
 
         var bytes = 0
         var discovered = 0
@@ -84,9 +85,12 @@ public actor IncidentMonitor {
                 scanned.insert(source.url)
                 let result = read(source, adapter: adapter)
                 bytes += result.bytes
-                for item in result.extracted where merge(item, from: source.url) {
-                    discovered += 1
-                    if notifies, item.incident.kind.rule.severity == .review, item.incident.completedAt > watermark {
+                for item in result.extracted {
+                    let isNew = merge(item, from: source.url)
+                    if isNew { discovered += 1 }
+                    guard notifies, item.incident.kind.rule.severity == .review, item.incident.completedAt > watermark
+                    else { continue }
+                    if isNew || Self.reopens(item.incident, answer: answers[item.incident.id]) {
                         pending[item.incident.id] = item.incident.completedAt
                     }
                 }
@@ -156,7 +160,18 @@ public actor IncidentMonitor {
             return true
         }
         existing.sources.insert(url)
-        if item.incident.at < existing.extracted.incident.at { existing.extracted = item }
+        let current = existing.extracted
+        existing.extracted = ExtractedIncident(
+            incident: Incident(
+                id: current.incident.id,
+                kind: current.incident.kind,
+                agent: current.incident.agent,
+                evidence: current.incident.evidence,
+                at: min(current.incident.at, item.incident.at),
+                completedAt: max(current.incident.completedAt, item.incident.completedAt),
+                posture: current.incident.posture,
+                detail: current.incident.detail),
+            rawSessionID: current.rawSessionID)
         found[item.incident.id] = existing
         return false
     }
@@ -168,6 +183,12 @@ public actor IncidentMonitor {
             entry.sources.remove(url)
             found[id] = entry.sources.isEmpty ? nil : entry
         }
+    }
+
+    /// An answer on a session-wide write finding covers only the writes it saw.
+    private static func reopens(_ incident: Incident, answer: Disposition?) -> Bool {
+        guard incident.kind == .writeToPathOutsideWorkspace, let date = answer?.date else { return false }
+        return incident.completedAt > date
     }
 
     /// Commit, then deliver. A crash before the commit delivers nothing and
@@ -201,7 +222,7 @@ public actor IncidentMonitor {
         let answers = await store.dispositions()
         return (found.values.map(\.extracted.incident) + vendor.values)
             .sorted { ($0.completedAt, $0.id.hex) > ($1.completedAt, $1.id.hex) }
-            .map { IncidentJSON.Row(incident: $0, disposition: answers[$0.id] ?? .open) }
+            .map { IncidentJSON.Row(incident: $0, disposition: Self.reopens($0, answer: answers[$0.id]) ? .open : answers[$0.id] ?? .open) }
     }
 
     /// For Jump to session only.

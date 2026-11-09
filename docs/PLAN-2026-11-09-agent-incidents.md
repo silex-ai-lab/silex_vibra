@@ -1,6 +1,6 @@
 # Plan: Agent incidents (unauthorized usage, human resolve, vendor report)
 
-Version: v0.8. Status: draft for the plan gate.
+Version: v0.10. Status: draft for the plan gate.
 
 ## Run record
 
@@ -91,7 +91,7 @@ a guessed format with no live check.
 | Denied call ran later | yes | no signal | not covered |
 | Credential read attempt, by the named commands and options only. An unrecognised option declines the command. `sed`, `awk`, `xxd`, `strings`, `gh auth token`, scripts and interpreter one-liners are not analysed | yes | yes | not covered |
 | Project `.env` named, one info item per session | yes | yes | not covered |
-| Write to a path outside the workspace, tool edits only, by the path as written, symlinks not followed | yes | yes | not covered |
+| Write to a path outside the workspace, tool edits only, by the path as written, symlinks not followed. One review item per session and destination family | yes | yes | not covered |
 | Force push attempt | yes | yes | not covered |
 | Unrestricted session | yes | yes | not covered |
 | Auth failure | yes | no signal | not covered |
@@ -148,7 +148,7 @@ public enum FindingEvidence: String, Codable, Sendable {
 
 public enum IncidentDetail: Sendable, Equatable {
     case credential(CredentialClass)
-    case tool(ToolClass)              // closed: bash, edit, write, read, fileChange
+    case tool(ToolClass)              // closed: bash, edit, write, read, fileChange, other
     case posture(SessionPosture)
     case authError
     case vendorExcess(VendorExcess)
@@ -192,7 +192,7 @@ enum ReportRoute { case none, agentBug, billing }
 | deniedCallRanLater | review | agentBug | A call was denied and the identical call ran later. You or a rule may have approved the retry |
 | credentialReadAttempt | review | agentBug | A read of a credential. Rotate the secret if you did not expect this |
 | workspaceSecretFileNamed | info | none | This project's own `.env` was named in this session |
-| writeToPathOutsideWorkspace | review | agentBug | A tool edited a path outside the workspace as written. A `--add-dir` grant or a symlink looks the same. Mark it expected if so |
+| writeToPathOutsideWorkspace | review | agentBug | A tool edited a path outside the workspace as written, at least once in this session. A `--add-dir` grant or a symlink looks the same. Mark it expected if so |
 | forcePushAttempt | review | agentBug | A force push. Check the branch history |
 | unrestrictedSession | info | none | You or your config turned guardrails off. Not a vendor fault |
 | authFailure | info | none | Sign in again, or rotate the key if you did not change it |
@@ -220,7 +220,8 @@ id is found twice, as a session's main and subagent files can do, the earliest
 
 | Kind | Anchor |
 |---|---|
-| deniedCallRanLater, credentialReadAttempt, writeToPathOutsideWorkspace, forcePushAttempt | the agent's own opaque id for the call: Claude `tool_use.id`, Codex `item.id` |
+| deniedCallRanLater, credentialReadAttempt, forcePushAttempt | the agent's own opaque id for the call: Claude `tool_use.id`, Codex `item.id` |
+| writeToPathOutsideWorkspace | the literal `session-write-outside-sibling` or `session-write-outside-elsewhere`, one per session and destination family |
 | authFailure | the record's `uuid` |
 | unrestrictedSession | the literal `session`, one per session |
 | workspaceSecretFileNamed | the literal `session-dotenv`, one per session |
@@ -324,7 +325,13 @@ call with no known `cwd`, produces no incident.
   planner's machine). The
   workspace is folded per
   file: Claude's latest record `cwd`, Codex's latest `turn_context` `cwd` plus
-  `workspace_roots`. Paths are lexical, so a symlink inside the workspace that
+  `workspace_roots`. One finding per session and destination family, because on
+  the planner's machine 177 writes in 7 days fell in 13 sessions and 165 were sibling
+  repositories. `sibling` means under the parent of the session's cwd, unless that
+  parent is the home directory or the root, and everything else is `elsewhere`. The
+  family is one bit, derived and dropped in the extractor. An answer closes the
+  finding only until a later write: when a write in that family completes after the
+  answer's date, the finding shows as open again and is eligible for a notification. Paths are lexical, so a symlink inside the workspace that
   points out, or the reverse, is not seen, and the guidance says so. Shell
   redirection is not analysed.
 - **forcePushAttempt**. A simple command `git`, optionally with `-C <dir>` or
@@ -486,17 +493,19 @@ Owner `planner` or `deepseek`. Each deepseek task is one dispatch, one at a time
 |---|---|---|---|---|
 | 1 | planner | none | Foundation: types, rule table, the extractor protocol, `incidentExtractor()` on the adapter protocol, and `IncidentJSON` | `swift build` green, a test pins the JSON key set to bounded values, checkpoint commit |
 | 2 | deepseek | 1 | Extractors, credential table, `simpleCommands`, fixtures | Case table passes on extractor findings and through `IncidentJSON`, including a compound denied retry that is `toolResult`, pending, denied, failed and completed for each kind, every example in Detection rules, all four `evidence` values, foreground against backgrounded, the 256 cap, replayed ids, and a session id shaped like a secret reaching no incident or JSON |
+| 2b | planner | 2, 5 | Session and family grouping for outside writes, reopening after a later write | Two outside writes in one session yield one finding per family, for both agents. A later write after an answer reopens it, across a restart, and notifies. An earlier write does not reopen it. The oracle applies the same rule and counts still match |
 | 3 | deepseek | 1 | Vendor file parsers and the pure reconcile over `[VendorDay]` and `[LocalDay]` | The Anthropic fixture is the documented grouped example with only `has_more` set false and `next_page` null, the same page with `api_key_id` null is a rejection case, and the OpenAI fixture follows its reference. Each formula's assertion shows the correct sum and one wrong sum. Wrong shape, absent or true `has_more`, and null or multiple keys rejected. Threshold boundaries pinned. A day before local coverage and the current UTC day are unreconciled. Key switching and a re-import with changed amounts behave per Incident identity |
 | 4 | deepseek | 1 | Draft and channel table | Exact draft text with the `evidence` sentence for every kind whose route is not `none`, 1800-byte cap, vendor findings build for both providers, vendor pages carry no query, no sentinel in the draft or the percent-encoded `mailto:` |
 | 5 | planner | 1, 2 | Monitor, `IncidentStore` actor, notifier | Idle poll reads 0 bytes. An injected crash before commit and between commit and delivery behaves as specified. A stale window write cannot drop a monitor update or rewind the watermark. Restart does not re-notify. Replay finds the same ids. Device, inode, shrink and same-size rewrite, including with a partial final line, reset to byte 0. A file aging out drops its state, and its later append and a restart do not re-alert. A batch older than the watermark cannot move it back. A tool completing after the watermark alerts. First run does not notify |
 | 6 | planner | 3, 4, 5 | Window, menu, CLI, and the import read that feeds UTC-bucketed samples into the reconcile | `--show-incidents --snapshot` renders each state, `Vibra --incidents --json` output checked, import never runs on the poll, closing the window during an import discards the result and leaves no excess rows, samples on both sides of a local-midnight and a UTC-midnight boundary land on the right day, a file older than 62 days is refused, a file whose newest day is weeks before today still reads a transcript modified on its oldest day, `ReadStats.files` on a fixture tree counts only files modified since the cutoff, and both an out-of-order transcript and a transcript copied after the interval are counted |
-| 7 | planner | 5, 6 | Independent Python oracle, canary in `make test`, perf comparison | The planner runs the oracle on real transcripts and it prints counts only, no seat reads them. Counts equal Swift counts per kind, `make test` green, `tools/gate/perf-bench.sh` before and after. Launch replay bytes and wall time on real 7-day data recorded, budget 10 s at utility priority, labelled a budget, with resident memory and an import's bytes and wall time. Exceeding it stops Task 7 and returns to the seats |
+| 7 | planner | 5, 6 | Independent Python oracle, canary in `make test`, perf comparison | The planner runs the oracle on real transcripts and it prints counts only, no seat reads them. Counts equal Swift counts per kind, `make test` green, `tools/gate/perf-bench.sh` before and after. Launch replay bytes and wall time on real 7-day data recorded, budget 30 s at utility priority and 150 MB resident, labelled a budget, with an import's bytes and wall time. Exceeding it stops Task 7 and returns to the seats |
 | 8 | planner | 7 | `docs/privacy.md`, `docs/features.md`, `CHANGELOG.md`, `docs/ROADMAP.md`, README rows | Each claim traced to a probe, including the always-on reader bullet in `docs/privacy.md`. Translated READMEs flagged, not rewritten |
 
 ### File ownership
 
 - **planner**: `Sources/VibraCore/Incidents/Incident.swift`,
   `Sources/VibraCore/Incidents/IncidentJSON.swift`,
+  `Sources/VibraCore/Incidents/IncidentText.swift`,
   `Sources/VibraCore/Incidents/IncidentMonitor.swift`,
   `Sources/VibraCore/Incidents/IncidentStore.swift`,
   `Sources/VibraCore/Adapters/AgentAdapter.swift`,
@@ -689,3 +698,26 @@ Review base for Step 7: `d69677761494a595ff379bdfd87cfe23ac4055b7`.
 
 This section is a verdict record appended after the gate. It changes no plan text.
 
+### Amendment after approval (v0.8 to v0.9)
+
+The planner measured the built feature on real data before the code gate, and
+two results break plan text the seats approved. A confirmation round covers them.
+
+| # | Finding | Change |
+|---|---|---|
+| 1 | `writeToPathOutsideWorkspace` found 177 writes in 7 days, in 13 sessions. 165 were sibling repositories of the session's cwd and 12 elsewhere under home (oracle, counts only). Every one was a review item, and an answer per call cannot stop the next one | One finding per session, anchor `session-write-outside`, the same shape as `workspaceSecretFileNamed` |
+| 2 | Launch replay read 710 MB in 21.50 s, 21.75 s and 23.14 s in a release build, three runs, exceeding the 10 s budget. Sampling shows the cost is line splitting, `String` creation and JSON parsing across the whole 7-day window. A real defect was fixed on the way: reads outside an autorelease pool held 540 to 830 MB resident, now 78 to 79 MB in the same three runs | Budget set to 30 s at utility priority, once per launch, and 150 MB resident |
+| 3 | Additions the implementation needed, for the record | `ToolClass.other` so a denied retry of any tool is reported, and `IncidentText.swift` for the CLI and window text. Oracle and Swift agree on real data: 5 rows compared, 0 differ. Codex item ids are unique within a rollout, 3463 of 3463 |
+
+### Amendment round objections (v0.9 to v0.10)
+
+Both reviewers read v0.9.
+
+| # | Objection (who) | Change |
+|---|---|---|
+| 1 | One id per session lets an answer silently cover later writes (Codex) | An answer closes the finding only until a later write in that family, which reopens it and is eligible to notify, tested across a restart |
+| 2 | The write change has no task, owner or acceptance (DeepSeek) | Task 2b, planner, with acceptance. DeepSeek's Task 2 is finished, so its file is free. The oracle follows the same rule |
+
+Non-blocking folded in (DeepSeek): destination family, so the 12 unusual writes are not hidden behind the 165 sibling writes, `ToolClass` comment. The `Plan gate record` above describes the v0.8 gate, and this amendment is the plan text that follows it.
+
+Measured after Task 2b, three runs, release build: replay read 714 MB in 22.31 s to 23.21 s, 71 to 79 MB resident. Real-data findings: 14 write items (9 sibling, 5 elsewhere) from 179 calls, 5 credential read attempts, 2 unrestricted sessions, 1 auth failure. Oracle compared 5 rows, 0 differ.

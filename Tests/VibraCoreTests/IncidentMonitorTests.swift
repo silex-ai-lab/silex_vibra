@@ -396,6 +396,77 @@ private final class Clock: @unchecked Sendable {
         #expect(await store.watermark() == before)
     }
 
+    private func outside(_ after: TimeInterval) -> String {
+        line("family", after: after, .writeToPathOutsideWorkspace)
+    }
+
+    @Test func aLaterWriteReopensAnAnsweredSessionFindingAndNotifies() async throws {
+        let tree = try Tree()
+        try tree.write("a.jsonl", [outside(-100)])
+        let sink = Delivered()
+        let (monitor, store) = tree.monitor(into: sink)
+        await monitor.poll()
+        let id = await monitor.rows()[0].incident.id
+        await store.set(.expected(at: tree.clock.now), for: id)
+        #expect(await monitor.rows()[0].disposition == .expected(at: tree.clock.now))
+
+        tree.clock.advance(30)
+        try tree.append("a.jsonl", outside(20))
+        await monitor.poll()
+
+        #expect(await monitor.rows().count == 1)
+        #expect(await monitor.rows()[0].disposition == .open)
+        #expect(sink.all.count == 1)
+    }
+
+    @Test func aWriteBeforeTheAnswerDoesNotReopenItAcrossARestart() async throws {
+        let tree = try Tree()
+        try tree.write("a.jsonl", [outside(-100), outside(-50)])
+        let (monitor, store) = tree.monitor(into: Delivered())
+        await monitor.poll()
+        let answeredAt = tree.clock.now
+        await store.set(.resolved(at: answeredAt), for: await monitor.rows()[0].incident.id)
+
+        let sink = Delivered()
+        let (restarted, _) = tree.monitor(into: sink)
+        await restarted.poll()
+
+        #expect(await restarted.rows()[0].disposition == .resolved(at: answeredAt))
+        #expect(sink.all.isEmpty)
+    }
+
+    @Test func aReopenedFindingStaysOpenAcrossARestart() async throws {
+        let tree = try Tree()
+        try tree.write("a.jsonl", [outside(-100)])
+        let (monitor, store) = tree.monitor(into: Delivered())
+        await monitor.poll()
+        await store.set(.expected(at: tree.clock.now), for: await monitor.rows()[0].incident.id)
+        tree.clock.advance(30)
+        try tree.append("a.jsonl", outside(20))
+        await monitor.poll()
+
+        let sink = Delivered()
+        let (restarted, _) = tree.monitor(into: sink)
+        await restarted.poll()
+
+        #expect(await restarted.rows()[0].disposition == .open)
+        #expect(sink.all.isEmpty)
+    }
+
+    @Test func aRepeatWhileStillOpenDoesNotNotifyAgain() async throws {
+        let tree = try Tree()
+        try tree.write("a.jsonl", [outside(-100)])
+        let sink = Delivered()
+        let (monitor, _) = tree.monitor(into: sink)
+        await monitor.poll()
+
+        tree.clock.advance(30)
+        try tree.append("a.jsonl", outside(20))
+        await monitor.poll()
+
+        #expect(sink.all.isEmpty)
+    }
+
     @Test func rowsSortNewestCompletedFirst() async throws {
         let tree = try Tree()
         try tree.write("a.jsonl", [line("older", after: -200), line("newer", after: -100)])
