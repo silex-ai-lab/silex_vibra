@@ -25,7 +25,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
     private let draftButton = NSButton(title: "Draft Report…", target: nil, action: nil)
 
     private var rows: [IncidentJSON.Row] = []
-    private var importGeneration = 0
+    private let importGate = ImportGate()
     private var draftWindow: NSWindow?
     private var draftText: NSTextView?
     private var draftIncident: Incident?
@@ -257,7 +257,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         alert.informativeText = """
         Vibra compares a usage file you fetched with the usage on this Mac. It never sees your key and makes no request.
 
-        Fetch one API key's usage, up to \(VendorUsage.maxAgeDays) days old, in your own terminal:
+        Fetch one API key's usage in your own terminal. One complete page holds at most 31 days, and the oldest day can be at most \(VendorUsage.maxAgeDays) days ago:
 
         curl -gs "https://api.anthropic.com/v1/organizations/usage_report/messages?starting_at=2026-11-01T00:00:00Z&limit=31&bucket_width=1d&api_key_ids[]=KEY_ID&group_by[]=api_key_id" -H "anthropic-version: 2026-10-21" -H "x-api-key: $ANTHROPIC_ADMIN_KEY" > usage.json
 
@@ -276,34 +276,41 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
     }
 
     private func runImport(_ url: URL) {
-        importGeneration += 1
-        let generation = importGeneration
+        let generation = importGate.advance()
         importButton.isEnabled = false
         importStatus.stringValue = "Reading local usage for the file's days…"
+        let gate = importGate
+        let monitor = self.monitor
         Task.detached(priority: .utility) { [weak self] in
-            let outcome = IncidentImport.run(url: url, now: Date())
-            await MainActor.run {
-                guard let self, generation == self.importGeneration else { return }
-                self.importButton.isEnabled = true
-                switch outcome {
-                case .success(let result):
-                    Task {
-                        await self.monitor.addVendorIncidents(result.incidents)
-                        self.importStatus.stringValue =
-                            "\(result.incidents.count) unexplained days, \(result.unreconciled.count) days not comparable."
-                        await self.reload()
-                    }
-                case .failure(let error):
-                    self.importStatus.stringValue = String(describing: error)
-                }
+            let outcome = await IncidentImport.run(url: url, now: Date())
+            var applied = false
+            if case .success(let result) = outcome {
+                applied = await monitor.replaceVendorIncidents(
+                    scope: result.scope, with: result.incidents, isCurrent: { gate.isCurrent(generation) })
             }
+            await MainActor.run { self?.finishImport(outcome, applied: applied, generation: generation) }
+        }
+    }
+
+    private func finishImport(_ outcome: Result<VendorReconciliation, IncidentImport.Failure>, applied: Bool, generation: Int) {
+        guard importGate.isCurrent(generation) else { return }
+        importButton.isEnabled = true
+        switch outcome {
+        case .success(let result) where applied:
+            importStatus.stringValue =
+                "\(result.incidents.count) unexplained days, \(result.unreconciled.count) days not comparable."
+            Task { [weak self] in await self?.reload() }
+        case .success:
+            importStatus.stringValue = ""
+        case .failure(let error):
+            importStatus.stringValue = String(describing: error)
         }
     }
 
     /// A read in progress cannot be cancelled. Closing discards its result.
     func windowWillClose(_ notification: Notification) {
         guard notification.object as? NSWindow === window else { return }
-        importGeneration += 1
+        _ = importGate.advance()
         importButton.isEnabled = true
         importStatus.stringValue = ""
     }
@@ -412,7 +419,7 @@ enum IncidentImport {
         }
     }
 
-    static func run(url: URL, now: Date) -> Result<VendorReconciliation, Failure> {
+    static func run(url: URL, now: Date) async -> Result<VendorReconciliation, Failure> {
         guard let data = try? Data(contentsOf: url) else { return .failure(.unreadable) }
         let file: VendorUsageFile
         do {
@@ -431,19 +438,26 @@ enum IncidentImport {
         }
         let ingest = ReportIngest(adapters: [adapter])
         let window = ReportWindow(now: now, days: VendorUsage.windowDays(oldest: oldest, now: now), calendar: .current)
-        let box = ResultBox()
-        let semaphore = DispatchSemaphore(value: 0)
-        Task.detached(priority: .utility) {
-            box.input = await ingest.collect(window: window)
-            semaphore.signal()
-        }
-        semaphore.wait()
-        let samples = box.input?.samplesByAgent[agent] ?? []
-        let local = VendorUsage.localDays(from: samples, provider: file.provider)
+        let input = await ingest.collect(window: window)
+        let local = VendorUsage.localDays(from: input.samplesByAgent[agent] ?? [], provider: file.provider)
         return .success(VendorUsage.reconcile(file, local: local, now: now))
     }
+}
 
-    private final class ResultBox: @unchecked Sendable {
-        var input: ReportInput?
+/// Which import is still wanted. Read from the monitor's actor, so a close
+/// that lands while the result is queued still discards it.
+final class ImportGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var generation = 0
+
+    func advance() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        generation += 1
+        return generation
+    }
+
+    func isCurrent(_ value: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return generation == value
     }
 }

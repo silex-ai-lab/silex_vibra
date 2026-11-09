@@ -430,8 +430,9 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
     }
 
     private mutating func rememberDenial(_ call: Call) {
-        guard !denials.contains(where: { $0.name == call.name && $0.fingerprint == call.fingerprint }) else {
-            return
+        if let index = denials.firstIndex(where: { $0.name == call.name && $0.fingerprint == call.fingerprint }) {
+            guard denials[index].stale else { return }
+            denials.remove(at: index)
         }
         nextSerial += 1
         denials.append(Denial(
@@ -621,15 +622,17 @@ struct CodexIncidentExtractor: IncidentExtractor {
         guard item["status"] as? String == "completed",
               let changes = item["changes"] as? [String: Any]
         else { return [] }
+        var families: Set<WriteFamily> = []
         for key in changes.keys {
             guard let path = IncidentPaths.absolute(key, cwd: cwd),
                   isOutsideWorkspace(path), let root = workspaceRoots.first
             else { continue }
-            let family = IncidentPaths.writeFamily(of: path, workspace: root)
-            return emit(.writeToPathOutsideWorkspace, .write(.fileChange, family), .toolResult,
-                        at: stamp, completedAt: stamp, anchor: IncidentPaths.writeAnchor(family))
+            families.insert(IncidentPaths.writeFamily(of: path, workspace: root))
         }
-        return []
+        return WriteFamily.allCases.filter(families.contains).flatMap { family in
+            emit(.writeToPathOutsideWorkspace, .write(.fileChange, family), .toolResult,
+                 at: stamp, completedAt: stamp, anchor: IncidentPaths.writeAnchor(family))
+        }
     }
 
     private func credentialFinding(in commands: [[String]]) -> (kind: IncidentKind, credentialClass: CredentialClass)? {

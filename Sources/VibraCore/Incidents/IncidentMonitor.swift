@@ -86,11 +86,12 @@ public actor IncidentMonitor {
                 let result = read(source, adapter: adapter)
                 bytes += result.bytes
                 for item in result.extracted {
-                    let isNew = merge(item, from: source.url)
-                    if isNew { discovered += 1 }
+                    let previous = found[item.incident.id]?.extracted.incident.completedAt
+                    merge(item, from: source.url)
+                    if previous == nil { discovered += 1 }
                     guard notifies, item.incident.kind.rule.severity == .review, item.incident.completedAt > watermark
                     else { continue }
-                    if isNew || Self.reopens(item.incident, answer: answers[item.incident.id]) {
+                    if previous == nil || Self.crossesAnswer(item.incident, previous: previous, answer: answers[item.incident.id]) {
                         pending[item.incident.id] = item.incident.completedAt
                     }
                 }
@@ -148,32 +149,28 @@ public actor IncidentMonitor {
     private func needsReset(_ state: Tracked, _ source: SourceDescriptor) -> Bool {
         source.deviceID != state.deviceID
             || source.fileID != state.fileID
-            || source.size < Int64(state.offset)
+            || source.size < state.lastSize
             || (source.size == state.lastSize && source.modified != state.lastModified)
     }
 
-    /// True the first time this id is seen. The earliest `at` wins when a
-    /// session's main and subagent files report the same id.
-    private func merge(_ item: ExtractedIncident, from url: URL) -> Bool {
+    /// The earliest `at` decides what the finding says, so its text is stable
+    /// across launches, and the latest `completedAt` decides whether it reopens.
+    private func merge(_ item: ExtractedIncident, from url: URL) {
         guard var existing = found[item.incident.id] else {
             found[item.incident.id] = Found(extracted: item, sources: [url])
-            return true
+            return
         }
         existing.sources.insert(url)
-        let current = existing.extracted
+        let current = existing.extracted.incident
+        let first = item.incident.at < current.at ? item.incident : current
         existing.extracted = ExtractedIncident(
             incident: Incident(
-                id: current.incident.id,
-                kind: current.incident.kind,
-                agent: current.incident.agent,
-                evidence: current.incident.evidence,
-                at: min(current.incident.at, item.incident.at),
-                completedAt: max(current.incident.completedAt, item.incident.completedAt),
-                posture: current.incident.posture,
-                detail: current.incident.detail),
-            rawSessionID: current.rawSessionID)
+                id: first.id, kind: first.kind, agent: first.agent, evidence: first.evidence,
+                at: first.at,
+                completedAt: max(current.completedAt, item.incident.completedAt),
+                posture: first.posture, detail: first.detail),
+            rawSessionID: existing.extracted.rawSessionID)
         found[item.incident.id] = existing
-        return false
     }
 
     private func forget(_ url: URL) {
@@ -191,12 +188,26 @@ public actor IncidentMonitor {
         return incident.completedAt > date
     }
 
+    /// True for the write that first crosses the answer, which is the moment
+    /// the finding goes from closed to open. Later writes find it already open.
+    private static func crossesAnswer(_ incident: Incident, previous: Date?, answer: Disposition?) -> Bool {
+        guard reopens(incident, answer: answer), let date = answer?.date, let previous else { return false }
+        return previous <= date
+    }
+
     /// Commit, then deliver. A crash before the commit delivers nothing and
     /// the next replay finds the batch. A crash after it loses one notification
     /// and never duplicates it.
     private func deliverPending(at date: Date) async -> Int {
-        guard let newest = pending.values.max() else { return 0 }
+        if pending.isEmpty { return 0 }
         if let lastDelivery, date.timeIntervalSince(lastDelivery) < deliveryInterval { return 0 }
+        // An answer given while the batch waited settles those items.
+        let answers = await store.dispositions()
+        pending = pending.filter { id, completedAt in
+            guard let answered = answers[id]?.date else { return true }
+            return completedAt > answered
+        }
+        guard let newest = pending.values.max() else { return 0 }
         guard await store.commit(watermark: newest) else { return 0 }
         let count = pending.count
         pending.removeAll()
@@ -210,9 +221,17 @@ public actor IncidentMonitor {
     }
 
     /// Findings from an imported usage file. They live for the app run, never
-    /// notify and never touch the watermark.
-    public func addVendorIncidents(_ incidents: [Incident]) {
+    /// notify and never touch the watermark. `scope` is every day the file
+    /// covers, so a corrected re-import removes a finding that no longer holds.
+    /// `isCurrent` is checked here, so an import discarded while this call was
+    /// queued changes nothing.
+    public func replaceVendorIncidents(
+        scope: [IncidentID], with incidents: [Incident], isCurrent: @Sendable () -> Bool = { true }
+    ) -> Bool {
+        guard isCurrent() else { return false }
+        for id in scope { vendor[id] = nil }
         for incident in incidents { vendor[incident.id] = incident }
+        return true
     }
 
     /// The answers and the watermark are the store's. A diagnostic reader

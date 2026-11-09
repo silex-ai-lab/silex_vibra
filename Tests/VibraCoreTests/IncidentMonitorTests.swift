@@ -382,10 +382,11 @@ private final class Clock: @unchecked Sendable {
         let excess = VendorExcess(provider: .openai, day: day, vendorTokens: 900, localTokens: 1)
         let at = tree.clock.now.addingTimeInterval(1000)
 
-        await monitor.addVendorIncidents([Incident(
-            id: IncidentID(agent: nil, session: nil, kind: .unexplainedVendorUsage, anchor: "openai|2026-11-01|k"),
-            kind: .unexplainedVendorUsage, agent: nil, evidence: .vendorFile,
-            at: at, completedAt: at, posture: .unknown, detail: .vendorExcess(excess))])
+        let id = IncidentID(agent: nil, session: nil, kind: .unexplainedVendorUsage, anchor: "openai|2026-11-01|k")
+        let incident = Incident(
+            id: id, kind: .unexplainedVendorUsage, agent: nil, evidence: .vendorFile,
+            at: at, completedAt: at, posture: .unknown, detail: .vendorExcess(excess))
+        #expect(await monitor.replaceVendorIncidents(scope: [id], with: [incident]))
         await monitor.poll()
 
         #expect(await monitor.rows().count == 1)
@@ -464,6 +465,100 @@ private final class Clock: @unchecked Sendable {
         #expect(sink.all.isEmpty)
     }
 
+    @Test func aCorrectedReimportRemovesAFindingThatNoLongerHolds() async throws {
+        let tree = try Tree()
+        let (monitor, _) = tree.monitor(into: Delivered())
+        let day = try #require(UTCDay(iso: "2026-11-01"))
+        let id = IncidentID(agent: nil, session: nil, kind: .unexplainedVendorUsage, anchor: "openai|2026-11-01|k")
+        let at = tree.clock.now
+        let incident = Incident(
+            id: id, kind: .unexplainedVendorUsage, agent: nil, evidence: .vendorFile, at: at, completedAt: at,
+            posture: .unknown, detail: .vendorExcess(VendorExcess(provider: .openai, day: day, vendorTokens: 9, localTokens: 1)))
+        _ = await monitor.replaceVendorIncidents(scope: [id], with: [incident])
+        #expect(await monitor.rows().count == 1)
+
+        _ = await monitor.replaceVendorIncidents(scope: [id], with: [])
+
+        #expect(await monitor.rows().isEmpty)
+    }
+
+    @Test func aDiscardedImportChangesNothing() async throws {
+        let tree = try Tree()
+        let (monitor, _) = tree.monitor(into: Delivered())
+        let day = try #require(UTCDay(iso: "2026-11-01"))
+        let id = IncidentID(agent: nil, session: nil, kind: .unexplainedVendorUsage, anchor: "openai|2026-11-01|k")
+        let at = tree.clock.now
+        let incident = Incident(
+            id: id, kind: .unexplainedVendorUsage, agent: nil, evidence: .vendorFile, at: at, completedAt: at,
+            posture: .unknown, detail: .vendorExcess(VendorExcess(provider: .openai, day: day, vendorTokens: 9, localTokens: 1)))
+
+        let applied = await monitor.replaceVendorIncidents(scope: [id], with: [incident], isCurrent: { false })
+
+        #expect(!applied)
+        #expect(await monitor.rows().isEmpty)
+    }
+
+    @Test func onlyTheFirstWriteAfterAnAnswerNotifies() async throws {
+        let tree = try Tree()
+        try tree.write("a.jsonl", [outside(-100)])
+        let sink = Delivered()
+        let (monitor, store) = tree.monitor(into: sink)
+        await monitor.poll()
+        await store.set(.expected(at: tree.clock.now), for: await monitor.rows()[0].incident.id)
+
+        tree.clock.advance(30)
+        try tree.append("a.jsonl", outside(20))
+        await monitor.poll()
+        tree.clock.advance(30)
+        try tree.append("a.jsonl", outside(50))
+        await monitor.poll()
+
+        #expect(sink.all.count == 1)
+    }
+
+    @Test func anAnswerGivenWhileABatchWaitsSettlesIt() async throws {
+        let tree = try Tree()
+        try tree.write("a.jsonl", [line("a", after: -100)])
+        let sink = Delivered()
+        let (monitor, store) = tree.monitor(into: sink, interval: 60)
+        await monitor.poll()
+        tree.clock.advance(5)
+        try tree.append("a.jsonl", line("b", after: 3))
+        await monitor.poll()
+        #expect(sink.all.count == 1)
+
+        tree.clock.advance(10)
+        try tree.append("a.jsonl", line("c", after: 12))
+        await monitor.poll()
+        let waiting = try #require(await monitor.rows().first?.incident.id)
+        tree.clock.advance(1)
+        await store.set(.resolved(at: tree.clock.now), for: waiting)
+
+        tree.clock.advance(60)
+        await monitor.poll()
+
+        #expect(sink.all.count == 1)
+    }
+
+    @Test func aFileThatShrinksPastAPartialLineIsReadFromTheStart() async throws {
+        let tree = try Tree()
+        let first = line("aaaa", after: -100)
+        try Data((first + "\n" + String(repeating: "p", count: 400)).utf8).write(to: tree.url("a.jsonl"))
+        let (monitor, _) = tree.monitor(into: Delivered())
+        await monitor.poll()
+        let before = await monitor.rows().map(\.incident.id)
+
+        tree.clock.advance(30)
+        let rewritten = line("bbbb", after: -100)
+        try Data((rewritten + "\n" + String(repeating: "p", count: 200)).utf8).write(to: tree.url("a.jsonl"))
+        try FileManager.default.setAttributes([.modificationDate: tree.clock.now], ofItemAtPath: tree.url("a.jsonl").path)
+        await monitor.poll()
+
+        let after = await monitor.rows().map(\.incident.id)
+        #expect(after.count == 1)
+        #expect(after != before)
+    }
+
     @Test func rowsSortNewestCompletedFirst() async throws {
         let tree = try Tree()
         try tree.write("a.jsonl", [line("older", after: -200), line("newer", after: -100)])
@@ -525,6 +620,20 @@ private final class Clock: @unchecked Sendable {
         await store.set(.open, for: id)
 
         #expect(await store.dispositions()[id] == nil)
+    }
+
+    @Test func aReadOnlyStoreNeverTouchesACorruptFile() async throws {
+        let url = scratch()
+        let directory = url.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("{not json".utf8).write(to: url)
+
+        let store = IncidentStore(url: url, readOnly: true)
+        await store.set(.resolved(at: Date()), for: IncidentID(hex: "abc"))
+
+        #expect(try String(contentsOf: url, encoding: .utf8) == "{not json")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["incidents.json"])
     }
 
     @Test func aCorruptFileIsKeptAsideAndReported() async throws {

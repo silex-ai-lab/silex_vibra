@@ -58,7 +58,7 @@ public enum VendorImportError: Error, Equatable, CustomStringConvertible {
         case .unrecognisedShape(let expected):
             "This is not a usage page this build reads. Expected \(expected)."
         case .partialPage:
-            "This is a partial page: has_more must be present and false."
+            "This is a partial page: has_more must be present and false. One page holds at most 31 days."
         case .noSingleKey:
             "Every result with usage must name one API key. Fetch the page grouped by api_key_id for your own key."
         case .tooOld:
@@ -71,10 +71,13 @@ public struct VendorReconciliation: Sendable, Equatable {
     public let incidents: [Incident]
     /// Days with no comparable local coverage, or the unfinished current day.
     public let unreconciled: [UTCDay]
+    /// The id of every day the file covers, finding or not.
+    public let scope: [IncidentID]
 
-    public init(incidents: [Incident], unreconciled: [UTCDay]) {
+    public init(incidents: [Incident], unreconciled: [UTCDay], scope: [IncidentID] = []) {
         self.incidents = incidents
         self.unreconciled = unreconciled
+        self.scope = scope
     }
 }
 
@@ -256,6 +259,7 @@ public enum VendorUsage {
 
         var incidents: [Incident] = []
         var unreconciled: [UTCDay] = []
+        let scope = file.days.map { incidentID(file, $0.day) }
         for entry in file.days.sorted(by: { $0.day < $1.day }) {
             // No local coverage at all, a day before it starts, or a day still
             // in progress cannot be compared with one Mac.
@@ -271,16 +275,20 @@ public enum VendorUsage {
                 incidents.append(incident(file, entry, localTokens: localValue))
             }
         }
-        return VendorReconciliation(incidents: incidents, unreconciled: unreconciled)
+        return VendorReconciliation(incidents: incidents, unreconciled: unreconciled, scope: scope)
+    }
+
+    /// The key id appears only inside this hash: two keys never share an
+    /// answer, and a re-import keeps the user's answer.
+    private static func incidentID(_ file: VendorUsageFile, _ day: UTCDay) -> IncidentID {
+        IncidentID(
+            agent: nil, session: nil, kind: .unexplainedVendorUsage,
+            anchor: "\(file.provider.rawValue)|\(day.iso)|\(file.apiKeyID)")
     }
 
     private static func incident(_ file: VendorUsageFile, _ entry: VendorDay, localTokens: Int) -> Incident {
-        // The key id appears only inside this hash: two keys never share an
-        // answer, and a re-import keeps the user's answer.
-        let anchor = "\(file.provider.rawValue)|\(entry.day.iso)|\(file.apiKeyID)"
         return Incident(
-            id: IncidentID(
-                agent: nil, session: nil, kind: .unexplainedVendorUsage, anchor: anchor),
+            id: incidentID(file, entry.day),
             kind: .unexplainedVendorUsage,
             agent: nil,
             evidence: .vendorFile,

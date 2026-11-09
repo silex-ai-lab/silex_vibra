@@ -154,7 +154,7 @@ never blocks or interrupts an agent.
 | Finding | Severity | What it means |
 |---|---|---|
 | A denied call ran later | review | A call was denied and the identical call later returned, with no message from you in between. You or a rule may have approved the retry. Claude Code only |
-| A credential read | review | A named reader was pointed at a credential: `~/.aws`, `~/.ssh`, `.netrc`, a package or GitHub token, an agent's own credentials, or a keychain lookup |
+| A credential read | review | A named reader was pointed at a credential: `~/.aws`, `~/.ssh`, `.netrc`, a package or GitHub token, an agent's own credentials, a keychain lookup, or a `.env` outside the workspace |
 | This project's .env was named | info | The same, for a `.env` inside the workspace. One per session |
 | A write outside the workspace | review | A tool edit whose path, as written, is outside the workspace. One finding per session and destination family, sibling repositories or elsewhere. A later write reopens a closed one |
 | A force push | review | `git push --force`, `-f` or a `+` refspec. `--force-with-lease` alone is exempt |
@@ -170,12 +170,15 @@ may not have run says so. Paths are compared as written, so a symlink or a
 
 **Answers.** Each finding can be marked Expected, Resolved or Reported, and
 reopened. Notifications carry a count only, at most one a minute, and backfilled
-findings never notify. After launch the list fills in once the replay finishes,
-about 20 seconds for 700 MB of transcripts on the machine it was measured on.
+findings never notify on a first run. A finding that completed while Vibra was
+closed notifies at the next launch. After launch the list fills in once the replay
+finishes, about 25 seconds for 700 MB of transcripts on the machine it was measured
+on.
 
 **Importing vendor usage.** The window can compare a usage file with this Mac's
 own usage, to spot quota someone else consumed. It needs an organization API
-usage page for exactly one API key, at most 62 days old. Pro, Max and ChatGPT
+usage page for exactly one API key. One complete page holds at most 31 days, and
+its oldest day can be at most 62 days ago. Pro, Max and ChatGPT
 plans appear in no file you can import. You fetch the file in your own terminal
 with your own admin key, and the window shows the command. A day is flagged when
 the vendor counted more than `max(10%, 100,000 tokens)` beyond what this Mac

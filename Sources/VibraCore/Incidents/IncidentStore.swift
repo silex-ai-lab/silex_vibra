@@ -31,18 +31,26 @@ public actor IncidentStore {
 
     private let url: URL
     private let now: @Sendable () -> Date
+    private let readOnly: Bool
     private var contents: Contents
     /// True when a corrupt file was set aside at load, so the window can say
     /// the user's answers were reset.
     public nonisolated let wasReset: Bool
 
-    public init(url: URL = IncidentStore.defaultURL, now: @escaping @Sendable () -> Date = { Date() }) {
+    /// `readOnly` is for the diagnostic commands, which must write nothing, even
+    /// the rename of a corrupt file.
+    public init(
+        url: URL = IncidentStore.defaultURL,
+        now: @escaping @Sendable () -> Date = { Date() },
+        readOnly: Bool = false
+    ) {
         self.url = url
         self.now = now
-        (contents, wasReset) = Self.load(url: url, now: now())
+        self.readOnly = readOnly
+        (contents, wasReset) = Self.load(url: url, now: now(), readOnly: readOnly)
     }
 
-    private static func load(url: URL, now: Date) -> (Contents, wasReset: Bool) {
+    private static func load(url: URL, now: Date, readOnly: Bool) -> (Contents, wasReset: Bool) {
         guard let data = try? Data(contentsOf: url) else { return (.empty, false) }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -51,6 +59,7 @@ public actor IncidentStore {
         if let decoded = try? decoder.decode(Contents.self, from: data), decoded.version == schemaVersion {
             return (decoded, false)
         }
+        if readOnly { return (.empty, true) }
         let aside = url.deletingLastPathComponent()
             .appendingPathComponent("incidents.corrupt-\(Int(now.timeIntervalSince1970)).json")
         try? FileManager.default.moveItem(at: url, to: aside)
@@ -104,6 +113,7 @@ public actor IncidentStore {
     }
 
     private func save() -> Bool {
+        if readOnly { return false }
         let cutoff = now().addingTimeInterval(-Self.retention)
         contents.dispositions = contents.dispositions.filter { $0.value.at >= cutoff }
         let encoder = JSONEncoder()

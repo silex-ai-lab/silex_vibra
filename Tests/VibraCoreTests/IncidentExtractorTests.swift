@@ -292,6 +292,57 @@ struct IncidentExtractorTests {
         #expect(Set(ids.map(\.hex)).count == 2)
     }
 
+    @Test func oneCodexItemCanReportBothFamilies() {
+        let lines = [
+            Self.line(["type": "session_meta", "timestamp": "2026-11-08T10:00:00.000Z", "payload": ["session_id": "c1"]]),
+            Self.line(["type": "turn_context", "timestamp": "2026-11-08T10:00:00.000Z", "payload": [
+                "cwd": "/Users/demo/workplace/sample", "workspace_roots": ["/Users/demo/workplace/sample"],
+            ] as [String: Any]]),
+            Self.line(["type": "event_msg", "timestamp": "2026-11-08T10:00:05.000Z", "payload": [
+                "type": "item_completed",
+                "item": ["type": "FileChange", "id": "i1", "status": "completed", "changes": [
+                    "/Users/demo/workplace/other/a.swift": [:] as [String: Any],
+                    "/opt/elsewhere/c.swift": [:] as [String: Any],
+                ]] as [String: Any],
+            ] as [String: Any]]),
+        ]
+        var extractor = CodexIncidentExtractor()
+        let found = extractor.fold(lines)
+        #expect(found.map(\.incident.detail) == [.write(.fileChange, .sibling), .write(.fileChange, .elsewhere)])
+    }
+
+    private func claudeBashCall(_ id: String, _ command: String, _ result: String, isError: Bool, at second: Int) -> [String] {
+        let stamp = String(format: "2026-11-08T10:00:%02d.000Z", second)
+        return [
+            Self.line([
+                "type": "assistant", "timestamp": stamp, "sessionId": "s1", "cwd": "/Users/demo/workplace/sample",
+                "message": ["role": "assistant", "content": [[
+                    "type": "tool_use", "id": id, "name": "Bash", "input": ["command": command],
+                ] as [String: Any]]] as [String: Any],
+            ]),
+            Self.line([
+                "type": "user", "timestamp": stamp, "sessionId": "s1",
+                "message": ["role": "user", "content": [[
+                    "type": "tool_result", "tool_use_id": id, "content": result, "is_error": isError,
+                ] as [String: Any]]] as [String: Any],
+            ]),
+        ]
+    }
+
+    @Test func aFreshDenialAfterAHumanMessageStillCounts() {
+        let denial = "The user doesn't want to proceed with this tool use."
+        var lines = claudeBashCall("u1", "swift build", denial, isError: true, at: 1)
+        lines.append(Self.line([
+            "type": "user", "timestamp": "2026-11-08T10:00:02.000Z", "sessionId": "s1",
+            "message": ["role": "user", "content": "not now"] as [String: Any],
+        ]))
+        lines += claudeBashCall("u2", "swift build", denial, isError: true, at: 3)
+        lines += claudeBashCall("u3", "swift build", "ok", isError: false, at: 4)
+
+        var extractor = ClaudeIncidentExtractor()
+        #expect(extractor.fold(lines).map(\.incident.kind) == [.deniedCallRanLater])
+    }
+
     @Test func theFamilyIsCarriedToTheDetail() {
         var extractor = ClaudeIncidentExtractor()
         let found = extractor.fold(

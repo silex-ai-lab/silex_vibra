@@ -156,6 +156,21 @@ struct VendorUsageTests {
         #expect(days.map(\.tokens) != [1100])  // input + output alone
     }
 
+    @Test func scopeNamesEveryDayIncludingOnesWithNoFinding() throws {
+        let day = try #require(UTCDay(iso: "2025-08-01"))
+        let earlier = try #require(UTCDay(iso: "2025-07-01"))
+        let file = VendorUsageFile(provider: .openai, apiKeyID: "k", days: [VendorDay(day: day, tokens: 1)])
+        let flagged = VendorUsageFile(provider: .openai, apiKeyID: "k", days: [VendorDay(day: day, tokens: 900_000)])
+        let local = [LocalDay(day: earlier, tokens: 1)]
+        let now = Date(timeIntervalSince1970: 1_754_179_200)
+
+        let quiet = VendorUsage.reconcile(file, local: local, now: now)
+        let loud = VendorUsage.reconcile(flagged, local: local, now: now)
+
+        #expect(quiet.incidents.isEmpty)
+        #expect(quiet.scope == loud.incidents.map(\.id))
+    }
+
     @Test func openAIFileWithoutTheOptionalCachedFieldParses() throws {
         let page: [String: Any] = [
             "object": "page", "has_more": false, "next_page": NSNull(),

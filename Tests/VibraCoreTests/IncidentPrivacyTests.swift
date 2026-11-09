@@ -53,6 +53,18 @@ import Testing
 }
 
 @Suite struct IncidentFoundationTests {
+    @Test func theTextOutputCountsEveryKindAndListsEachRow() {
+        let at = Date(timeIntervalSince1970: 1_800_000_000)
+        let incident = Incident(
+            id: IncidentID(hex: "abc"), kind: .forcePushAttempt, agent: .codex, evidence: .commandLine,
+            at: at, completedAt: at, posture: .sandboxed, detail: .tool(.bash))
+        let text = IncidentText.render([IncidentJSON.Row(incident: incident, disposition: .open)])
+        for kind in IncidentKind.allCases {
+            #expect(text.contains("\(kind.rawValue): \(kind == .forcePushAttempt ? 1 : 0)"))
+        }
+        #expect(text.contains("2027-01-15T08:00:00Z  review  Codex  forcePushAttempt  commandLine  tool: bash  open"))
+    }
+
     @Test func utcDayRejectsNonDates() {
         #expect(UTCDay(iso: "2026-02-30") == nil)
         #expect(UTCDay(iso: "2026-11-1") == nil)

@@ -532,7 +532,7 @@ if CommandLine.arguments.contains("--incidents") {
     let adapters = AdapterRegistry.all()
     nonisolated(unsafe) var finished = false
     Task.detached {
-        let store = IncidentStore()
+        let store = IncidentStore(readOnly: true)
         let monitor = IncidentMonitor(adapters: adapters, store: store, notifies: false, deliver: { _ in })
         let started = Date()
         let stats = await monitor.poll()
@@ -595,7 +595,7 @@ func detailDiagnostic(sessionID: String?) -> any RenderableWindow {
 /// The window over a one-shot read that notifies nothing and writes nothing.
 @MainActor
 func incidentsDiagnostic() -> any RenderableWindow {
-    let store = IncidentStore()
+    let store = IncidentStore(readOnly: true)
     let monitor = IncidentMonitor(adapters: AdapterRegistry.all(), store: store, notifies: false, deliver: { _ in })
     nonisolated(unsafe) var done = false
     Task.detached {
