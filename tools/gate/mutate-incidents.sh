@@ -33,7 +33,7 @@ mutate() {
     output=$(swift run --build-system native VibraTests --filter 'Incident|VendorUsage|VendorReport' 2>&1)
     status=$?
     mv "$file.orig" "$file"
-    if printf '%s' "$output" | grep -q 'error:'; then
+    if printf '%s' "$output" | grep -qE '\.swift:[0-9]+:[0-9]+: error:'; then
         echo "ERROR $label: the mutant did not compile"
         failed=1
     elif [ "$status" -ne 0 ]; then
