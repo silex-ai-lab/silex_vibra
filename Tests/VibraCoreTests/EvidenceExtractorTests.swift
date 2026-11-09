@@ -68,12 +68,54 @@ struct EvidenceExtractorTests {
         #expect(fold.events == [check(.test, .passed(.runnerSummary), at: 1)])
     }
 
-    @Test func claudeRejectedCheckIsUnknown() {
+    @Test(arguments: [
+        "The user doesn't want to proceed with this tool use.",
+        "The user doesn't want to take this action right now.",
+    ])
+    func claudeRejectedCallLeavesNoEvent(text: String) {
+        let fold = claude([F.claudeBash("a", "swift test", at: 1), F.claudeResult("a", text: text, isError: true, at: 2)])
+        #expect(fold.events.isEmpty)
+        #expect(fold.sawToolRecords)
+    }
+
+    @Test func claudeBackgroundedCheckIsNeverExitProven() {
         let fold = claude([
-            F.claudeBash("a", "swift test", at: 1),
-            F.claudeResult("a", text: "The user doesn't want to proceed with this tool use.", isError: true, at: 2),
+            F.claudeUse("a", name: "Bash", input: ["command": "swift test", "run_in_background": true], at: 1),
+            F.claudeResult("a", text: "Command running in background with ID: bash_1", at: 2),
         ])
         #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test func claudeManuallyBackgroundedCheckIsNotAPass() {
+        let fold = claude([
+            F.claudeBash("a", "swift test", at: 1),
+            F.claudeResult("a", text: "Command was manually backgrounded by user", at: 2),
+        ])
+        #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test(arguments: ["Permission denied by policy", "<tool_use_error>nope</tool_use_error>", "Command timed out"])
+    func claudeAnErrorWithoutAnExitCodeIsNotAFailure(text: String) {
+        let fold = claude([F.claudeBash("a", "swift test", at: 1), F.claudeResult("a", text: text, isError: true, at: 2)])
+        #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test func claudeChainFailureDoesNotBlameTheCheck() {
+        let fold = claude([
+            F.claudeBash("a", "cd missing && swift test", at: 1),
+            F.claudeResult("a", text: "Exit code 1\nno such directory", isError: true, at: 2),
+        ])
+        #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test func claudeChainSuccessProvesThePass() {
+        let fold = claude([F.claudeBash("a", "cd x && swift test", at: 1), F.claudeResult("a", text: "", at: 2)])
+        #expect(fold.events == [check(.test, .passed(.exitStatus), at: 1)])
+    }
+
+    @Test func aChangedRecordShapeIsNotReadAsACleanSession() {
+        let claudeFold = claude([F.claudeUse("a", name: "Edit", input: ["renamed": "/work/a.swift"], at: 1)])
+        #expect(claudeFold.sawToolRecords == false)
     }
 
     @Test func claudeCheckWithoutAResultIsUnknownAtFinish() {

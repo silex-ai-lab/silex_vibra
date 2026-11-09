@@ -4,7 +4,7 @@ import VibraCore
 /// What Vibra knows about one session, and every next step that exists for it.
 /// The snapshot is the menu's own. The one thing it reads is the "Code checks"
 /// row, through the injected `readEvidence`, on open and then at most once a
-/// minute while `lastActivity` keeps moving.
+/// minute after `lastActivity` moves.
 @MainActor
 final class SessionDetailWindowController: NSObject, RenderableWindow {
     private var window: NSWindow?
@@ -20,6 +20,9 @@ final class SessionDetailWindowController: NSObject, RenderableWindow {
     }
     private var evidenceRead = EvidenceRead.reading
     private var evidenceTask: Task<Void, Never>?
+    private var evidenceRetry: Task<Void, Never>?
+    /// Identifies the read whose answer the row may show.
+    private var evidenceGeneration = 0
     private var evidenceStartedAt: Date?
     private var evidenceActivity: Date?
     private static let evidenceRefreshInterval: TimeInterval = 60
@@ -96,6 +99,9 @@ final class SessionDetailWindowController: NSObject, RenderableWindow {
         if self.session?.key != session.key {
             evidenceTask?.cancel()
             evidenceTask = nil
+            evidenceRetry?.cancel()
+            evidenceRetry = nil
+            evidenceGeneration += 1
             evidenceRead = .reading
         }
         apply(session: session, snapshot: snapshot)
@@ -106,26 +112,41 @@ final class SessionDetailWindowController: NSObject, RenderableWindow {
         guard evidenceTask == nil, model?.evidenceAvailable == true else { return }
         evidenceActivity = session.lastActivity
         evidenceStartedAt = Date()
-        let key = session.key
+        evidenceGeneration += 1
+        let generation = evidenceGeneration
         evidenceTask = Task { [readEvidence] in
             let evidence = await readEvidence(session)
-            self.finishEvidenceRead(evidence, for: key)
+            self.finishEvidenceRead(evidence, generation: generation)
         }
     }
 
-    private func finishEvidenceRead(_ evidence: DeliveryEvidence?, for key: SessionKey) {
-        guard session?.key == key else { return }
+    private func finishEvidenceRead(_ evidence: DeliveryEvidence?, generation: Int) {
+        guard generation == evidenceGeneration else { return }
         evidenceTask = nil
         evidenceRead = .finished(evidence)
         renderRows()
+        if let session { refreshEvidenceIfDue(session) }
     }
 
+    /// A session often goes quiet right after its last check, so a refresh
+    /// refused for time alone is retried once the minute is up.
     private func refreshEvidenceIfDue(_ session: Session) {
-        guard evidenceTask == nil, case .finished = evidenceRead,
-              session.lastActivity != evidenceActivity,
-              Date().timeIntervalSince(evidenceStartedAt ?? .distantPast) >= Self.evidenceRefreshInterval
+        guard windowIsVisible, evidenceTask == nil, case .finished = evidenceRead,
+              session.lastActivity != evidenceActivity
         else { return }
-        startEvidenceRead(for: session)
+        let elapsed = Date().timeIntervalSince(evidenceStartedAt ?? .distantPast)
+        guard elapsed < Self.evidenceRefreshInterval else {
+            startEvidenceRead(for: session)
+            return
+        }
+        guard evidenceRetry == nil else { return }
+        let wait = Self.evidenceRefreshInterval - elapsed
+        evidenceRetry = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled, let self else { return }
+            self.evidenceRetry = nil
+            if let current = self.session { self.refreshEvidenceIfDue(current) }
+        }
     }
 
     private func present(session: Session, model: SessionDetailModel) {

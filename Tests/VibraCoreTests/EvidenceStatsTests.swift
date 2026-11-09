@@ -9,7 +9,7 @@ struct EvidenceStatsTests {
         .check(ObservedCheck(at: t.addingTimeInterval(s), kind: kind, result: result))
     }
 
-    @Test func printsExactlyTheFourLineFamiliesSortedAndCountsOnly() {
+    @Test func printsExactlyTheFiveLineFamiliesSortedAndCountsOnly() {
         let rows: [(agent: AgentKind, fold: EvidenceFold)] = [
             (.codex, EvidenceFold(events: [.codeChange(t), check(5, .test, .failed(.runnerSummary))], sawToolRecords: true)),
             (.claudeCode, EvidenceFold(events: [], sawToolRecords: false)),
@@ -29,6 +29,8 @@ struct EvidenceStatsTests {
         case agent=claudeCode case=checkedAfterLastChange n=1
         case agent=claudeCode case=noToolRecordsRecognized n=1
         case agent=codex case=checkedAfterLastChange n=1
+        reported agent=claudeCode kind=build result=unknown n=1
+        reported agent=codex kind=test result=failed.runnerSummary n=1
         check agent=claudeCode kind=build result=passed.exitStatus n=1
         check agent=claudeCode kind=build result=unknown n=1
         check agent=codex kind=test result=failed.runnerSummary n=1

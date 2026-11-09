@@ -28,7 +28,7 @@ struct EvidencePrivacyTests {
             F.claudeBash("t1", "swift test --filter \(command) | tail -3", at: 3),
             F.claudeResult("t1", text: "Test run with 2 tests passed \(output)", at: 4),
             F.claudeBash("t2", "swift build --target \(command)", at: 5),
-            F.claudeResult("t2", text: "\(output)", isError: true, at: 6),
+            F.claudeResult("t2", text: "Exit code 1\n\(output)", isError: true, at: 6),
             F.claudeBash("t3", "make lint \(command)", at: 7),
         ]
         try write(claudeLines, to: claudeRoot.appendingPathComponent("proj/sess-1.jsonl"))
@@ -59,6 +59,7 @@ struct EvidencePrivacyTests {
         claude.fold(claudeLines)
         var codex = CodexEvidenceExtractor()
         codex.fold(codexLines)
+        rendered += [String(describing: claude), String(describing: codex)]
         rendered += [String(describing: claude.finish()), String(describing: codex.finish())]
 
         for text in rendered {

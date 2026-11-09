@@ -1,10 +1,23 @@
 import Foundation
 
+/// What a command line's exit status can prove about the checks in it.
+enum ExitProof: Int, Comparable, Sendable {
+    /// Nothing. A pipe, `||`, or a later command owns the status.
+    case none
+    /// Zero proves every command in the chain ran and passed. Non-zero only
+    /// says something in the chain failed, maybe before the check ran.
+    case zeroOnly
+    /// The check alone sets the status.
+    case full
+
+    static func < (a: ExitProof, b: ExitProof) -> Bool { a.rawValue < b.rawValue }
+}
+
 /// Decides whether a shell command line runs a test, build or lint command,
-/// and whether the line's own exit status can be trusted to describe it.
+/// and what the line's exit status proves about it.
 ///
 /// Pure. It sees command text and returns two enums, so nothing it reads can
-/// outlive the call.
+/// outlive the call. `tools/evidence-oracle` runs the same case file.
 enum CommandClassifier {
     private enum Separator { case and, or, semicolon, pipe, background, newline }
 
@@ -49,32 +62,65 @@ enum CommandClassifier {
         }
     }
 
+    /// These report on the tool and exit 0 without checking anything.
+    private static let informational: Set<String> = [
+        "--version", "-version", "--help", "-h", "--show-bin-path", "--collect-only", "--co", "-list",
+        "-showBuildSettings", "-showsdks", "--listTests", "--no-run", "--dry-run",
+    ]
+
     /// Wrappers dropped from the front of a segment. A value is how many
     /// words follow the wrapper and go with it.
     private static let wrappers: [String: Int] = [
-        "env": 0, "time": 0, "command": 0, "timeout": 1, "npx": 0, "bunx": 0, "do": 0, "then": 0,
+        "env": 0, "time": 0, "command": 0, "timeout": 1, "npx": 0, "bunx": 0,
+        "do": 0, "then": 0, "if": 0, "elif": 0, "else": 0, "while": 0, "until": 0,
     ]
-    /// Their options can take values (`--with x`), so any later word may start
-    /// the program.
     private static let runWrappers: [[String]] = [["uv", "run"], ["poetry", "run"]]
+    private static let runOptionsTakingValue: Set<String> = [
+        "--with", "--with-editable", "--with-requirements", "--python", "-p", "--extra", "--group",
+        "--only-group", "--project", "--directory", "--package", "--env-file", "--index",
+        "--default-index", "--index-url",
+    ]
 
-    static func classify(script: String) -> (kind: CheckKind, exitVisible: Bool)? {
+    static func classify(script: String) -> (kind: CheckKind, proof: ExitProof)? {
         let segments = split(script)
         var pipefail = false
         var kinds: [CheckKind] = []
-        var allVisible = true
+        var weakest = ExitProof.full
         for (index, segment) in segments.enumerated() {
-            if segment.words.first == "set", segment.words.contains("pipefail") { pipefail = true }
+            pipefail = pipefailState(after: segment.words, current: pipefail)
             if index > 0, segments[index - 1].separator == .pipe { continue }
             guard let kind = checkKind(of: segment.words) else { continue }
             kinds.append(kind)
-            let tail = segments[index...].compactMap(\.separator)
-            let pipeOK = pipefail
-            let visible = tail.allSatisfy { $0 == .and || ($0 == .pipe && pipeOK) }
-            if !visible { allVisible = false }
+            weakest = min(weakest, proof(of: index, in: segments, pipefail: pipefail))
         }
         guard let strongest = CheckKind.allCases.first(where: kinds.contains) else { return nil }
-        return (strongest, allVisible)
+        return (strongest, weakest)
+    }
+
+    private static func pipefailState(after words: [String], current: Bool) -> Bool {
+        if words == ["setopt", "pipefail"] { return true }
+        if words == ["unsetopt", "pipefail"] { return false }
+        guard words.first == "set", let at = words.firstIndex(of: "pipefail"), at > 1,
+              let flag = words[at - 1].first, flag == "-" || flag == "+", words[at - 1].hasSuffix("o")
+        else { return current }
+        return flag == "-"
+    }
+
+    private static func proof(of index: Int, in segments: [Segment], pipefail: Bool) -> ExitProof {
+        var result = ExitProof.full
+        for earlier in segments[..<index].reversed() {
+            guard let separator = earlier.separator, [.and, .or, .pipe].contains(separator) else { break }
+            if separator == .or { return .none }
+            result = .zeroOnly
+        }
+        for separator in segments[index...].compactMap(\.separator) {
+            switch separator {
+            case .and: result = min(result, .zeroOnly)
+            case .pipe where pipefail: result = min(result, .zeroOnly)
+            case .pipe, .or, .semicolon, .newline, .background: return .none
+            }
+        }
+        return result
     }
 
     private static func checkKind(of rawWords: [String]) -> CheckKind? {
@@ -91,7 +137,7 @@ enum CommandClassifier {
             } else if words.count > 1, [basename(first), words[1]] == ["pnpm", "exec"] {
                 words.removeFirst(2)
             } else if words.count > 1, runWrappers.contains([basename(first), words[1]]) {
-                return words.indices.dropFirst(2).lazy.compactMap { match(Array(words[$0...])) }.first
+                return match(afterRunOptions(Array(words.dropFirst(2))))
             } else {
                 break
             }
@@ -99,9 +145,17 @@ enum CommandClassifier {
         return match(words)
     }
 
+    private static func afterRunOptions(_ words: [String]) -> [String] {
+        var index = 0
+        while index < words.count, words[index].hasPrefix("-") {
+            index += runOptionsTakingValue.contains(words[index]) ? 2 : 1
+        }
+        return Array(words.dropFirst(index))
+    }
+
     private static func match(_ rawWords: [String]) -> CheckKind? {
         let words = rawWords.map { String($0.reversed().drop { $0 == ")" }.reversed()) }
-        guard let first = words.first else { return nil }
+        guard let first = words.first, informational.isDisjoint(with: words) else { return nil }
         let normalized = [basename(first)] + words.dropFirst()
         return runners.first { runner in
             normalized.starts(with: runner.prefix)
@@ -147,8 +201,37 @@ enum CommandClassifier {
         return chars.count
     }
 
+    /// `open` is the index of the opening parenthesis of `$(`, `<(` or `>(`.
+    private static func indexAfterSubstitution(in chars: [Character], open: Int) -> Int {
+        var depth = 0
+        var quote: Character?
+        var i = open
+        while i < chars.count {
+            let c = chars[i]
+            if let q = quote {
+                if c == q { quote = nil }
+            } else if c == "'" || c == "\"" {
+                quote = c
+            } else if c == "(" {
+                depth += 1
+            } else if c == ")" {
+                depth -= 1
+                if depth == 0 { return i + 1 }
+            }
+            i += 1
+        }
+        return chars.count
+    }
+
+    private static func indexAfterBacktick(in chars: [Character], open: Int) -> Int {
+        var i = open + 1
+        while i < chars.count, chars[i] != "`" { i += chars[i] == "\\" ? 2 : 1 }
+        return min(i + 1, chars.count)
+    }
+
     /// Quote-aware, one pass. A heredoc's body is dropped, because it is data
-    /// and not commands, and parsing resumes after its closing delimiter.
+    /// and not commands, and parsing resumes after its closing delimiter. A
+    /// substitution stays inside its word: its exit status is not the line's.
     private static func split(_ script: String) -> [Segment] {
         var segments: [Segment] = []
         var current = Segment()
@@ -169,6 +252,11 @@ enum CommandClassifier {
             current.separator = separator
             segments.append(current)
             current = Segment()
+        }
+        func take(through end: Int) {
+            word.append(contentsOf: String(chars[i..<end]))
+            hasWord = true
+            i = end
         }
 
         while i < chars.count {
@@ -193,28 +281,41 @@ enum CommandClassifier {
             case " ", "\t":
                 endWord()
             case "\n":
-                endSegment(.newline)
+                if hasWord || !current.words.isEmpty { endSegment(.newline) }
                 if let delimiter = heredocDelimiter {
                     heredocDelimiter = nil
                     i = indexAfterHeredoc(in: chars, from: i + 1, delimiter: delimiter)
                     continue
                 }
+            case "$" where next == "(":
+                take(through: indexAfterSubstitution(in: chars, open: i + 1))
+                continue
+            case "<" where next == "(", ">" where next == "(":
+                take(through: indexAfterSubstitution(in: chars, open: i + 1))
+                continue
+            case "`":
+                take(through: indexAfterBacktick(in: chars, open: i))
+                continue
             case ";":
                 endSegment(.semicolon)
             case "|":
+                let previous: Character? = i > 0 ? chars[i - 1] : nil
                 if next == "|" { i += 1; endSegment(.or) }
+                else if previous == ">" { word.append(c); hasWord = true }
                 else { if next == "&" { i += 1 }; endSegment(.pipe) }
             case "&":
                 let previous: Character? = i > 0 ? chars[i - 1] : nil
                 if next == "&" { i += 1; endSegment(.and) }
                 else if next == ">" || previous == ">" || previous == "<" { word.append(c); hasWord = true }
                 else { endSegment(.background) }
-            case "<":
-                if next == "<", i + 2 >= chars.count || chars[i + 2] != "<" {
-                    heredocDelimiter = delimiter(in: chars, after: i + 2)
+            case "<" where next == "<":
+                if i + 2 < chars.count, chars[i + 2] == "<" {
+                    take(through: i + 3)
+                    continue
                 }
-                word.append(c)
-                hasWord = true
+                heredocDelimiter = delimiter(in: chars, after: i + 2)
+                take(through: i + 2)
+                continue
             default:
                 word.append(c)
                 hasWord = true

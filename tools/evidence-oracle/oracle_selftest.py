@@ -12,52 +12,12 @@ def expect(name, got, want):
         failures.append(f"{name}: got {got!r}, want {want!r}")
 
 
-cases = [
-    ("swift test", ("test", True)),
-    ("cd x && swift test", ("test", True)),
-    ("swift test && echo ok", ("test", True)),
-    ("swift test 2>&1", ("test", True)),
-    ("swift test 2>&1 | tail -5", ("test", False)),
-    ("swift test | grep FAIL", ("test", False)),
-    ("set -o pipefail; swift test | tail", ("test", True)),
-    ("swift test; echo done", ("test", False)),
-    ("swift test || true", ("test", False)),
-    ("swift test\necho done", ("test", False)),
-    ("swift test\n", ("test", True)),
-    ('git commit -m "make test"', None),
-    ("echo 'a; swift test'", None),
-    ("cat <<EOF\nswift test\nEOF", None),
-    ("python3 - <<'EOF'\nprint(1)\nEOF\nswift test", ("test", True)),
-    ("cat <<-EOF\n\tswift build\n\tEOF\nswift test", ("test", True)),
-    ("cat <<EOF\nswift test", None),
-    ('cat <<"A B"\nx\nA B\nswift test', ("test", True)),
-    ("FOO=1 timeout 60 pytest -q", ("test", True)),
-    ("(cd x && swift test)", ("test", True)),
-    (".venv/bin/pytest", ("test", True)),
-    ("npm run typecheck", ("lint", True)),
-    ("swift build && swift test | tail", ("test", False)),
-    ("swift build && make test", ("test", True)),
-    ("uv run pytest", ("test", True)),
-    ("uv run --with x --python 3.12 pytest -q", ("test", True)),
-    ("timeout 600 uv run --extra dev python -m pytest", ("test", True)),
-    ("uv run script.py", None),
-    ("A='x y' uv run --q pytest", ("test", True)),
-    ("time (A=1 python -m unittest x | tail -1)", ("test", False)),
-    ("for x in a; do swift test; done", ("test", False)),
-    ("cat x | pytest", None),
-    ("make bench", None),
-    ("npm install", None),
-]
-for script, want in cases:
-    expect(script, o.classify(script), want)
-
-expect("summary pass", o.summary("Test run with 3 tests in 1 suite passed after 0.1 seconds."), True)
-expect("summary fail", o.summary("Test run with 3 tests in 1 suite failed after 0.1 seconds with 1 issue."), False)
-expect("summary undecided", o.summary("nothing useful"), None)
-expect("summary last line fails", o.summary("2 passed\n1 failed"), False)
-expect("summary same line fail beats pass", o.summary("1 failed, 2 passed"), False)
-expect("summary pass after quoted failure", o.summary("Test 1 failed started\n2 passed"), None)
-expect("summary reads the tail only", o.summary("1 failed\n" + "x" * 7000), None)
+shared = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../Tests/VibraCoreTests/Fixtures/evidence-cases.json")))
+for item in shared["classify"]:
+    want = (item["kind"], item["proof"]) if item["kind"] else None
+    expect(item["script"], o.classify(item["script"]), want)
+for item in shared["summary"]:
+    expect(item["tail"], o.summary(item["tail"], item["kind"]), item["verdict"])
 
 expect("doc is no change", o.counts_as_change("/r/README.md"), False)
 expect("temp is no change", o.counts_as_change("/private/tmp/a.py"), False)
@@ -86,5 +46,5 @@ expect("claude case", [l for l in out if l.startswith("case")], ["case agent=cla
 expect("claude check", [l for l in out if l.startswith("check")], ["check agent=claudeCode kind=test result=passed.runnerSummary n=1"])
 expect("claude replayed use counted once", [l for l in out if l.startswith("change")], ["change agent=claudeCode n=1"])
 
-print("\n".join(failures) if failures else f"OK {len(cases)} classify cases and contracts")
+print("\n".join(failures) if failures else f"OK {len(shared['classify'])} classify and {len(shared['summary'])} summary cases and contracts")
 sys.exit(1 if failures else 0)

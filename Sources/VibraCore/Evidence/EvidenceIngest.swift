@@ -18,15 +18,19 @@ public actor EvidenceIngest {
     /// JSONL reader bytes in the last `collect`.
     public private(set) var lastBytesRead: Int = 0
 
-    /// nil when no adapter for the session's agent reads evidence.
+    /// nil when no adapter for the session's agent reads evidence, when its
+    /// transcript is gone, or when the caller cancelled.
     public func collect(for session: Session) -> EvidenceFold? {
         lastBytesRead = 0
         guard let adapter = adapters.first(where: { $0.kind == session.agent && $0.isAvailable }),
               adapter.evidenceExtractor() != nil
         else { return nil }
 
+        let sources = adapter.evidenceSources(for: session)
+        guard !sources.isEmpty else { return nil }
         var merged = EvidenceFold()
-        for url in adapter.evidenceSources(for: session) {
+        for url in sources {
+            if Task.isCancelled { return nil }
             guard var extractor = adapter.evidenceExtractor() else { break }
             lastBytesRead += foldLineBatches(of: url, reader: reader) { extractor.fold($0) }
             let fold = extractor.finish()

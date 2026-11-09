@@ -42,11 +42,14 @@ func isCodePath(_ path: String) -> Bool {
     return !documentationExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased())
 }
 
-/// A masked exit status says nothing about the check, so only the runner's own
-/// summary can decide, and an undecided summary stays unknown.
-func checkResult(exitVisible: Bool, exitCode: Int?, outputTail: String) -> CheckResult {
-    if exitVisible, let exitCode { return exitCode == 0 ? .passed(.exitStatus) : .failed(.exitStatus) }
-    switch RunnerSummary.verdict(outputTail: outputTail) {
+/// An exit status decides only as far as `proof` allows. Anything it cannot
+/// settle goes to the runner's own summary, and an undecided summary is unknown.
+func checkResult(proof: ExitProof, exitCode: Int?, outputTail: String, kind: CheckKind) -> CheckResult {
+    if let exitCode {
+        if exitCode == 0, proof != .none { return .passed(.exitStatus) }
+        if exitCode != 0, proof == .full { return .failed(.exitStatus) }
+    }
+    switch RunnerSummary.verdict(outputTail: outputTail, kind: kind) {
     case true?: return .passed(.runnerSummary)
     case false?: return .failed(.runnerSummary)
     case nil: return .unknown
@@ -63,12 +66,14 @@ func checkResult(exitVisible: Bool, exitCode: Int?, outputTail: String) -> Check
 /// replayed record cannot reopen a finished call.
 struct ClaudeEvidenceExtractor: EvidenceExtractor {
     private enum Pending {
-        case check(CheckKind, exitVisible: Bool, at: Date)
+        case check(CheckKind, proof: ExitProof, at: Date)
         case edit(at: Date)
     }
 
     private static let editTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
-    private static let rejection = "The user doesn't want to proceed"
+    private static let neverRan = "The user doesn't want to"
+    /// A successful result with these texts carries no exit status yet.
+    private static let notFinished = ["Command running in background", "Command was"]
 
     private var pending: [String: Pending] = [:]
     private var tracked: Set<String> = []
@@ -96,18 +101,21 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
     }
 
     private mutating func open(_ block: [String: Any], at stamp: Date?) {
-        result.sawToolRecords = true
         guard let id = block["id"] as? String, let stamp, !tracked.contains(id),
               let name = block["name"] as? String,
               let input = block["input"] as? [String: Any]
         else { return }
         if name == "Bash" {
-            guard let command = input["command"] as? String,
-                  let found = CommandClassifier.classify(script: command) else { return }
+            guard let command = input["command"] as? String else { return }
+            result.sawToolRecords = true
+            guard let found = CommandClassifier.classify(script: command) else { return }
             tracked.insert(id)
-            pending[id] = .check(found.kind, exitVisible: found.exitVisible, at: stamp)
+            let proof = input["run_in_background"] as? Bool == true ? ExitProof.none : found.proof
+            pending[id] = .check(found.kind, proof: proof, at: stamp)
         } else if Self.editTools.contains(name) {
-            guard let path = (input["file_path"] ?? input["notebook_path"]) as? String, isCodePath(path) else { return }
+            guard let path = (input["file_path"] ?? input["notebook_path"]) as? String else { return }
+            result.sawToolRecords = true
+            guard isCodePath(path) else { return }
             tracked.insert(id)
             pending[id] = .edit(at: stamp)
         }
@@ -116,17 +124,24 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
     private mutating func close(_ block: [String: Any]) {
         guard let id = block["tool_use_id"] as? String, let call = pending.removeValue(forKey: id) else { return }
         let text = Self.text(of: block["content"])
-        let rejected = text.hasPrefix(Self.rejection)
+        guard !text.hasPrefix(Self.neverRan) else { return }
         let isError = block["is_error"] as? Bool ?? false
         switch call {
         case .edit(let at):
-            if !isError && !rejected { result.events.append(.codeChange(at)) }
-        case .check(let kind, let exitVisible, let at):
-            let outcome: CheckResult = rejected
-                ? .unknown
-                : checkResult(exitVisible: exitVisible, exitCode: isError ? 1 : 0, outputTail: text)
+            if !isError { result.events.append(.codeChange(at)) }
+        case .check(let kind, let proof, let at):
+            let outcome = checkResult(
+                proof: proof, exitCode: Self.exitCode(isError: isError, text: text), outputTail: text, kind: kind)
             result.events.append(.check(ObservedCheck(at: at, kind: kind, result: outcome)))
         }
+    }
+
+    /// `is_error` also marks denials, timeouts and tool errors. Only a result
+    /// that opens with "Exit code N" reports what the process returned.
+    private static func exitCode(isError: Bool, text: String) -> Int? {
+        guard isError else { return notFinished.contains(where: text.hasPrefix) ? nil : 0 }
+        guard text.hasPrefix("Exit code ") else { return nil }
+        return Int(text.dropFirst("Exit code ".count).prefix { $0 == "-" || $0.isNumber })
     }
 
     private static func text(of content: Any?) -> String {
@@ -173,24 +188,24 @@ struct CodexEvidenceExtractor: EvidenceExtractor {
     }
 
     private mutating func command(_ item: [String: Any], completedAt stamp: Date) {
-        result.sawToolRecords = true
         guard let argv = item["command"] as? [String] else { return }
+        result.sawToolRecords = true
         let script = argv.count >= 3 && ["-lc", "-c"].contains(argv[1]) ? argv[2] : argv.joined(separator: " ")
         guard let found = CommandClassifier.classify(script: script) else { return }
         let duration = item["duration"] as? [String: Any]
         let seconds = Double(jsonInt(duration?["secs"])) + Double(jsonInt(duration?["nanos"])) / 1e9
         let outcome = checkResult(
-            exitVisible: found.exitVisible,
+            proof: found.proof,
             exitCode: (item["exit_code"] as? NSNumber)?.intValue,
-            outputTail: item["aggregated_output"] as? String ?? "")
+            outputTail: item["aggregated_output"] as? String ?? "",
+            kind: found.kind)
         result.events.append(.check(ObservedCheck(at: stamp.addingTimeInterval(-seconds), kind: found.kind, result: outcome)))
     }
 
     private mutating func change(_ item: [String: Any], at stamp: Date) {
+        guard let changes = item["changes"] as? [String: Any] else { return }
         result.sawToolRecords = true
-        guard item["status"] as? String == "completed",
-              let changes = item["changes"] as? [String: Any],
-              changes.keys.contains(where: isCodePath) else { return }
+        guard item["status"] as? String == "completed", changes.keys.contains(where: isCodePath) else { return }
         result.events.append(.codeChange(stamp))
     }
 

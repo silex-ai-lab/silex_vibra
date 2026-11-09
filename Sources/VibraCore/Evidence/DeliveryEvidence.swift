@@ -87,17 +87,13 @@ public enum DeliveryEvidence: Sendable, Equatable {
         case .changedWithoutCheck(let change):
             return "Code changed \(ago(change)). No test, build or lint command seen in this session. \(Self.limit)"
         case .changedAfterLastCheck(let change, let check):
-            return "Code changed \(ago(change)), after the last \(check.kind.noun) command ran \(ago(check.at)). "
+            return "Code changed \(ago(change)), after the last \(check.kind.rawValue) command ran \(ago(check.at)). "
                 + "No check seen since. \(Self.limit)"
         case .checkedAfterLastChange(let check):
-            return "\(check.kind.noun.capitalized) command ran \(ago(check.at)), after the last code change. "
+            return "\(check.kind.rawValue.capitalized) command ran \(ago(check.at)), after the last code change. "
                 + "\(check.result.sentence) \(Self.limit)"
         }
     }
-}
-
-extension CheckKind {
-    fileprivate var noun: String { rawValue }
 }
 
 extension CheckResult {

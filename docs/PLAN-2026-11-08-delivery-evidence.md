@@ -179,8 +179,8 @@ Each step ends in a check and a commit on `feat/delivery-evidence`, cut from
    removing the masking rule makes a test fail.
 3. On real data, no check with a known exit status gets the opposite verdict
    from its runner summary. Measured by `evidence_oracle.py --agreement` after
-   the classifier was anchored: 27 such checks, 6 decided, 0 wrong. That sample
-   is small. The earlier 0 of 27 decided came from a looser probe.
+   the classifier was anchored. The current count is reported with each run. The
+   sample is small, so this guards against gross error only.
 4. Swift and oracle counts agree, or each difference has a stated cause.
 5. `make bench` still reports zero bytes on a warm refresh, so the poll path is
    untouched.
@@ -231,28 +231,40 @@ third element. `CommandClassifier` splits the script outside quotes.
   `npm|pnpm|yarn|bun [run] build`, `cargo build`, `cargo check`, `go build`,
   `tsc`. Lint is `make lint`, `npm|pnpm|yarn|bun [run] lint|typecheck`,
   `cargo clippy`, `go vet`, `ruff check`, `mypy`, `eslint`.
-- A check's exit status is visible when its segment is not piped, is not
-  followed by `||`, and every separator after it is `&&`. `set -o pipefail`
-  anywhere earlier makes a pipe visible.
+- Exit proof has three levels. `full`: the check alone sets the status. `zeroOnly`:
+  an `&&` chain, or a pipe under `pipefail`, where 0 proves every part passed and
+  non-zero does not say which part failed. `none`: a pipe, a later `||`, `;`,
+  newline or `&`, or an earlier `||` in the same list, where the check may not
+  have run. `set -o pipefail` and `setopt pipefail` set it, `set +o` clears it.
 - Several checks in one command report the strongest kind (test, then build,
-  then lint). Exit status is visible only if it is visible for all of them.
+  then lint) and the weakest proof.
+- Command substitution stays inside its word and is never a check. Flags that
+  only report on the tool (`--version`, `--help`, `--collect-only`, `--no-run`
+  and similar) are not checks.
 
 **Result rules.**
 
-| Exit status | Reported | Result |
-|---|---|---|
-| Visible, zero | any | `passed(.exitStatus)` |
-| Visible, non-zero | any | `failed(.exitStatus)` |
-| Masked | any | Runner summary, else `unknown` |
-| No result record | none | `unknown` |
+| Exit status | `full` | `zeroOnly` | `none` |
+|---|---|---|---|
+| Zero | passed | passed | runner summary |
+| Non-zero | failed | runner summary | runner summary |
+| Not available | runner summary | runner summary | runner summary |
+
+A runner summary with no decision is `unknown`.
+
+Claude Code's `is_error` is an exit status only when the result opens with
+`Exit code N`. About 14% of `is_error` Bash results do not, for example
+permission denials and tool errors (65 of 437). A result that opens with `The
+user doesn't want to` means the call never ran, so it produces no event. A call
+with `run_in_background` has `none`, and its immediate result is not an exit
+status (333 real results). A result opening `Command was` is treated the same.
 
 The last output line that matches a runner summary decides, and on that line
 failure beats pass. A pass after an earlier failure line is `unknown`, because
-output can quote a failure, as one real test run's own test names did.
-
-A masked non-zero status is not a failure. `swift test | grep FAIL` exits 1 when
-nothing failed. A Claude Code result that begins "The user doesn't want to
-proceed" means the check never ran, so it is `unknown`.
+output can quote a failure, as one real test run's own test names did. A pass
+must fit the check's kind, so `Build complete!` proves only a build, and a count
+of zero proves nothing. `exit=N` text is not read, because after a pipe it is
+the last command's status.
 
 **Times.** A Claude Code event uses its `tool_use` record's timestamp. A Codex
 check uses `item_completed` time minus `duration` (`secs`, `nanos`), and a Codex

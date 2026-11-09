@@ -109,6 +109,7 @@ public struct CodexAdapter: AgentAdapter {
             if source.url.deletingPathExtension().lastPathComponent.hasSuffix(session.id) { return true }
             guard source.modified >= session.startedAt,
                   let first = firstLine(of: source.url),
+                  lineContains(first, session.id),
                   let record = jsonObject(first),
                   record["type"] as? String == "session_meta",
                   let payload = record["payload"] as? [String: Any]
