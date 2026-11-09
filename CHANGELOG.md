@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Return to Session works in Orca.** Clicking a Claude Code or Codex session
+  running in an Orca terminal now switches Orca to that terminal. Before, it
+  showed "No terminal owns ttysNNN", or wrongly blamed Terminal.app, because an
+  ancestor named `terminal-host-<hash>` matched the word "terminal". Vibra now
+  matches terminal names exactly. It reads one variable,
+  `ORCA_TERMINAL_HANDLE`, from the agent's environment when you click.
+
 - **Code checks in Session Details.** For Claude Code and Codex, the window now
   says whether a test, build or lint command ran after the session's last code
   change, and what it returned. It reports only what the transcript shows. A

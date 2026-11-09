@@ -365,6 +365,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             )
         case .noTerminalOwnsTTY(let tty, let owner):
             switch owner {
+            case .multiplexer("Orca"):
+                explain(
+                    "Orca didn't switch to \(tty)",
+                    "\(tty) belongs to Orca, but Orca didn't accept this "
+                    + "session's terminal handle. A session started before Orca "
+                    + "last restarted can do this.\n\nvibra will not guess at a "
+                    + "different tab."
+                )
             case .multiplexer(let name):
                 explain(
                     "\(tty) belongs to \(name)",

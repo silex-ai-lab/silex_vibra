@@ -52,7 +52,8 @@ public enum ProcessInspector {
     public enum TTYOwner: Equatable, Sendable {
         /// A terminal emulator holds it; a failed jump is Vibra's problem.
         case emulator(String)
-        /// tmux, screen or herdr holds it; its panes are invisible to the emulator.
+        /// tmux, screen, herdr or Orca holds it; its panes are invisible to any
+        /// emulator Vibra can script.
         case multiplexer(String)
         /// Nothing recognisable in the ancestry.
         case unknown
@@ -73,25 +74,74 @@ public enum ProcessInspector {
                 .split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
             guard parts.count == 2, let ppid = Int32(parts[0]) else { return .unknown }
 
-            // Match on the executable's basename: `ps -o comm=` prints a full
-            // path for a bundled app ("/Applications/iTerm.app/.../iTerm2").
-            let name = (String(parts[1]) as NSString).lastPathComponent.lowercased()
-
-            if let mux = ["tmux", "tmux: server", "screen", "herdr"]
-                .first(where: { name.contains($0) }) {
-                return .multiplexer(mux)
-            }
-            if name.contains("iterm") { return .emulator("iTerm2") }
-            if name.contains("terminal") { return .emulator("Terminal") }
-            if name.contains("ghostty") { return .emulator("Ghostty") }
-            if name.contains("alacritty") { return .emulator("Alacritty") }
-            if name.contains("wezterm") { return .emulator("WezTerm") }
-            if name.contains("kitty") { return .emulator("kitty") }
+            if let owner = owner(ofExecutable: String(parts[1])) { return owner }
 
             guard ppid > 1 else { return .unknown }
             current = ppid
         }
         return .unknown
+    }
+
+    private static let ownersByName: [String: TTYOwner] = [
+        "screen": .multiplexer("screen"),
+        "herdr": .multiplexer("herdr"),
+        "terminal": .emulator("Terminal"),
+    ]
+
+    private static let ownersByPrefix: [(prefix: String, owner: TTYOwner)] = [
+        ("tmux", .multiplexer("tmux")),
+        ("iterm", .emulator("iTerm2")),
+        ("ghostty", .emulator("Ghostty")),
+        ("alacritty", .emulator("Alacritty")),
+        ("wezterm", .emulator("WezTerm")),
+        ("kitty", .emulator("kitty")),
+    ]
+
+    /// Who an ancestor is, from what `ps -o comm=` prints for it: a full path
+    /// for a bundled app. Orca is told by its path because its pty host is named
+    /// `terminal-host-<hash>`, and a substring match once called that Terminal.
+    static func owner(ofExecutable path: String) -> TTYOwner? {
+        if path.contains("/Orca.app/") || path.contains("/orca/daemon-host/") {
+            return .multiplexer("Orca")
+        }
+        let name = (path as NSString).lastPathComponent.lowercased()
+        return ownersByName[name] ?? ownersByPrefix.first { name.hasPrefix($0.prefix) }?.owner
+    }
+
+    /// One variable from the environment `pid` was started with. The kernel
+    /// hands back the whole block, which can hold secrets, so only the named
+    /// entry leaves this function.
+    public static func environmentValue(_ key: String, of pid: Int32) -> String? {
+        var mib = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 0 else { return nil }
+        var bytes = [UInt8](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &bytes, &size, nil, 0) == 0 else { return nil }
+        return environmentValue(key, inProcArgs: Array(bytes.prefix(size)))
+    }
+
+    /// Reads `KERN_PROCARGS2`: argc, the executable path, padding NULs, argc
+    /// arguments, then the environment up to an empty entry. Walks past the
+    /// arguments so that an argument spelled like the variable cannot answer.
+    static func environmentValue(_ key: String, inProcArgs bytes: [UInt8]) -> String? {
+        guard bytes.count > 4 else { return nil }
+        let argc = bytes.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) }
+        guard argc >= 0 else { return nil }
+        var fields = bytes.dropFirst(4)
+            .split(separator: 0, omittingEmptySubsequences: false)
+            .makeIterator()
+        guard fields.next() != nil else { return nil }
+        var field = fields.next()
+        while field?.isEmpty == true { field = fields.next() }
+        for _ in 0..<argc { field = fields.next() }
+        let wanted = Array("\(key)=".utf8)
+        while let entry = field, !entry.isEmpty {
+            if entry.starts(with: wanted) {
+                return String(decoding: entry.dropFirst(wanted.count), as: UTF8.self)
+            }
+            field = fields.next()
+        }
+        return nil
     }
 
     /// Pid holding `url` open. Used for Codex, which keeps an open lock named

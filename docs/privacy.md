@@ -42,6 +42,12 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   a command, a path and tool output for both agents and asserts it reaches no
   extractor state, result, row text or `--evidence-stats` output. `make test`
   fails if that test did not run.
+- **Returning to a session in Orca reads one environment variable.** When you
+  click a session running in an Orca terminal, Vibra asks the kernel for that
+  agent process's start-up environment and keeps only `ORCA_TERMINAL_HANDLE`,
+  which it passes to `orca terminal switch`. That environment also holds other
+  values, including an Orca hook token. They are not stored, printed or passed
+  on. Nothing is read until you click.
 - **History is the one feature that shows what you typed.** It reads on demand,
   keeps the text in memory only while its window is open, and writes nothing.
   Everything machine-readable stays content-free: `--query`, `--probe`,
