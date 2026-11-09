@@ -88,6 +88,7 @@ struct IncidentExtractorTests {
         switch detail {
         case .credential(let value): "credential:\(value.rawValue)"
         case .tool(let value): "tool:\(value.rawValue)"
+        case .write(let value, _): "tool:\(value.rawValue)"
         case .posture(let value): "posture:\(value.rawValue)"
         case .authError: "authError"
         case .vendorExcess(let value): "vendorExcess:\(value.provider.rawValue):\(value.day.iso)"
@@ -289,6 +290,26 @@ struct IncidentExtractorTests {
         #expect(ids[0] == ids[1])
         #expect(ids[0] != ids[2])
         #expect(Set(ids.map(\.hex)).count == 2)
+    }
+
+    @Test func theFamilyIsCarriedToTheDetail() {
+        var extractor = ClaudeIncidentExtractor()
+        let found = extractor.fold(
+            claudeWrite("u1", "/Users/demo/workplace/other/a.swift", at: 1)
+                + claudeWrite("u2", "/opt/elsewhere/c.swift", at: 2))
+        #expect(found.map(\.incident.detail) == [.write(.write, .sibling), .write(.write, .elsewhere)])
+        #expect(IncidentText.title(found[0].incident).contains("sibling"))
+        #expect(IncidentText.title(found[1].incident).contains("elsewhere"))
+    }
+
+    @Test func aWorkspaceDirectlyUnderHomeHasNoSiblings() {
+        let home = VibraPaths.home.path
+        #expect(IncidentPaths.writeFamily(of: home + "/other/x", workspace: home + "/proj") == .elsewhere)
+    }
+
+    @Test func aWorkspaceAtHomeIsElsewhere() {
+        let home = VibraPaths.home.path
+        #expect(IncidentPaths.writeFamily(of: "/Users/other/x", workspace: home) == .elsewhere)
     }
 
     @Test func codexOutsideWritesShareOneIdPerFamily() {

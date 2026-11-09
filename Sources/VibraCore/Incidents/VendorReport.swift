@@ -48,6 +48,9 @@ public enum VendorReport {
             lines.append("Credential: \(label(credential))")
         case .tool(let tool):
             lines.append("Tool: \(label(tool))")
+        case .write(let tool, let family):
+            lines.append("Tool: \(label(tool))")
+            lines.append("Destination: \(family.label)")
         default:
             break
         }

@@ -34,6 +34,10 @@ import Testing
         #expect(Set(vendor.keys) == ["type", "provider", "day", "vendorTokens", "localTokens"])
         #expect(vendor["day"] as? String == "2026-11-01")
 
+        let write = try #require(try object(row(.write(.edit, .elsewhere), disposition: .open))["detail"] as? [String: Any])
+        #expect(Set(write.keys) == ["type", "tool", "writeFamily"])
+        #expect(write["writeFamily"] as? String == "elsewhere")
+
         let credential = try #require(try object(row(.credential(.sshKey), disposition: .open))["detail"] as? [String: Any])
         #expect(Set(credential.keys) == ["type", "credentialClass"])
     }

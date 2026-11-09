@@ -155,7 +155,7 @@ private final class Clock: @unchecked Sendable {
 
         #expect(sink.all.count == 1)
         #expect(sink.all.first?.key == "incident:review")
-        #expect(sink.all.first?.body == "1 new item.")
+        #expect(sink.all.first?.body == "1 item to review.")
     }
 
     @Test func infoSeverityNeverNotifies() async throws {

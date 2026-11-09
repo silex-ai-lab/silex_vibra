@@ -24,6 +24,19 @@ public enum ToolClass: String, Codable, Sendable, CaseIterable {
     case bash, edit, write, read, fileChange, other
 }
 
+/// Where an outside write went, as one bit. Sibling repositories are routine
+/// on a multi-repository machine, and the rest are not.
+public enum WriteFamily: String, Codable, Sendable, CaseIterable {
+    case sibling, elsewhere
+
+    public var label: String {
+        switch self {
+        case .sibling: "a sibling of the workspace"
+        case .elsewhere: "elsewhere on this Mac"
+        }
+    }
+}
+
 public enum FindingEvidence: String, Codable, Sendable, CaseIterable {
     /// A non-shell tool call, or a sole foreground shell command that exited 0.
     case toolResult
@@ -84,6 +97,7 @@ public struct VendorExcess: Sendable, Equatable {
 public enum IncidentDetail: Sendable, Equatable {
     case credential(CredentialClass)
     case tool(ToolClass)
+    case write(ToolClass, WriteFamily)
     case posture(SessionPosture)
     case authError
     case vendorExcess(VendorExcess)
@@ -208,7 +222,7 @@ extension IncidentKind {
         case .writeToPathOutsideWorkspace:
             IncidentRule(
                 severity: .review, title: "A write outside the workspace",
-                guidance: "A tool edited a path outside the workspace as written. A --add-dir grant or a symlink looks the same. Mark it expected if so.",
+                guidance: "A tool edited a path outside the workspace as written, at least once in this session. A --add-dir grant or a symlink looks the same. Mark it expected if so.",
                 route: .agentBug)
         case .forcePushAttempt:
             IncidentRule(

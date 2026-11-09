@@ -50,7 +50,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
     var renderedText: String {
         ([headline.stringValue, coverage.stringValue, importStatus.stringValue]
             + rows.map { row in
-                "\(title(row.incident.kind))  \(IncidentText.owner(row.incident))  \(row.disposition.state)"
+                "\(IncidentText.title(row.incident))  \(IncidentText.owner(row.incident))  \(row.disposition.state)"
             }
             + [detail.stringValue]).joined(separator: "\n")
     }
@@ -73,8 +73,6 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         guard windowIsVisible else { return }
         Task { [weak self] in await self?.reload() }
     }
-
-    private func title(_ kind: IncidentKind) -> String { kind.rule.title }
 
     private func reload() async {
         let selected = selectedRow?.incident.id
@@ -111,7 +109,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         }
         let incident = row.incident
         detail.stringValue = [
-            incident.kind.rule.title,
+            IncidentText.title(incident),
             IncidentText.summary(row),
             IncidentText.fact(incident.detail),
             "Posture: \(incident.posture.rawValue)",
@@ -321,7 +319,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         switch id {
         case "when": text = item.incident.completedAt.formatted(date: .abbreviated, time: .shortened)
         case "who": text = IncidentText.owner(item.incident)
-        case "what": text = item.incident.kind.rule.title
+        case "what": text = IncidentText.title(item.incident)
         default: text = item.disposition.state
         }
         let label = NSTextField(labelWithString: text)

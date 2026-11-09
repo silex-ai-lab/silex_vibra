@@ -55,7 +55,7 @@ mutate "failed writes are findings" "$extractor" 'if let family = call.writeFami
 mutate "injected records count as human" "$extractor" 'record["isMeta"] as? Bool != true,' ''
 mutate "a lease exempts a plus refspec" "$extractor" 'if word.hasPrefix("+"), word.count > 1 { force = true }' ''
 mutate "background counts as finished" "$extractor" 'return call.soleForeground && !call.backgrounded && !isError && finished' 'return call.soleForeground && !isError && finished'
-mutate "write anchor is per call" "$extractor" 'at: call.at, completedAt: completedAt, anchor: family)' 'at: call.at, completedAt: completedAt, anchor: id)'
+mutate "write anchor is per call" "$extractor" 'at: call.at, completedAt: completedAt, anchor: IncidentPaths.writeAnchor(family))' 'at: call.at, completedAt: completedAt, anchor: id)'
 mutate "OpenAI double-counts cached input" "$usage" 'return input + output' 'return input + output + 400'
 mutate "the current UTC day is compared" "$usage" 'guard let earliest, entry.day >= earliest, entry.day != today else {' 'guard let earliest, entry.day >= earliest else {'
 mutate "the draft carries the hashed id" "$report" 'lines.append("OS: \(osVersion)")' 'lines.append("OS: \(osVersion) \(incident.id.hex)")'

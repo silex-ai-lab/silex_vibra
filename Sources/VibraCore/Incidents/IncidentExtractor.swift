@@ -47,16 +47,17 @@ enum IncidentPaths {
             .contains(where: path.hasPrefix)
     }
 
-    /// A session and destination family share one write finding. `sibling`
+    /// One session and destination family share one write finding. `sibling`
     /// is under the parent of the workspace, unless that parent is home or the
     /// root, where it would mean everything.
-    static func writeFamily(of path: String, workspace root: String) -> String {
+    static func writeFamily(of path: String, workspace root: String) -> WriteFamily {
         let parent = (root as NSString).deletingLastPathComponent
-        if parent != "/", parent != VibraPaths.home.path, isWithin(path, root: parent) {
-            return "session-write-outside-sibling"
-        }
-        return "session-write-outside-elsewhere"
+        let home = VibraPaths.home.path
+        if parent != "/", parent != home, root != home, isWithin(path, root: parent) { return .sibling }
+        return .elsewhere
     }
+
+    static func writeAnchor(_ family: WriteFamily) -> String { "session-write-outside-\(family.rawValue)" }
 
     /// The agents' own state. One list, so a second root is one edit.
     static let agentStateRoots = ["~/.claude/projects"]
@@ -134,7 +135,7 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
         let backgrounded: Bool
         let credential: (kind: IncidentKind, credentialClass: CredentialClass)?
         let forcePush: Bool
-        let writeFamily: String?
+        let writeFamily: WriteFamily?
         var denialSerial: Int?
         var denialAt: Date?
     }
@@ -297,7 +298,7 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
         let backgrounded = input["run_in_background"] as? Bool == true
         var credential: (kind: IncidentKind, credentialClass: CredentialClass)?
         var forcePush = false
-        var writeFamily: String?
+        var writeFamily: WriteFamily?
 
         switch name {
         case "Bash":
@@ -369,8 +370,8 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
                         at: call.at, completedAt: completedAt, anchor: id)
         }
         if let family = call.writeFamily, !isError, let toolClass = call.toolClass {
-            out += emit(.writeToPathOutsideWorkspace, .tool(toolClass), .toolResult,
-                        at: call.at, completedAt: completedAt, anchor: family)
+            out += emit(.writeToPathOutsideWorkspace, .write(toolClass, family), .toolResult,
+                        at: call.at, completedAt: completedAt, anchor: IncidentPaths.writeAnchor(family))
         }
         return out
     }
@@ -404,7 +405,7 @@ struct ClaudeIncidentExtractor: IncidentExtractor {
     }
 
     /// Nil when the path is inside the workspace or otherwise not a finding.
-    private func outsideWriteFamily(_ path: String) -> String? {
+    private func outsideWriteFamily(_ path: String) -> WriteFamily? {
         guard let cwd, let root = IncidentPaths.absolute(cwd, cwd: nil),
               let resolved = IncidentPaths.absolute(path, cwd: cwd)
         else { return nil }
@@ -624,9 +625,9 @@ struct CodexIncidentExtractor: IncidentExtractor {
             guard let path = IncidentPaths.absolute(key, cwd: cwd),
                   isOutsideWorkspace(path), let root = workspaceRoots.first
             else { continue }
-            return emit(.writeToPathOutsideWorkspace, .tool(.fileChange), .toolResult,
-                        at: stamp, completedAt: stamp,
-                        anchor: IncidentPaths.writeFamily(of: path, workspace: root))
+            let family = IncidentPaths.writeFamily(of: path, workspace: root)
+            return emit(.writeToPathOutsideWorkspace, .write(.fileChange, family), .toolResult,
+                        at: stamp, completedAt: stamp, anchor: IncidentPaths.writeAnchor(family))
         }
         return []
     }

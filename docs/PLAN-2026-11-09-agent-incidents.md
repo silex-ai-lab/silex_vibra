@@ -1,6 +1,6 @@
 # Plan: Agent incidents (unauthorized usage, human resolve, vendor report)
 
-Version: v0.10. Status: draft for the plan gate.
+Version: v0.11. Status: draft for the plan gate.
 
 ## Run record
 
@@ -149,6 +149,7 @@ public enum FindingEvidence: String, Codable, Sendable {
 public enum IncidentDetail: Sendable, Equatable {
     case credential(CredentialClass)
     case tool(ToolClass)              // closed: bash, edit, write, read, fileChange, other
+    case write(ToolClass, WriteFamily) // closed: sibling, elsewhere
     case posture(SessionPosture)
     case authError
     case vendorExcess(VendorExcess)
@@ -216,7 +217,8 @@ says an agent was malicious or a key was stolen.
 `id` is hex SHA-256 of `agent|session|kind|anchor`, with `-` for a nil agent or
 session. The anchor is positional and never derived from content. When the same
 id is found twice, as a session's main and subagent files can do, the earliest
-`at` wins.
+`at` and the latest `completedAt` win. Reopening a write finding depends on the
+latest `completedAt`.
 
 | Kind | Anchor |
 |---|---|
@@ -328,8 +330,9 @@ call with no known `cwd`, produces no incident.
   `workspace_roots`. One finding per session and destination family, because on
   the planner's machine 177 writes in 7 days fell in 13 sessions and 165 were sibling
   repositories. `sibling` means under the parent of the session's cwd, unless that
-  parent is the home directory or the root, and everything else is `elsewhere`. The
-  family is one bit, derived and dropped in the extractor. An answer closes the
+  parent is the home directory or the root, or the workspace is home itself, and
+  everything else is `elsewhere`. The family is carried in the detail and shown in
+  the window, the JSON and the draft, so the unusual writes can be told apart. An answer closes the
   finding only until a later write: when a write in that family completes after the
   answer's date, the finding shows as open again and is eligible for a notification. Paths are lexical, so a symlink inside the workspace that
   points out, or the reverse, is not seen, and the guidance says so. Shell
@@ -493,7 +496,7 @@ Owner `planner` or `deepseek`. Each deepseek task is one dispatch, one at a time
 |---|---|---|---|---|
 | 1 | planner | none | Foundation: types, rule table, the extractor protocol, `incidentExtractor()` on the adapter protocol, and `IncidentJSON` | `swift build` green, a test pins the JSON key set to bounded values, checkpoint commit |
 | 2 | deepseek | 1 | Extractors, credential table, `simpleCommands`, fixtures | Case table passes on extractor findings and through `IncidentJSON`, including a compound denied retry that is `toolResult`, pending, denied, failed and completed for each kind, every example in Detection rules, all four `evidence` values, foreground against backgrounded, the 256 cap, replayed ids, and a session id shaped like a secret reaching no incident or JSON |
-| 2b | planner | 2, 5 | Session and family grouping for outside writes, reopening after a later write | Two outside writes in one session yield one finding per family, for both agents. A later write after an answer reopens it, across a restart, and notifies. An earlier write does not reopen it. The oracle applies the same rule and counts still match |
+| 2b | planner | 2, 5 | Session and family grouping for outside writes, reopening after a later write | The extractor emits each write with the same id per family, and the monitor shows one finding per family, for both agents. The window and draft name the family. The guidance reads "at least once in this session". A later write after an answer reopens it, across a restart, and notifies. An earlier write does not reopen it. The oracle applies the same rule and counts still match |
 | 3 | deepseek | 1 | Vendor file parsers and the pure reconcile over `[VendorDay]` and `[LocalDay]` | The Anthropic fixture is the documented grouped example with only `has_more` set false and `next_page` null, the same page with `api_key_id` null is a rejection case, and the OpenAI fixture follows its reference. Each formula's assertion shows the correct sum and one wrong sum. Wrong shape, absent or true `has_more`, and null or multiple keys rejected. Threshold boundaries pinned. A day before local coverage and the current UTC day are unreconciled. Key switching and a re-import with changed amounts behave per Incident identity |
 | 4 | deepseek | 1 | Draft and channel table | Exact draft text with the `evidence` sentence for every kind whose route is not `none`, 1800-byte cap, vendor findings build for both providers, vendor pages carry no query, no sentinel in the draft or the percent-encoded `mailto:` |
 | 5 | planner | 1, 2 | Monitor, `IncidentStore` actor, notifier | Idle poll reads 0 bytes. An injected crash before commit and between commit and delivery behaves as specified. A stale window write cannot drop a monitor update or rewind the watermark. Restart does not re-notify. Replay finds the same ids. Device, inode, shrink and same-size rewrite, including with a partial final line, reset to byte 0. A file aging out drops its state, and its later append and a restart do not re-alert. A batch older than the watermark cannot move it back. A tool completing after the watermark alerts. First run does not notify |
@@ -512,22 +515,23 @@ Owner `planner` or `deepseek`. Each deepseek task is one dispatch, one at a time
   `Sources/VibraApp/IncidentsWindowController.swift`,
   `Sources/VibraApp/MenuBarController.swift`, `Sources/VibraApp/main.swift`,
   `Tests/VibraCoreTests/IncidentMonitorTests.swift`,
+  (Task 2b, reassigned after Task 2 closed, together with code-gate repairs)
+  `Sources/VibraCore/Incidents/IncidentExtractor.swift`,
+  `Tests/VibraCoreTests/IncidentExtractorTests.swift`,
+  `Tests/VibraCoreTests/Fixtures/incident-cases.json`,
   `Tests/VibraCoreTests/IncidentPrivacyTests.swift`,
   `tools/incident-oracle/incident_oracle.py`, `Makefile`, `README.md`,
   `CHANGELOG.md`, `docs/privacy.md`, `docs/features.md`, `docs/ROADMAP.md`,
   this plan.
-- **deepseek**: `Sources/VibraCore/Incidents/IncidentExtractor.swift`,
-  `Sources/VibraCore/Incidents/CredentialTable.swift`,
+- **deepseek**: `Sources/VibraCore/Incidents/CredentialTable.swift`,
   `Sources/VibraCore/Incidents/VendorUsage.swift`,
   `Sources/VibraCore/Incidents/VendorReport.swift`,
   `Sources/VibraCore/Evidence/CommandClassifier.swift` (add
   `simpleCommands(in:)` returning word lists and `soleForeground` only, private types stay private, and
   update its header comment, which says only two enums leave it), `Sources/VibraCore/Adapters/ClaudeCodeAdapter.swift` and
   `Sources/VibraCore/Adapters/CodexAdapter.swift` (the extractor hook only),
-  `Tests/VibraCoreTests/IncidentExtractorTests.swift`,
   `Tests/VibraCoreTests/VendorUsageTests.swift`,
   `Tests/VibraCoreTests/VendorReportTests.swift`,
-  `Tests/VibraCoreTests/Fixtures/incident-cases.json`,
   `Tests/VibraCoreTests/Fixtures/vendor-usage-anthropic.json`,
   `Tests/VibraCoreTests/Fixtures/vendor-usage-openai.json`.
 
@@ -721,3 +725,14 @@ Both reviewers read v0.9.
 Non-blocking folded in (DeepSeek): destination family, so the 12 unusual writes are not hidden behind the 165 sibling writes, `ToolClass` comment. The `Plan gate record` above describes the v0.8 gate, and this amendment is the plan text that follows it.
 
 Measured after Task 2b, three runs, release build: replay read 714 MB in 22.31 s to 23.21 s, 71 to 79 MB resident. Real-data findings: 14 write items (9 sibling, 5 elsewhere) from 179 calls, 5 credential read attempts, 2 unrestricted sessions, 1 auth failure. Oracle compared 5 rows, 0 differ.
+
+### Amendment round objections (v0.10 to v0.11)
+
+Codex approved v0.10. DeepSeek rejected it, and both read this revision.
+
+| # | Objection (who) | Change |
+|---|---|---|
+| 1 | Task 2b's files are still listed under deepseek (DeepSeek) | Moved to the planner with a note, and code-gate repairs named |
+| 2 | The family is hashed away, so two rows cannot be told apart and the unusual one invites dismissal (DeepSeek) | `IncidentDetail.write(ToolClass, WriteFamily)`, printed in the window, JSON and draft |
+
+Non-blocking folded in (DeepSeek): latest `completedAt` stated in the identity rule, a notification body true for reopens, the guidance string named in Task 2b, a workspace at home falls to `elsewhere`, the layer named in Task 2b's acceptance. The 9 and 5 split in the measurement comes from the oracle's `write families` line.

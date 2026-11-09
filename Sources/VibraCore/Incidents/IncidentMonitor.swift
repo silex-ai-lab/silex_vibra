@@ -205,7 +205,7 @@ public actor IncidentMonitor {
             key: Self.notificationKey,
             sessionID: "",
             title: "Agent activity to review",
-            body: count == 1 ? "1 new item." : "\(count) new items."))
+            body: count == 1 ? "1 item to review." : "\(count) items to review."))
         return count
     }
 

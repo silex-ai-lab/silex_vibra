@@ -12,11 +12,20 @@ public enum IncidentText {
         switch detail {
         case .credential(let value): "credential class: \(value.rawValue)"
         case .tool(let value): "tool: \(value.rawValue)"
+        case .write(let value, let family): "tool: \(value.rawValue), destination: \(family.label)"
         case .posture(let value): "posture: \(value.rawValue)"
         case .authError: "authentication_failed"
         case .vendorExcess(let excess):
             "\(excess.provider.rawValue) \(excess.day.iso): vendor \(excess.vendorTokens) tokens, this Mac \(excess.localTokens)"
         }
+    }
+
+    /// The finding's title, naming the destination of a write.
+    public static func title(_ incident: Incident) -> String {
+        if case .write(_, let family) = incident.detail {
+            return "\(incident.kind.rule.title) (\(family.label))"
+        }
+        return incident.kind.rule.title
     }
 
     public static func owner(_ incident: Incident) -> String {

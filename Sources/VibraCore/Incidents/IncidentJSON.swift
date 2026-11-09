@@ -22,6 +22,7 @@ public enum IncidentJSON {
         var type: String
         var credentialClass: CredentialClass?
         var tool: ToolClass?
+        var writeFamily: WriteFamily?
         var posture: SessionPosture?
         var provider: VendorProvider?
         var day: String?
@@ -36,6 +37,10 @@ public enum IncidentJSON {
             case .tool(let value):
                 type = "tool"
                 tool = value
+            case .write(let value, let family):
+                type = "write"
+                tool = value
+                writeFamily = family
             case .posture(let value):
                 type = "posture"
                 posture = value
