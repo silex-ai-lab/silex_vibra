@@ -736,3 +736,14 @@ Codex approved v0.10. DeepSeek rejected it, and both read this revision.
 | 2 | The family is hashed away, so two rows cannot be told apart and the unusual one invites dismissal (DeepSeek) | `IncidentDetail.write(ToolClass, WriteFamily)`, printed in the window, JSON and draft |
 
 Non-blocking folded in (DeepSeek): latest `completedAt` stated in the identity rule, a notification body true for reopens, the guidance string named in Task 2b, a workspace at home falls to `elsewhere`, the layer named in Task 2b's acceptance. The 9 and 5 split in the measurement comes from the oracle's `write families` line.
+
+## Amended plan gate record
+
+Plan version v0.11. Literal final verdicts, read from the reply files:
+
+- `DISPATCH deepseek-plan-r11`: PLAN-APPROVED
+- `DISPATCH codex-plan-r11`: PLAN-APPROVED
+- PLANNER (claude): PLAN-APPROVED
+
+This section is a verdict record. It changes no plan text.
+
