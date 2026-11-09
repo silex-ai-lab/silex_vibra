@@ -212,19 +212,16 @@ private final class Clock: @unchecked Sendable {
     @Test func aFailedCommitDeliversNothingAndTheNextReplayFindsTheBatch() async throws {
         let tree = try Tree()
         try tree.write("a.jsonl", [line("a", after: -100)])
-        let (monitor, store) = tree.monitor(into: Delivered())
+        let dead = Delivered()
+        let (monitor, _) = tree.monitor(into: dead)
         await monitor.poll()
-        _ = store
 
+        let directory = tree.storeURL.deletingLastPathComponent()
         tree.clock.advance(30)
         try tree.append("a.jsonl", line("b", after: 20))
-        let blocked = tree.root.appendingPathComponent("blocker")
-        try Data().write(to: blocked)
-        let unwritable = IncidentStore(url: blocked.appendingPathComponent("incidents.json"), now: { [clock = tree.clock] in clock.now })
-        await unwritable.commit(watermark: Date(timeIntervalSince1970: Self.launch))
-        let dead = Delivered()
-        let (crashing, _) = tree.monitor(store: unwritable, into: dead)
-        await crashing.poll()
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        await monitor.poll()
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
         #expect(dead.all.isEmpty)
 
         let sink = Delivered()
