@@ -592,7 +592,21 @@ func detailDiagnostic(sessionID: String?) -> any RenderableWindow {
     return controller
 }
 
-let showWindow = ["--show-report", "--show-history", "--show-settings", "--show-setup", "--show-detail"]
+/// The window over a one-shot read that notifies nothing and writes nothing.
+@MainActor
+func incidentsDiagnostic() -> any RenderableWindow {
+    let store = IncidentStore()
+    let monitor = IncidentMonitor(adapters: AdapterRegistry.all(), store: store, notifies: false, deliver: { _ in })
+    nonisolated(unsafe) var done = false
+    Task.detached {
+        await monitor.poll()
+        done = true
+    }
+    while !done { RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05)) }
+    return IncidentsWindowController(monitor: monitor, store: store, onJump: { _ in })
+}
+
+let showWindow = ["--show-report", "--show-history", "--show-settings", "--show-setup", "--show-detail", "--show-incidents"]
     .first { CommandLine.arguments.contains($0) }
 if let showWindow {
     let snapshotPath = argument(after: "--snapshot")
@@ -603,6 +617,7 @@ if let showWindow {
     case "--show-settings": controller = SettingsWindowController()
     case "--show-setup": controller = SetupWindowController()
     case "--show-detail": controller = detailDiagnostic(sessionID: argument(after: "--show-detail"))
+    case "--show-incidents": controller = incidentsDiagnostic()
     default: controller = ReportWindowController(adapters: AdapterRegistry.all())
     }
     let delegate = ReportOnlyDelegate(controller: controller, snapshotPath: snapshotPath)
