@@ -343,6 +343,25 @@ struct IncidentExtractorTests {
         #expect(extractor.fold(lines).map(\.incident.kind) == [.deniedCallRanLater])
     }
 
+    @Test func anEmptyRootsListRevokesTheEarlierRoots() {
+        func context(_ roots: [String]) -> String {
+            Self.line(["type": "turn_context", "timestamp": "2026-11-08T10:00:00.000Z", "payload": [
+                "cwd": "/Users/demo/workplace/sample", "workspace_roots": roots,
+            ] as [String: Any]])
+        }
+        let change = Self.line(["type": "event_msg", "timestamp": "2026-11-08T10:00:05.000Z", "payload": [
+            "type": "item_completed",
+            "item": ["type": "FileChange", "id": "i1", "status": "completed", "changes": ["/opt/granted/a.swift": [:] as [String: Any]]] as [String: Any],
+        ] as [String: Any]])
+        let meta = Self.line(["type": "session_meta", "timestamp": "2026-11-08T10:00:00.000Z", "payload": ["session_id": "c1"]])
+
+        var granted = CodexIncidentExtractor()
+        #expect(granted.fold([meta, context(["/opt/granted"]), change]).isEmpty)
+
+        var revoked = CodexIncidentExtractor()
+        #expect(revoked.fold([meta, context(["/opt/granted"]), context([]), change]).count == 1)
+    }
+
     @Test func theFamilyIsCarriedToTheDetail() {
         var extractor = ClaudeIncidentExtractor()
         let found = extractor.fold(

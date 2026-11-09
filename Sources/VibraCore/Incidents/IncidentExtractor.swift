@@ -552,7 +552,7 @@ struct CodexIncidentExtractor: IncidentExtractor {
                 if cwd == nil, let path = payload["cwd"] as? String, !path.isEmpty { cwd = path }
             case "turn_context":
                 if let path = payload["cwd"] as? String, !path.isEmpty { cwd = path }
-                if let values = payload["workspace_roots"] as? [String], !values.isEmpty { roots = values }
+                if let values = payload["workspace_roots"] as? [String] { roots = values }
                 if let policy = payload["sandbox_policy"] as? [String: Any],
                    let kind = policy["type"] as? String {
                     sandbox = kind

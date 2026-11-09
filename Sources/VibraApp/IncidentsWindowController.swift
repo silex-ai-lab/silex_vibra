@@ -257,7 +257,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         alert.informativeText = """
         Vibra compares a usage file you fetched with the usage on this Mac. It never sees your key and makes no request.
 
-        Fetch one API key's usage in your own terminal. One complete page holds at most 31 days, and the oldest day can be at most \(VendorUsage.maxAgeDays) days ago:
+        Fetch one API key's usage in your own terminal. One complete page holds at most 31 days:
 
         curl -gs "https://api.anthropic.com/v1/organizations/usage_report/messages?starting_at=2026-11-01T00:00:00Z&limit=31&bucket_width=1d&api_key_ids[]=KEY_ID&group_by[]=api_key_id" -H "anthropic-version: 2026-10-21" -H "x-api-key: $ANTHROPIC_ADMIN_KEY" > usage.json
 

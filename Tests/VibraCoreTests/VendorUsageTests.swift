@@ -156,6 +156,41 @@ struct VendorUsageTests {
         #expect(days.map(\.tokens) != [1100])  // input + output alone
     }
 
+    @Test func aCorrectedZeroRowKeepsTheKeyAndTheScope() throws {
+        let now = Date(timeIntervalSince1970: 1_754_179_200)
+        func page(_ tokens: Int) throws -> VendorUsageFile {
+            try VendorUsage.parse(try JSONSerialization.data(withJSONObject: [
+                "object": "page", "has_more": false, "next_page": NSNull(),
+                "data": [["start_time": 1_754_006_400, "results": [
+                    ["input_tokens": tokens, "output_tokens": 0, "api_key_id": "key_1"],
+                ]] as [String: Any]],
+            ] as [String: Any]), now: now)
+        }
+        let day = try #require(UTCDay(iso: "2025-07-01"))
+        let local = [LocalDay(day: day, tokens: 1)]
+        let flagged = VendorUsage.reconcile(try page(900_000), local: local, now: now)
+        let corrected = VendorUsage.reconcile(try page(0), local: local, now: now)
+
+        #expect(try page(0).apiKeyID == "key_1")
+        #expect(flagged.incidents.count == 1)
+        #expect(corrected.incidents.isEmpty)
+        #expect(corrected.scope == flagged.incidents.map(\.id))
+    }
+
+    @Test func aZeroRowWithANullKeyIsAllowedButUsageIsNot() throws {
+        let now = Date(timeIntervalSince1970: 1_754_179_200)
+        func page(_ tokens: Int) throws -> Data {
+            try JSONSerialization.data(withJSONObject: [
+                "object": "page", "has_more": false, "next_page": NSNull(),
+                "data": [["start_time": 1_754_006_400, "results": [
+                    ["input_tokens": tokens, "output_tokens": 0, "api_key_id": NSNull()] as [String: Any],
+                ]] as [String: Any]],
+            ] as [String: Any])
+        }
+        #expect(try VendorUsage.parse(try page(0), now: now).apiKeyID == "")
+        #expect(throws: VendorImportError.noSingleKey) { try VendorUsage.parse(try page(5), now: now) }
+    }
+
     @Test func scopeNamesEveryDayIncludingOnesWithNoFinding() throws {
         let day = try #require(UTCDay(iso: "2025-08-01"))
         let earlier = try #require(UTCDay(iso: "2025-07-01"))

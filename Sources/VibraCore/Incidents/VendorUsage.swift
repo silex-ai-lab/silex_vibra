@@ -149,9 +149,10 @@ public enum VendorUsage {
                 let key = try self.key(of: result)
                 let sum = isOpenAI ? try openAITokens(result) : try anthropicTokens(result)
                 tokens += sum
-                if sum > 0 {
-                    guard let key, !key.isEmpty else { throw VendorImportError.noSingleKey }
+                if let key, !key.isEmpty {
                     keys.insert(key)
+                } else if sum > 0 {
+                    throw VendorImportError.noSingleKey
                 }
             }
             totals[day, default: 0] += tokens

@@ -59,7 +59,7 @@ public actor IncidentStore {
         if let decoded = try? decoder.decode(Contents.self, from: data), decoded.version == schemaVersion {
             return (decoded, false)
         }
-        if readOnly { return (.empty, true) }
+        if readOnly { return (.empty, false) }
         let aside = url.deletingLastPathComponent()
             .appendingPathComponent("incidents.corrupt-\(Int(now.timeIntervalSince1970)).json")
         try? FileManager.default.moveItem(at: url, to: aside)

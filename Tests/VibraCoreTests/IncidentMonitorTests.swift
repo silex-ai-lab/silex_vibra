@@ -540,6 +540,32 @@ private final class Clock: @unchecked Sendable {
         #expect(sink.all.count == 1)
     }
 
+    @Test func anUnansweredItemInTheSameBatchIsStillDelivered() async throws {
+        let tree = try Tree()
+        try tree.write("a.jsonl", [line("a", after: -100)])
+        let sink = Delivered()
+        let (monitor, store) = tree.monitor(into: sink, interval: 60)
+        await monitor.poll()
+        tree.clock.advance(5)
+        try tree.append("a.jsonl", line("b", after: 3))
+        await monitor.poll()
+        #expect(sink.all.count == 1)
+
+        tree.clock.advance(10)
+        try tree.append("a.jsonl", line("c", after: 12))
+        try tree.append("a.jsonl", line("d", after: 13))
+        await monitor.poll()
+        let waiting = await monitor.rows().prefix(2).map(\.incident.id)
+        tree.clock.advance(1)
+        await store.set(.resolved(at: tree.clock.now), for: waiting[0])
+
+        tree.clock.advance(60)
+        await monitor.poll()
+
+        #expect(sink.all.count == 2)
+        #expect(sink.all.last?.body == "1 item to review.")
+    }
+
     @Test func aFileThatShrinksPastAPartialLineIsReadFromTheStart() async throws {
         let tree = try Tree()
         let first = line("aaaa", after: -100)
@@ -630,6 +656,7 @@ private final class Clock: @unchecked Sendable {
         try Data("{not json".utf8).write(to: url)
 
         let store = IncidentStore(url: url, readOnly: true)
+        #expect(!store.wasReset)
         await store.set(.resolved(at: Date()), for: IncidentID(hex: "abc"))
 
         #expect(try String(contentsOf: url, encoding: .utf8) == "{not json")
