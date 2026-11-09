@@ -57,6 +57,7 @@ on all your agent sessions and tells you as soon as one of them needs you.
 | 🔎 You hunt through tabs for the right one | Click the row or the notification to jump to its terminal tab or app window. |
 | 👀 You can't tell which agents are still busy | The menu bar shows it at a glance. `2▶` means two are working, `2!` means two need you. |
 | 🧾 You wonder what all this work used | **Usage Report…** (⌘U) shows 7 days of tokens and what they would cost at API prices. |
+| 🛡️ An agent did something you did not sanction | **Review Agent Activity…** lists denied calls that ran later, credential reads, writes outside the workspace, force pushes and unrestricted sessions. You answer each one, or draft a report to the vendor and send it yourself. |
 
 Not every agent reports every state, and some cannot be jumped to. The
 [Supported agents](#supported-agents) table shows exactly what works for each one.
@@ -237,6 +238,10 @@ the session files and databases the agents already write (paths in each guide).
   message text. History, the one feature that shows what you typed, keeps it in
   memory only while its window is open and writes nothing.
 - It never approves an agent's permission prompt for you. It only shows it.
+- The incident monitor reads tool activity in Claude Code and Codex transcripts,
+  keeps only closed values, and writes hashed ids and your answers to
+  `~/Library/Application Support/Vibra/incidents.json`. A report to a vendor is a
+  local draft that only you can send.
 
 **Canary tests** plant fake secrets and message text in test fixtures and check
 that none of it shows up in returned sessions, their JSON, `--query` output or

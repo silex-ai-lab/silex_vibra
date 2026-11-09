@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Review Agent Activity.** Vibra now watches Claude Code and Codex transcripts
+  for denied calls that ran later, credential reads, writes outside the workspace,
+  force pushes, unrestricted sessions and authentication failures. You answer each
+  finding, or draft a report to the vendor and send it yourself. A usage file you
+  fetch with your own key can be imported to flag days this Mac cannot explain.
+  No network requests. The feature adds the first file Vibra persists beyond
+  preferences, `~/Library/Application Support/Vibra/incidents.json`, holding hashed
+  ids and your answers. See [docs/features.md](docs/features.md) and
+  [docs/privacy.md](docs/privacy.md).
+
 - **Return to Session works in Orca.** Clicking a Claude Code or Codex session
   running in an Orca terminal now switches Orca to that terminal. Before, it
   showed "No terminal owns ttysNNN", or wrongly blamed Terminal.app, because an

@@ -80,3 +80,139 @@ import Testing
         #expect(billing == [.unexplainedVendorUsage])
     }
 }
+
+@Suite struct IncidentPrivacyTests {
+    private static let sentinel = "SENTINEL9f3a"
+    private static let session = "sk-ant-\(sentinel)"
+    private static let cwd = "/Users/demo/\(sentinel)/proj"
+
+    private func json(_ object: [String: Any]) throws -> String {
+        String(decoding: try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]), as: UTF8.self)
+    }
+
+    private func claudeCall(_ id: String, _ name: String, _ input: [String: Any], second: Int) throws -> [String] {
+        let stamp = String(format: "2026-11-08T10:00:%02d.000Z", second)
+        return [
+            try json([
+                "type": "assistant", "timestamp": stamp, "sessionId": Self.session, "cwd": Self.cwd,
+                "message": ["role": "assistant", "content": [["type": "tool_use", "id": id, "name": name, "input": input] as [String: Any]]] as [String: Any],
+            ]),
+            try json([
+                "type": "user", "timestamp": stamp, "sessionId": Self.session, "cwd": Self.cwd,
+                "message": ["role": "user", "content": [["type": "tool_result", "tool_use_id": id, "content": "output \(Self.sentinel)"]]] as [String: Any],
+            ]),
+        ]
+    }
+
+    private func claudeIncidents() throws -> [Incident] {
+        var lines = [try json([
+            "type": "user", "timestamp": "2026-11-08T09:59:00.000Z", "sessionId": Self.session, "cwd": Self.cwd,
+            "message": ["role": "user", "content": "prompt \(Self.sentinel)"] as [String: Any],
+        ])]
+        lines += try claudeCall("u1", "Bash", ["command": "cat ~/.aws/credentials \(Self.sentinel)"], second: 1)
+        lines += try claudeCall("u2", "Read", ["file_path": "/opt/\(Self.sentinel)/.env"], second: 2)
+        lines += try claudeCall("u3", "Write", ["file_path": "/opt/\(Self.sentinel)/x.swift", "content": Self.sentinel], second: 3)
+        lines += try claudeCall("u4", "Bash", ["command": "git push --force origin \(Self.sentinel)"], second: 4)
+        lines.append(try json([
+            "type": "assistant", "timestamp": "2026-11-08T10:00:05.000Z", "sessionId": Self.session, "cwd": Self.cwd,
+            "isApiErrorMessage": true, "error": "authentication_failed", "uuid": "uuid-\(Self.sentinel)",
+            "message": ["role": "assistant", "content": [["type": "text", "text": Self.sentinel]]] as [String: Any],
+        ]))
+        var extractor = ClaudeIncidentExtractor()
+        return extractor.fold(lines).map(\.incident)
+    }
+
+    private func codexIncidents() throws -> [Incident] {
+        let lines = [
+            try json(["type": "session_meta", "timestamp": "2026-11-08T10:00:00.000Z", "payload": ["session_id": Self.session, "cwd": Self.cwd]]),
+            try json(["type": "turn_context", "timestamp": "2026-11-08T10:00:00.000Z", "payload": [
+                "cwd": Self.cwd, "workspace_roots": [Self.cwd], "sandbox_policy": ["type": "danger-full-access"],
+            ] as [String: Any]]),
+            try json(["type": "event_msg", "timestamp": "2026-11-08T10:00:05.000Z", "payload": [
+                "type": "item_completed",
+                "item": ["type": "CommandExecution", "id": "i1", "status": "completed", "exit_code": 0,
+                         "command": ["bash", "-lc", "cat ~/.ssh/id_rsa \(Self.sentinel)"], "aggregated_output": Self.sentinel] as [String: Any],
+            ] as [String: Any]]),
+            try json(["type": "event_msg", "timestamp": "2026-11-08T10:00:06.000Z", "payload": [
+                "type": "item_completed",
+                "item": ["type": "FileChange", "id": "i2", "status": "completed", "changes": ["/opt/\(Self.sentinel)/y.swift": [:] as [String: Any]]] as [String: Any],
+            ] as [String: Any]]),
+        ]
+        var extractor = CodexIncidentExtractor()
+        return extractor.fold(lines).map(\.incident)
+    }
+
+    private func vendorIncident() throws -> Incident {
+        let now = Date(timeIntervalSince1970: 1_754_179_200)
+        let file = try VendorUsage.parse(try JSONSerialization.data(withJSONObject: [
+            "object": "page", "has_more": false, "next_page": NSNull(),
+            "data": [["object": "bucket", "start_time": 1_754_006_400, "end_time": 1_754_092_800, "results": [[
+                "input_tokens": 900_000, "output_tokens": 100_000, "api_key_id": "key_\(Self.sentinel)",
+            ] as [String: Any]]] as [String: Any]],
+        ] as [String: Any]), now: now)
+        let local = [LocalDay(day: try #require(UTCDay(iso: "2025-07-31")), tokens: 1)]
+        return try #require(VendorUsage.reconcile(file, local: local, now: now).incidents.first)
+    }
+
+    @Test func incidentSentinelsNeverLeak() async throws {
+        let claude = try claudeIncidents()
+        let codex = try codexIncidents()
+        let vendor = try vendorIncident()
+        #expect(Set(claude.map(\.kind)) == [.credentialReadAttempt, .writeToPathOutsideWorkspace, .forcePushAttempt, .authFailure])
+        #expect(Set(codex.map(\.kind)) == [.unrestrictedSession, .credentialReadAttempt, .writeToPathOutsideWorkspace])
+
+        let all = claude + codex + [vendor]
+        let rows = all.map { IncidentJSON.Row(incident: $0, disposition: .open) }
+        var surfaces = all.map { String(describing: $0) }
+        surfaces.append(String(decoding: try IncidentJSON.encode(rows), as: UTF8.self))
+        surfaces.append(IncidentText.render(rows))
+        surfaces += rows.map(IncidentText.summary)
+
+        for incident in all {
+            guard let draft = VendorReport.draft(incident: incident, appVersion: "1", osVersion: "macOS") else { continue }
+            surfaces += [draft.subject, draft.body]
+            let mailto = try #require(VendorReport.mailtoURL(draft))
+            surfaces.append(mailto.absoluteString)
+            surfaces.append(try #require(mailto.absoluteString.removingPercentEncoding))
+            let channel = try #require(VendorReport.channel(for: incident))
+            surfaces += [channel.page.absoluteString, channel.securityPage?.absoluteString ?? "", channel.warning]
+            #expect(channel.page.query == nil)
+            #expect(channel.securityPage?.query == nil)
+        }
+
+        let directory = testScratchDirectory().appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("incidents.json")
+        let store = IncidentStore(url: url)
+        await store.commit(watermark: Date())
+        for incident in all { await store.set(.resolved(at: Date()), for: incident.id) }
+        let stored = try String(contentsOf: url, encoding: .utf8)
+        surfaces.append(stored)
+
+        let lowered = Self.sentinel.lowercased()
+        for surface in surfaces {
+            #expect(!surface.lowercased().contains(lowered), "leak: \(surface.prefix(160))")
+        }
+
+        let ids = Set(all.map(\.id.hex))
+        let digests = stored.matches(of: /[0-9a-f]{64}/).map { String($0.output) }
+        #expect(!digests.isEmpty)
+        #expect(digests.allSatisfy(ids.contains))
+    }
+
+    @Test func aFailedImportNamesNeitherTheKeyNorAValue() throws {
+        let page: [String: Any] = [
+            "object": "page", "has_more": false, "next_page": NSNull(),
+            "data": [["start_time": 1_754_006_400, "results": [
+                ["input_tokens": 1, "output_tokens": 1, "api_key_id": "a_\(Self.sentinel)"],
+                ["input_tokens": 1, "output_tokens": 1, "api_key_id": "b_\(Self.sentinel)"],
+            ]] as [String: Any]],
+        ]
+        do {
+            _ = try VendorUsage.parse(try JSONSerialization.data(withJSONObject: page), now: Date(timeIntervalSince1970: 1_754_179_200))
+            Issue.record("two keys must be refused")
+        } catch {
+            #expect(!String(describing: error).contains(Self.sentinel))
+        }
+    }
+}
