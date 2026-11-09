@@ -8,12 +8,12 @@
 {
 "script": "cd x && swift test",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "cd x && swift build && swift test",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "swift test 2>&1",
@@ -93,7 +93,7 @@
 {
 "script": "swift test && echo ok",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "swift test & wait",
@@ -128,12 +128,12 @@
 {
 "script": "swift build && swift test",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "make lint && swift build",
 "kind": "build",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "swift build | tail -1; swift test",
@@ -168,7 +168,7 @@
 {
 "script": "swift test &&\necho ok",
 "kind": "test",
-"proof": "zeroOnly"
+"proof": "none"
 },
 {
 "script": "foo |\n swift test",
@@ -766,6 +766,51 @@
 "proof": "full"
 },
 {
+"script": "swift test -l",
+"kind": null,
+"proof": null
+},
+{
+"script": "swift test --skip-build",
+"kind": null,
+"proof": null
+},
+{
+"script": "make test -i",
+"kind": null,
+"proof": null
+},
+{
+"script": "jest --clearCache",
+"kind": null,
+"proof": null
+},
+{
+"script": "mypy --install-types",
+"kind": null,
+"proof": null
+},
+{
+"script": "ruff check --fix-only",
+"kind": null,
+"proof": null
+},
+{
+"script": "ruff check --diff",
+"kind": null,
+"proof": null
+},
+{
+"script": "xcodebuild clean -scheme X",
+"kind": null,
+"proof": null
+},
+{
+"script": "npm run lint && git diff --exit-code",
+"kind": "lint",
+"proof": "none"
+},
+{
 "script": "echo \"$(echo \"a; swift test\")\"",
 "kind": null,
 "proof": null
@@ -915,7 +960,7 @@
 {
 "tail": "ok  \tgithub.com/x/y\t0.3s",
 "kind": "test",
-"verdict": true
+"verdict": null
 },
 {
 "tail": "Tests:       8 passed, 8 total",
@@ -1025,7 +1070,22 @@
 {
 "tail": "ok  \tgithub.com/x/y\t(cached)",
 "kind": "test",
-"verdict": true
+"verdict": null
+},
+{
+"tail": "Tests: 1 passed, 1 total\nJest: \"global\" coverage threshold for lines (95%) not met: 66%",
+"kind": "test",
+"verdict": false
+},
+{
+"tail": "Jest: \"global\" coverage threshold for lines (95%) not met: 66%\nTests: 1 passed, 1 total",
+"kind": "test",
+"verdict": null
+},
+{
+"tail": "test result: ok. 5 passed\nprocess didn't exit successfully: x (signal: 6, SIGABRT)",
+"kind": "test",
+"verdict": false
 },
 {
 "tail": "Build complete!\nSegmentation fault",

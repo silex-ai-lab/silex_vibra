@@ -30,10 +30,10 @@ exits keeps the details it had and says `No longer active`.
 For Claude Code and Codex the window also has a **Code checks** row. It says
 whether the session issued a test, build or lint command after its last code
 change, counting subagents, and what that command returned. An exit status
-counts only for one simple command, or simple commands joined by `&&`, where 0
-proves a pass and non-zero does not say which part failed. Anything else, such
-as a pipe, a subshell or a background run, falls to the runner's own summary
-line, and a call that did not exit cleanly can never read as a pass from one. If
+counts only when the check is one simple command on its own. Anything else, such
+as a pipe, `&&`, a subshell or a background run, falls to the runner's own
+summary line, and a call that did not exit cleanly can never read as a pass from
+one. A run that selected no tests reads as not visible. If
 nothing decides, the result reads as not visible. The row describes what this
 session did. It does not say a task is done, and edits made through shell
 commands are not counted. `Vibra --evidence-stats [--days N]` prints the same

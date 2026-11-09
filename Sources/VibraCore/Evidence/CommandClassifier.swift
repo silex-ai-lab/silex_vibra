@@ -1,20 +1,12 @@
 import Foundation
 
-/// What a command line's exit status can prove about the checks in it.
-///
-/// Anything outside two narrow shapes proves nothing, because a parser cannot
-/// follow `exit`, subshells, `set -e` or functions far enough to promise more.
-enum ExitProof: Sendable {
-    /// One simple command, so the check alone sets the status.
-    case full
-    /// Simple commands joined only by `&&`. Zero proves every one ran and
-    /// passed. Non-zero does not say which one failed.
-    case zeroOnly
-    case none
-}
-
 /// Decides whether a shell command line runs a test, build or lint command,
-/// and what the line's exit status proves about it.
+/// and whether the line's exit status belongs to that check alone.
+///
+/// Only one simple command qualifies. A parser cannot follow `exit`, subshells,
+/// `set -e` or functions, and across `&&` Claude Code's `is_error` follows the
+/// last command's rules: `check && grep x` is not an error when `grep` or the
+/// check exits 1.
 ///
 /// Pure. It sees command text and returns two enums, so nothing it reads can
 /// outlive the call. `tools/evidence-oracle` runs the same case file.
@@ -69,10 +61,14 @@ enum CommandClassifier {
         "-showTestPlans", "-resolvePackageDependencies", "--no-run", "--dry-run", "-dry-run", "--just-print",
         "--fixtures", "--markers", "--setup-plan", "--setup-only", "--showConfig", "--print-config", "--init",
         "--show-files", "--show-settings", "--exit-zero", "--if-present", "--passWithNoTests",
+        "--show-codecov-path", "--skip-build", "--ignore-errors", "--recon", "--clearCache", "--install-types",
+        "--fix-only", "--add-noqa", "--clean", "--dry", "--listFilesOnly", "--noCheck", "--collectonly",
+        "--fixtures-per-test", "--cache-show", "--env-info", "-enumerate-tests",
     ]
     /// The same words mean something else to other tools: `pytest -n 4` runs.
     private static let notACheckingFor: [String: Set<String>] = [
-        "make": ["-n", "-q"], "go": ["-n", "-c"], "tsc": ["-v"], "eslint": ["-v"], "swift": ["list"], "vitest": ["list"],
+        "make": ["-n", "-q", "-i"], "go": ["-n", "-c"], "tsc": ["-v"], "eslint": ["-v"], "swift": ["list", "-l"],
+        "vitest": ["list", "init"], "ruff": ["--diff"], "xcodebuild": ["clean"],
     ]
 
     /// Wrappers dropped from the front of a segment. A value is how many
@@ -96,7 +92,7 @@ enum CommandClassifier {
         "else", "elif", "fi", "for", "while", "until", "do", "done", "{", "}", "!",
     ]
 
-    static func classify(script: String) -> (kind: CheckKind, proof: ExitProof)? {
+    static func classify(script: String) -> (kind: CheckKind, soleCommand: Bool)? {
         let segments = split(script)
         var kinds: [CheckKind] = []
         for (index, segment) in segments.enumerated() {
@@ -104,18 +100,14 @@ enum CommandClassifier {
             if let kind = checkKind(of: segment.words) { kinds.append(kind) }
         }
         guard let strongest = CheckKind.allCases.first(where: kinds.contains) else { return nil }
-        return (strongest, proof(of: segments))
+        return (strongest, isSoleSimpleCommand(segments))
     }
 
-    private static func proof(of segments: [Segment]) -> ExitProof {
-        let simple = segments.allSatisfy { segment in
-            guard let first = segment.words.first, !controlWords.contains(first) else { return false }
-            return !segment.words.contains { $0.contains("(") || $0.contains(")") || $0.contains("`") }
-        }
-        guard simple else { return .none }
-        let separators = segments.compactMap(\.separator)
-        if separators.isEmpty { return .full }
-        return separators.allSatisfy { $0 == .and } && segments.last?.separator == nil ? .zeroOnly : .none
+    private static func isSoleSimpleCommand(_ segments: [Segment]) -> Bool {
+        guard segments.count == 1, segments[0].separator == nil,
+              let first = segments[0].words.first, !controlWords.contains(first)
+        else { return false }
+        return !segments[0].words.contains { $0.contains("(") || $0.contains(")") || $0.contains("`") }
     }
 
     private static func checkKind(of rawWords: [String]) -> CheckKind? {

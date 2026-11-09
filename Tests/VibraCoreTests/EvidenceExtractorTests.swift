@@ -136,9 +136,23 @@ struct EvidenceExtractorTests {
         #expect(fold.events == [check(.test, .unknown, at: 1)])
     }
 
-    @Test func claudeChainSuccessProvesThePass() {
-        let fold = claude([F.claudeBash("a", "cd x && swift test", at: 1), F.claudeResult("a", text: "", at: 2)])
-        #expect(fold.events == [check(.test, .passed(.exitStatus), at: 1)])
+    @Test func claudeChainEndingInGrepIsNotProvenByItsFlag() {
+        let fold = claude([F.claudeBash("a", "npm run lint && git diff --exit-code", at: 1), F.claudeResult("a", text: "", at: 2)])
+        #expect(fold.events == [check(.lint, .unknown, at: 1)])
+    }
+
+    @Test(arguments: ["Exit code 143\nCommand timed out after 2m 0.0s", "Exit code 127\npytest: command not found"])
+    func claudeAKilledOrMissingCommandIsNotAFailedCheck(text: String) {
+        let fold = claude([F.claudeBash("a", "pytest", at: 1), F.claudeResult("a", text: text, isError: true, at: 2)])
+        #expect(fold.events == [check(.test, .unknown, at: 1)])
+    }
+
+    @Test func aRunThatSelectedNothingIsNotAPass() {
+        let fold = claude([
+            F.claudeBash("a", "swift test --filter Nope", at: 1),
+            F.claudeResult("a", text: "warning: No matching test cases were run", at: 2),
+        ])
+        #expect(fold.events == [check(.test, .unknown, at: 1)])
     }
 
     @Test func aChangedRecordShapeIsNotReadAsACleanSession() {
@@ -244,7 +258,7 @@ struct EvidenceExtractorTests {
 
     @Test func codexShellWrapperScriptIsTheThirdElement() {
         let line = F.codexItem([
-            "type": "CommandExecution", "status": "completed", "command": ["zsh", "-lc", "cd x && swift test"],
+            "type": "CommandExecution", "status": "completed", "command": ["zsh", "-lc", "swift test"],
             "exit_code": 0, "aggregated_output": "", "duration": ["secs": 0, "nanos": 0],
         ], at: 5)
         #expect(codex([line]).events == [check(.test, .passed(.exitStatus), at: 5)])

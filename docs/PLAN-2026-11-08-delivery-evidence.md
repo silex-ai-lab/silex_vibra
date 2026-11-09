@@ -227,12 +227,12 @@ third element. `CommandClassifier` splits the script outside quotes.
   `npm|pnpm|yarn|bun [run] build`, `cargo build`, `cargo check`, `go build`,
   `tsc`. Lint is `make lint`, `npm|pnpm|yarn|bun [run] lint|typecheck`,
   `cargo clippy`, `go vet`, `ruff check`, `mypy`, `eslint`.
-- Exit proof has three levels. `full`: one simple command. `zeroOnly`: simple
-  commands joined only by `&&`, where 0 proves every part ran and passed and
-  non-zero does not say which failed. `none`: everything else, including pipes,
-  `;`, newlines, subshells, `pipefail`, and any line using `exit`, `set`, `if`
-  or similar. Two review rounds found that a parser cannot follow those far
-  enough, and only 23 of 1349 real checks relied on exit status anyway.
+- An exit status counts only when the check is one simple command with no
+  control word, parenthesis or backtick. Everything else, including `&&`, has
+  none. Three review rounds found false passes through subshells, an earlier
+  `exit`, `set -e` and Claude Code's `is_error`, which across `&&` follows the
+  last command's rules, so `check && grep x` is not an error on exit 1. Only 21
+  of 1349 real checks are affected by keeping an exit status at all.
 - Several checks in one command report the strongest kind (test, then build,
   then lint).
 - Command substitution stays inside its word and is never a check. Flags that
@@ -241,12 +241,15 @@ third element. `CommandClassifier` splits the script outside quotes.
 
 **Result rules.**
 
-| Exit status | `full` | `zeroOnly` | `none` |
-|---|---|---|---|
-| Zero | passed | passed | runner summary |
-| Non-zero or tool error | failed (`full`, non-zero only) | failure from summary, else unknown | failure from summary, else unknown |
-| Not reported | runner summary | runner summary | runner summary |
-| Still running | unknown | unknown | unknown |
+| Exit status | One simple command | Anything else |
+|---|---|---|
+| Zero | passed | runner summary |
+| Non-zero | failed | failure from summary, else unknown |
+| Tool error, timeout, kill, not found | failure from summary, else unknown | failure from summary, else unknown |
+| Not reported | runner summary | runner summary |
+| Still running | unknown | unknown |
+
+A run whose output says it selected no tests is `unknown`, even at exit 0.
 
 A call that did not exit cleanly can confirm a failure from a runner summary and
 can never read as a pass, because a partial summary does not contradict the
@@ -264,7 +267,8 @@ The last output line that matches a runner summary decides, and on that line
 failure beats pass. A pass after an earlier failure line is `unknown`, because
 output can quote a failure, as one real test run's own test names did. A pass
 must fit the check's kind, so `Build complete!` proves only a build, and a count
-of zero proves nothing. `exit=N` text is not read, because after a pipe it is
+of zero proves nothing. Go prints no total, so its `ok` lines are not read as a
+pass. `exit=N` text is not read, because after a pipe it is
 the last command's status.
 
 **Times.** A Claude Code event uses its `tool_use` record's timestamp. A Codex

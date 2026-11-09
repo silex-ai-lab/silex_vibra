@@ -45,27 +45,36 @@ func isCodePath(_ path: String) -> Bool {
 /// What a finished tool call reported about its process.
 enum ObservedExit: Sendable {
     case zero, nonZero
-    /// The tool failed, with no exit status: a timeout, an abort.
+    /// The tool failed or killed it, so the status says nothing about the check.
     case errored
     case notReported
     /// Still running when the result was written.
     case notFinished
+
+    /// Codes the shell or the agent produced: not found, not executable,
+    /// timed out, killed.
+    private static let notFromTheCheck: Set<Int> = [124, 126, 127, 130, 137, 143]
+
+    init(code: Int) {
+        self = code == 0 ? .zero : Self.notFromTheCheck.contains(code) ? .errored : .nonZero
+    }
 }
 
-/// An exit status decides only as far as `proof` allows. Whatever it leaves
-/// open goes to the runner's summary, and a call that did not exit cleanly can
-/// confirm a failure from one but never a pass: a partial summary does not
-/// contradict the status.
-func checkResult(proof: ExitProof, exit: ObservedExit, outputTail: String, kind: CheckKind) -> CheckResult {
+/// An exit status decides only when the check is the whole command. Whatever
+/// it leaves open goes to the runner's summary, and a call that did not exit
+/// cleanly can confirm a failure from one but never a pass: a partial summary
+/// does not contradict the status.
+func checkResult(soleCommand: Bool, exit: ObservedExit, outputTail: String, kind: CheckKind) -> CheckResult {
+    if RunnerSummary.ranNothing(outputTail: outputTail) { return .unknown }
     let summary = RunnerSummary.verdict(outputTail: outputTail, kind: kind)
     switch exit {
     case .notFinished:
         return .unknown
-    case .nonZero where proof == .full:
+    case .nonZero where soleCommand:
         return .failed(.exitStatus)
     case .nonZero, .errored:
         return summary == false ? .failed(.runnerSummary) : .unknown
-    case .zero where proof != .none:
+    case .zero where soleCommand:
         return .passed(.exitStatus)
     case .zero, .notReported:
         switch summary {
@@ -86,7 +95,7 @@ func checkResult(proof: ExitProof, exit: ObservedExit, outputTail: String, kind:
 /// replayed record cannot reopen a finished call.
 struct ClaudeEvidenceExtractor: EvidenceExtractor {
     private enum Pending {
-        case check(CheckKind, proof: ExitProof, at: Date)
+        case check(CheckKind, soleCommand: Bool, at: Date)
         case edit(at: Date)
     }
 
@@ -132,8 +141,8 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
             result.sawToolRecords = true
             guard let found = CommandClassifier.classify(script: command) else { return }
             tracked.insert(id)
-            let proof = input["run_in_background"] as? Bool == true ? ExitProof.none : found.proof
-            pending[id] = .check(found.kind, proof: proof, at: stamp)
+            let sole = found.soleCommand && input["run_in_background"] as? Bool != true
+            pending[id] = .check(found.kind, soleCommand: sole, at: stamp)
         } else if Self.editTools.contains(name) {
             guard let path = (input["file_path"] ?? input["notebook_path"]) as? String else { return }
             result.sawToolRecords = true
@@ -151,9 +160,9 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
         switch call {
         case .edit(let at):
             if !isError { result.events.append(.codeChange(at)) }
-        case .check(let kind, let proof, let at):
+        case .check(let kind, let sole, let at):
             let outcome = checkResult(
-                proof: proof, exit: Self.observedExit(isError: isError, text: text), outputTail: text, kind: kind)
+                soleCommand: sole, exit: Self.observedExit(isError: isError, text: text), outputTail: text, kind: kind)
             result.events.append(.check(ObservedCheck(at: at, kind: kind, result: outcome)))
         }
     }
@@ -167,10 +176,10 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
             return .notFinished
         }
         guard isError else { return .zero }
-        guard text.hasPrefix("Exit code "),
+        guard text.hasPrefix("Exit code "), !text.contains("Command timed out after"), !text.contains("Command killed:"),
               let code = Int(text.dropFirst("Exit code ".count).prefix { $0 == "-" || $0.isNumber })
         else { return .errored }
-        return code == 0 ? .zero : .nonZero
+        return ObservedExit(code: code)
     }
 
     private static func text(of content: Any?) -> String {
@@ -224,9 +233,9 @@ struct CodexEvidenceExtractor: EvidenceExtractor {
         guard let found = CommandClassifier.classify(script: script) else { return }
         let duration = item["duration"] as? [String: Any]
         let seconds = Double(jsonInt(duration?["secs"])) + Double(jsonInt(duration?["nanos"])) / 1e9
-        let exit: ObservedExit = (item["exit_code"] as? NSNumber).map { $0.intValue == 0 ? .zero : .nonZero } ?? .notReported
+        let exit = (item["exit_code"] as? NSNumber).map { ObservedExit(code: $0.intValue) } ?? .notReported
         let outcome = checkResult(
-            proof: found.proof, exit: exit, outputTail: item["aggregated_output"] as? String ?? "", kind: found.kind)
+            soleCommand: found.soleCommand, exit: exit, outputTail: item["aggregated_output"] as? String ?? "", kind: found.kind)
         result.events.append(.check(ObservedCheck(at: stamp.addingTimeInterval(-seconds), kind: found.kind, result: outcome)))
     }
 

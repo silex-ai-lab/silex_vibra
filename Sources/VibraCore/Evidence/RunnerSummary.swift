@@ -15,10 +15,12 @@ enum RunnerSummary {
     static let tailBytes = 6000
 
     private static let fail = regex(
-        #"Test run with \d+ tests?.*failed|with [1-9]\d* issues?|Executed \d+ tests?, with [1-9]\d* failure|\b[1-9]\d* failed\b|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED|Segmentation fault|signal code \d+"#)
+        #"Test run with \d+ tests?.*failed|with [1-9]\d* issues?|Executed \d+ tests?, with [1-9]\d* failure|\b[1-9]\d* failed\b|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED|Segmentation fault|signal code \d+|threshold.*not met|does not meet.*threshold|fatal runtime error|process didn't exit successfully|SIGABRT|SIGSEGV|error: test failed"#)
+    private static let nothingRan = regex(
+        #"No matching test cases|no tests to run|running 0 tests|^Tests:\s+\d+ skipped, \d+ total"#)
     private static let pass: [CheckKind: NSRegularExpression] = [
         .test: regex(
-            #"Test run with [1-9]\d* tests?.*passed|Executed [1-9]\d* tests?, with 0 failures|\b[1-9]\d* passed\b|test result: ok\. [1-9]\d* passed|^ok\s+\S+\s+(\d+\.\d+s|\(cached\))|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED"#),
+            #"Test run with [1-9]\d* tests?.*passed|Executed [1-9]\d* tests?, with 0 failures|\b[1-9]\d* passed\b|test result: ok\. [1-9]\d* passed|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED"#),
         .build: regex(#"Build complete!|BUILD SUCCEEDED"#),
         .lint: regex(#"All checks passed|Success: no issues"#),
     ]
@@ -30,6 +32,12 @@ enum RunnerSummary {
 
     private static func matches(_ pattern: NSRegularExpression?, _ line: String) -> Bool {
         pattern?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil
+    }
+
+    /// The run exited cleanly because it selected nothing to do.
+    static func ranNothing(outputTail: String) -> Bool {
+        let tail = String(decoding: Array(outputTail.utf8.suffix(tailBytes)), as: UTF8.self)
+        return matches(nothingRan, tail)
     }
 
     /// true passed, false failed, nil undecided.

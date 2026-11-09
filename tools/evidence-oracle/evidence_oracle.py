@@ -15,13 +15,15 @@ from datetime import datetime
 
 FAIL = re.compile(
     r"Test run with \d+ tests?.*failed|with [1-9]\d* issues?|Executed \d+ tests?, with [1-9]\d* failure|\b[1-9]\d* failed\b"
-    r"|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED|Segmentation fault|signal code \d+",
+    r"|\b[1-9]\d* errors?\b|test result: FAILED|^FAIL\b|error: fatal|Tests:\s+[1-9]\d* failed|\*\*\* \[|BUILD FAILED|TEST FAILED|Segmentation fault|signal code \d+|threshold.*not met|does not meet.*threshold|fatal runtime error"
+    r"|process didn't exit successfully|SIGABRT|SIGSEGV|error: test failed",
     re.M,
 )
+NOTHING_RAN = re.compile(r"No matching test cases|no tests to run|running 0 tests|^Tests:\s+\d+ skipped, \d+ total", re.M)
 PASS = {
     "test": re.compile(
         r"Test run with [1-9]\d* tests?.*passed|Executed [1-9]\d* tests?, with 0 failures|\b[1-9]\d* passed\b"
-        r"|test result: ok\. [1-9]\d* passed|^ok\s+\S+\s+(\d+\.\d+s|\(cached\))|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED",
+        r"|test result: ok\. [1-9]\d* passed|Tests:\s+[1-9]\d* passed|TEST SUCCEEDED",
         re.M,
     ),
     "build": re.compile(r"Build complete!|BUILD SUCCEEDED"),
@@ -37,8 +39,13 @@ NOT_A_CHECK = {"--version", "-version", "-V", "--help", "-h", "-usage", "--show-
                "-list", "--list", "--list-tests", "--listTests", "-showBuildSettings", "-showsdks", "-showdestinations",
                "-showTestPlans", "-resolvePackageDependencies", "--no-run", "--dry-run", "-dry-run", "--just-print",
                "--fixtures", "--markers", "--setup-plan", "--setup-only", "--showConfig", "--print-config", "--init",
-               "--show-files", "--show-settings", "--exit-zero", "--if-present", "--passWithNoTests"}
-NOT_A_CHECK_FOR = {"make": {"-n", "-q"}, "go": {"-n", "-c"}, "tsc": {"-v"}, "eslint": {"-v"}, "swift": {"list"}, "vitest": {"list"}}
+               "--show-files", "--show-settings", "--exit-zero", "--if-present", "--passWithNoTests",
+               "--show-codecov-path", "--skip-build", "--ignore-errors", "--recon", "--clearCache", "--install-types",
+               "--fix-only", "--add-noqa", "--clean", "--dry", "--listFilesOnly", "--noCheck", "--collectonly",
+               "--fixtures-per-test", "--cache-show", "--env-info", "-enumerate-tests"}
+NOT_A_CHECK_FOR = {"make": {"-n", "-q", "-i"}, "go": {"-n", "-c"}, "tsc": {"-v"}, "eslint": {"-v"}, "swift": {"list", "-l"},
+                   "vitest": {"list", "init"}, "ruff": {"--diff"}, "xcodebuild": {"clean"}}
+NOT_FROM_THE_CHECK = {124, 126, 127, 130, 137, 143}
 RUN_VALUE_OPTIONS = {"--with", "--with-editable", "--with-requirements", "--python", "-p", "--extra", "--group",
                      "--only-group", "--project", "--directory", "--package", "--env-file", "--index", "--default-index"}
 RUN_ALONE_OPTIONS = {"--no-project", "--no-sync", "-q", "--quiet", "-v", "--verbose", "--offline", "--frozen", "--locked",
@@ -279,13 +286,12 @@ def runner(words):
 
 
 def proof_of(segs):
-    for words, _ in segs:
-        if not words or words[0] in CONTROL or any(ch in w for w in words for ch in "()`"):
-            return "none"
-    seps = [sep for _, sep in segs if sep]
-    if not seps:
-        return "full"
-    return "zeroOnly" if all(sep == "&&" for sep in seps) and segs[-1][1] is None else "none"
+    if len(segs) != 1 or segs[0][1] is not None:
+        return "none"
+    words = segs[0][0]
+    if not words or words[0] in CONTROL or any(ch in w for w in words for ch in "()`"):
+        return "none"
+    return "full"
 
 
 def classify(script):
@@ -313,20 +319,21 @@ def summary(text, kind):
 
 
 def result_of(proof, code, text, kind, truth, agent):
-    """code: 0, a non-zero int, "errored", "unfinished" or None."""
+    """code: an int, "errored", "unfinished" or None."""
+    if isinstance(code, int) and code in NOT_FROM_THE_CHECK:
+        code = "errored"
     v = summary(text, kind)
-    if code == "unfinished":
-        return "unknown"
-    if code in (0, None) or code == "errored":
-        pass
+    tail = text.encode("utf-8", "replace")[-TAIL:].decode("utf-8", "replace")
     if isinstance(code, int) and proof == "full":
         truth.append((code != 0, v, agent))
-    if code == 0 and proof != "none":
-        return "passed.exitStatus"
+    if NOTHING_RAN.search(tail) or code == "unfinished":
+        return "unknown"
     if isinstance(code, int) and code != 0 and proof == "full":
         return "failed.exitStatus"
     if code == "errored" or (isinstance(code, int) and code != 0):
         return "failed.runnerSummary" if v is False else "unknown"
+    if code == 0 and proof == "full":
+        return "passed.exitStatus"
     return "unknown" if v is None else ("passed.runnerSummary" if v else "failed.runnerSummary")
 
 
@@ -354,7 +361,7 @@ def claude_exit(err, text):
     if not err:
         return 0
     m = re.match(r"Exit code (-?\d+)", text)
-    return int(m.group(1)) if m else "errored"
+    return int(m.group(1)) if m and "Command timed out after" not in text and "Command killed:" not in text else "errored"
 
 
 def fold_claude(path, truth):

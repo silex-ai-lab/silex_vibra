@@ -17,13 +17,12 @@ struct EvidenceCases: Decodable {
 
 struct CommandClassifierTests {
     @Test func everyCaseInTheSharedFile() throws {
-        let names: [ExitProof: String] = [.full: "full", .zeroOnly: "zeroOnly", .none: "none"]
         let cases = try EvidenceCases.load().classify
         #expect(cases.count > 100)
         for item in cases {
             let found = CommandClassifier.classify(script: item.script)
             #expect(found?.kind.rawValue == item.kind, "kind of \(item.script)")
-            #expect(found.flatMap { names[$0.proof] } == item.proof, "proof of \(item.script)")
+            #expect(found.map { $0.soleCommand ? "full" : "none" } == item.proof, "proof of \(item.script)")
         }
     }
 
