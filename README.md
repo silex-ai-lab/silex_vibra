@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge" alt="License: Apache 2.0"></a>
   <a href="#install"><img src="https://img.shields.io/badge/macOS-14%2B-black.svg?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+"></a>
-  <a href="docs/development.md"><img src="https://img.shields.io/badge/Swift-6-F05138.svg?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6"></a>
+  <a href="docs/development.md"><img src="https://img.shields.io/badge/Swift-6.1%2B-F05138.svg?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6.1+"></a>
   <a href="#privacy"><img src="https://img.shields.io/badge/Network-none-2ea44f.svg?style=for-the-badge" alt="Network: none"></a>
   <a href="https://github.com/silex-ai-lab/silex_vibra/stargazers"><img src="https://img.shields.io/github/stars/silex-ai-lab/silex_vibra?style=for-the-badge" alt="GitHub stars"></a>
 </p>
@@ -96,11 +96,13 @@ Vibra is free to install and use under the [Apache-2.0 license](LICENSE).
 Both this repository and the official tap are public. No GitHub account,
 invitation, or repository access approval is needed.
 
-Apple Silicon and Intel Macs are supported. Check `swift --version` before
-installing. If Swift is missing, run `xcode-select --install`. If it is older
-than Swift 6, update the Command Line Tools through Software Update.
+Apple Silicon and Intel Macs are supported. CI builds, tests and launches the
+app on every push, on macOS 15 with Swift 6.1.2, on both Apple Silicon and
+Intel. Check `swift --version` before installing. If Swift is missing, run
+`xcode-select --install`. If it is older than Swift 6.1, update the Command
+Line Tools through Software Update.
 
-With [Homebrew](https://brew.sh), macOS 14 or later, and Swift 6 or later:
+With [Homebrew](https://brew.sh), macOS 14 or later, and Swift 6.1 or later:
 
 ```sh
 brew install silex-ai-lab/tap/vibra
@@ -120,7 +122,7 @@ remove Vibra and its saved data, see [Removing Vibra](#removing-vibra).
 
 #### Manual source build
 
-You need **macOS 14 or later** and a Swift 6 toolchain. **You do not need
+You need **macOS 14 or later** and Swift 6.1 or later. **You do not need
 Xcode.** The Command Line Tools are enough:
 
 ```sh

@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge" alt="License: Apache 2.0"></a>
   <a href="#インストール"><img src="https://img.shields.io/badge/macOS-14%2B-black.svg?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+"></a>
-  <a href="docs/development.md"><img src="https://img.shields.io/badge/Swift-6-F05138.svg?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6"></a>
+  <a href="docs/development.md"><img src="https://img.shields.io/badge/Swift-6.1%2B-F05138.svg?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6.1+"></a>
   <a href="#プライバシー"><img src="https://img.shields.io/badge/Network-none-2ea44f.svg?style=for-the-badge" alt="Network: none"></a>
   <a href="https://github.com/silex-ai-lab/silex_vibra/stargazers"><img src="https://img.shields.io/github/stars/silex-ai-lab/silex_vibra?style=for-the-badge" alt="GitHub stars"></a>
 </p>
@@ -96,10 +96,10 @@ Vibra は Mac のメニューバーに常駐する、小さな無料アプリで
 Vibra は [Apache-2.0 ライセンス](LICENSE)に基づき、誰でも無料でインストールして使用できます。
 このリポジトリと公式 tap は公開されています。GitHub アカウント、招待、リポジトリへのアクセス承認は不要です。
 
-Apple Silicon と Intel Mac に対応しています。インストール前に `swift --version` で Swift 6 以降であることを確認してください。
+Apple Silicon と Intel Mac に対応しています。CI はプッシュのたびに、macOS 15 と Swift 6.1.2 を使い、Apple Silicon と Intel の両方でアプリをビルド、テスト、起動しています。インストール前に `swift --version` で Swift 6.1 以降であることを確認してください。
 Swift がない場合は `xcode-select --install` を実行し、古い場合は「ソフトウェアアップデート」で Command Line Tools を更新してください。
 
-[Homebrew](https://brew.sh)、macOS 14 以降、Swift 6 以降が必要です。
+[Homebrew](https://brew.sh)、macOS 14 以降、Swift 6.1 以降が必要です。
 
 ```sh
 brew install silex-ai-lab/tap/vibra
@@ -117,7 +117,7 @@ Vibra と保存データを削除するには、[Vibra の削除](#vibra-の削�
 
 #### ソースから手動でビルド
 
-**macOS 14 以降** と Swift 6 ツールチェーンが必要です。**Xcode は不要です。**
+**macOS 14 以降** と Swift 6.1 以降が必要です。**Xcode は不要です。**
 Command Line Tools で十分です。
 
 ```sh
