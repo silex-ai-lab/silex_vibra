@@ -91,7 +91,7 @@ public struct VibraSettings: Sendable, Equatable, Codable {
     public static let stallThreshold = Limit(
         key: "stallThresholdSeconds", defaultValue: 300, range: 60...7200)
     public static let attentionDecay = Limit(
-        key: "attentionDecaySeconds", defaultValue: 8 * 3600, range: 3600...172_800)
+        key: "attentionDecaySeconds", defaultValue: 2 * 3600, range: 3600...172_800)
     public static let activityWindow = Limit(
         key: "activityWindowSeconds", defaultValue: 12 * 3600, range: 3600...259_200)
 

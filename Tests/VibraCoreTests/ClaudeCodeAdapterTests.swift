@@ -42,4 +42,21 @@ struct ClaudeCodeAdapterTests {
         let session = try #require(adapter.discoverSessions().first)
         #expect(session.lastEvent == .permissionPrompt)
     }
+
+    private func lastEvent(ofTranscript prompt: String) throws -> LastEventKind? {
+        let records = [
+            #"{"type":"user","sessionId":"seat-1","cwd":"/fake/proj","timestamp":"2026-11-12T17:00:00.000Z","message":{"role":"user","content":"\#(prompt)"}}"#,
+            #"{"type":"assistant","sessionId":"seat-1","timestamp":"2026-11-12T17:00:05.000Z","message":{"role":"assistant","model":"claude-opus-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}"#,
+        ]
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("claude-seat-\(UUID().uuidString).jsonl")
+        try (records.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try ClaudeCodeAdapter(file: url).discoverSessions().first?.lastEvent
+    }
+
+    @Test func fleetDispatchEndsSettled() throws {
+        #expect(try lastEvent(ofTranscript: "fix the build") == .turnComplete)
+        #expect(try lastEvent(ofTranscript: "Dispatch `claude-plan-r2`: read /tmp/fleet/p.txt and continue.") == .settled)
+    }
 }

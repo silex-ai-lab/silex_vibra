@@ -28,7 +28,7 @@ Exit 0 with one JSON object on stdout; exit 1 on failure.
 ```json
 {
   "generatedAt": "2026-09-26T09:00:00Z",
-  "settings": {"activityWindowSeconds": 43200, "attentionDecaySeconds": 28800, "stallThresholdSeconds": 300},
+  "settings": {"activityWindowSeconds": 43200, "attentionDecaySeconds": 7200, "stallThresholdSeconds": 300},
   "sessions": [{
     "agent": "claudeCode", "id": "…", "project": "my-repo", "cwd": "/Users/me/my-repo",
     "gitBranch": "main", "state": "awaitingInput", "needsAttention": true,

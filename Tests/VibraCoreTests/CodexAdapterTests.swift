@@ -54,4 +54,45 @@ struct CodexAdapterTests {
         let session = try #require(CodexAdapter(file: url).discoverSessions().first)
         #expect(session.lastEvent == .producing)
     }
+
+    private func lastEvent(ofRollout records: [String]) throws -> LastEventKind? {
+        let meta = #"{"timestamp":"2026-11-12T17:00:00.000Z","type":"session_meta","payload":{"session_id":"turn-owner-1","cwd":"/fake/proj","originator":"codex-tui","model_provider":"openai"}}"#
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("codex-owner-\(UUID().uuidString).jsonl")
+        try (([meta] + records).joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try CodexAdapter(file: url).discoverSessions().first?.lastEvent
+    }
+
+    private func turn(trigger: String, prompt: String) -> [String] {
+        [
+            #"{"timestamp":"2026-11-12T17:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_attribution":{"turn_trigger":"\#(trigger)"}}}"#,
+            #"{"timestamp":"2026-11-12T17:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"\#(prompt)"}]}}"#,
+            #"{"timestamp":"2026-11-12T17:00:09.000Z","type":"event_msg","payload":{"type":"task_complete"}}"#,
+        ]
+    }
+
+    @Test func turnTheHumanStartedEndsAsTheirTurn() throws {
+        #expect(try lastEvent(ofRollout: turn(trigger: "user", prompt: "fix the build")) == .turnComplete)
+        #expect(try lastEvent(ofRollout: turn(trigger: "realtime", prompt: "fix the build")) == .turnComplete)
+    }
+
+    @Test func scheduledAutomationRunEndsSettled() throws {
+        // A Codex app automation's run is a report nobody is expected to answer.
+        let run = turn(trigger: "automation_heartbeat_scheduled", prompt: "# AGENTS.md instructions")
+        #expect(try lastEvent(ofRollout: run) == .settled)
+    }
+
+    @Test func fleetDispatchEndsSettled() throws {
+        // A fleet planner typed this into the seat's terminal and reads the
+        // reply file itself; the rollout still records the trigger as "user".
+        let dispatch = turn(trigger: "user", prompt: "Dispatch codex-impl-r4: read /tmp/fleet/prompt.txt and follow it exactly.")
+        #expect(try lastEvent(ofRollout: dispatch) == .settled)
+    }
+
+    @Test func humanTurnAfterADispatchIsTheirTurnAgain() throws {
+        let records = turn(trigger: "user", prompt: "Dispatch codex-impl-r4: read /tmp/p.txt")
+            + turn(trigger: "user", prompt: "what did you change?")
+        #expect(try lastEvent(ofRollout: records) == .turnComplete)
+    }
 }

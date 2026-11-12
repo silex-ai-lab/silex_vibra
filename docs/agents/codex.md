@@ -18,7 +18,10 @@ these files — see [../privacy.md](../privacy.md).
 - 🔵 **working** — can show, from an `event_msg` payload of `task_started` or
   `item_completed` (`.producing`).
 - 🟠 **your turn** — can show, from an `event_msg` payload of `task_complete`
-  (`.turnComplete`).
+  (`.turnComplete`). Only for a turn a human started. A turn whose
+  `task_started.turn_attribution.turn_trigger` starts with `automation` (a
+  Codex app scheduled task), or whose prompt opens with `Dispatch <id>:` (a
+  fleet planner's dispatch), ends idle (`.settled`).
 - 🔴 **needs approval** — never, because `CodexCheckpoint` never emits
   `.permissionPrompt` (and no live-status enrichment applies to Codex).
 - 🟡 **stalled** — can show, from `.producing` that went quiet past the stall
@@ -34,7 +37,8 @@ these files — see [../privacy.md](../privacy.md).
 | your turn | observed live | [docs/STATUS.md@d40c4fb:263-264](https://github.com/silex-ai-lab/silex_vibra/blob/d40c4fb/docs/STATUS.md#L263-L264) ("`awaitingInput` at t+4s"); `CodexAdapterTests.trailingTaskCompleteMeansTurnIsOver` |
 | needs approval | never shown | `CodexCheckpoint.buildSession` maps only `task_complete`/`task_started`/`item_completed`/`token_count`, never `.permissionPrompt` |
 | stalled | fixture-tested | `LivePipelineTests.classificationUsesThePassedStallThreshold` (`SettingsAndPipelineTests.swift`) (`.producing` quiet → stalled) |
-| idle | not observed | reachable from a decayed turn or an unrecognised event (`StateEngine`); no live observation and no test |
+| idle | observed live | 2026-11-12: a scheduled automation run and two fleet seats that finished dispatches read idle; `CodexAdapterTests.scheduledAutomationRunEndsSettled`, `CodexAdapterTests.fleetDispatchEndsSettled` |
+| idle (decayed) | not observed | reachable from a decayed turn or an unrecognised event (`StateEngine`); no live observation and no test |
 
 ## Limits
 

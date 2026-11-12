@@ -18,6 +18,8 @@ questions you typed, on demand and only while its window is open — see
 - 🔵 **working** — can show, from `stop_reason: "tool_use"` (`.producing`) in the
   transcript, or from a live `busy` status (`Session.enriched`).
 - 🟠 **your turn** — can show, from `stop_reason: "end_turn"` (`.turnComplete`).
+  A turn whose typed prompt opens with `Dispatch <id>:` (a fleet planner's
+  dispatch) ends idle (`.settled`) instead.
 - 🔴 **needs approval** — can show, from a trailing `permission-mode` record
   (`.permissionPrompt`), or from a live `waiting` status (`Session.enriched`).
 - 🟡 **stalled** — can show, from `.producing` that went quiet past the stall
