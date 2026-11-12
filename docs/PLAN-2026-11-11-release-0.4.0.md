@@ -83,8 +83,9 @@ Each task ends in a check. Commits are small and conventional.
 ## Publishing, after the code gate and only with the user's go-ahead
 
 1. The user merges the landing PR, then the `release/0.4.0` PR.
-2. Tag `v0.4.0` on the merge commit and create the GitHub release from
-   `docs/releases/v0.4.0.md`. Source-only, like earlier releases.
+2. Tag `v0.4.0` on the merge commit and push the tag. The GitHub release
+   from `docs/releases/v0.4.0.md` is published after step 3 merges.
+   Source-only, like earlier releases.
 3. Open a PR on `silex-ai-lab/homebrew-tap` that moves `url` to the tag's
    archive, sets `version "0.4.0"` and the `sha256` of the downloaded archive.
    Check it with `brew audit --strict` and a local
@@ -208,3 +209,13 @@ Both seats rejected revision 40d6aab.
 | Non-blocking, declined: "Both checks are mutation-tested" ambiguity (DeepSeek) | The sentence follows the canary assertion and the did-not-run check, unchanged from before this release |
 
 Publishing order follows from the release note: the tap PR merges before the GitHub release is published.
+
+### Code gate round 2 → changes
+
+Both seats rejected revision f1cd9dd.
+
+| Defect (who) | Change |
+|---|---|
+| STATUS "runs continuously at under 1% CPU" overstates one 60 s sample; the 5–12% spike note is not rechecked (Codex 1) | The Verdict states the 0.7% average over one 60 s sample with agents writing; the spike and RSS notes are labelled as earlier measurements not rechecked on 0.4.0 |
+| The 43–76 MB RSS range is attributed to 0.2.0, whose verification measured 42–46 MB (DeepSeek 1) | Attributed to the table before 0.4.0; the 0.2.0 figure is named separately |
+| Non-blocking, folded in: "one run each unless noted"; publishing steps ordered so the GitHub release follows the tap merge; the two mutation-tested checks named (DeepSeek) | STATUS, Publishing step 2 |
