@@ -55,6 +55,7 @@ Vibra 是一个住在 Mac 菜单栏里的免费小应用。它替你盯着所有
 | 🔎 你在一堆标签页里找它 | 点一下那一行或那条通知，就跳到对应的终端标签页或应用窗口。 |
 | 👀 你分不清哪些 Agent 还在忙 | 看一眼菜单栏就知道。`2▶` 表示两个正在工作，`2!` 表示两个在等你。 |
 | 🧾 你好奇这些工作用了多少 | **Usage Report…**（⌘U）显示 7 天的 token 用量，以及按 API 价格算要花多少钱。 |
+| 🛡️ Agent 做了你没授权的事 | **Review Agent Activity…** 会列出被拒绝后仍然执行的调用、读取凭据、在工作区外写入、强制推送，以及未受权限限制的会话。你可以逐条回应，也可以起草一份给供应商的报告，由你自己发送。 |
 
 并不是每个 Agent 都能上报每一种状态，有些也没法跳转过去。
 [支持的 Agent](#支持的-agent) 表格写清了每个 Agent 具体能做到什么。
@@ -107,8 +108,8 @@ open "$(brew --prefix vibra)/Vibra.app"
 启动前请退出旧版 Vibra。Homebrew 不会覆盖 `/Applications/Vibra.app`，也不会修改登录项。
 该版本仍采用 ad-hoc 签名，未做公证。迁移和权限限制见 [tap 说明](https://github.com/silex-ai-lab/homebrew-tap#switch-from-a-manual-installation)。
 
-更新前先退出 Vibra，再运行 `brew upgrade silex-ai-lab/tap/vibra`。
-卸载使用 `brew uninstall silex-ai-lab/tap/vibra`。
+更新前先退出 Vibra，再运行 `brew upgrade silex-ai-lab/tap/vibra`。要卸载
+Vibra 并删除已保存的数据，见 [卸载 Vibra](#卸载-vibra)。
 
 #### 手动从源码构建
 
@@ -133,10 +134,21 @@ open /Applications/Vibra.app
 Vibra 没有 Dock 图标，也没有窗口。**菜单栏项目就是整个应用。**
 在菜单栏右侧找 `Vibra`，有会话活跃时则是像 `2▶ 1!` 这样的计数。
 
-完整删除：
+### 卸载 Vibra
+
+先退出 Vibra。然后按你当初的安装方式卸载应用：
 
 ```sh
-make uninstall
+brew uninstall silex-ai-lab/tap/vibra   # Homebrew
+make uninstall                          # manual build, from the repository
+```
+
+两种方式都会留下已保存的数据：你在 Review Agent Activity 窗口里的回答，以及
+Vibra 的设置。要连这些也一起删除：
+
+```sh
+rm -rf ~/Library/Application\ Support/Vibra
+defaults delete ai.silexlab.vibra
 ```
 
 ### 首次启动
@@ -175,7 +187,7 @@ Homebrew 版本位于 `$(brew --prefix vibra)/Vibra.app`，手动安装的版本
 **live**：已在有记录的真实会话中见到。**✓**：代码能显示，但还没有实时记录（指南
 会说明是否有夹具测试覆盖）。**—**：从不显示（例如 Codex 和 Hermes 没有批准状态）。
 
-点击某一行时：Claude Code 和 Codex 会跳到终端标签页（iTerm2、Terminal、herdr）或宿主应用，
+点击某一行时：Claude Code 和 Codex 会跳到终端标签页（iTerm2、Terminal、herdr、Orca）或宿主应用，
 VS Code 会跳到对应窗口，Cursor 会被带到前台。OpenCode 和 Hermes 会话无法跳转：
 点击这类行会打开它的详情。
 
@@ -194,6 +206,11 @@ VS Code 会跳到对应窗口，Cursor 会被带到前台。OpenCode 和 Hermes 
 - **Usage Report…**（⌘U）：7 天的 token 用量和等值 API 费用，Claude Code 和 Codex
   按天列出，另外还会提示你的 Claude Code 会话里哪些地方最花钱。
 - **History…**（⌘Y）：你问过 Agent 的问题。
+- **Code checks**（Claude Code 和 Codex）：Session Details 里会显示，会话最后一次
+  改动代码之后是否运行过测试、构建或 lint 命令，以及命令返回了什么。它从不说
+  任务已经完成。详见[功能说明](docs/features.md#the-menu)。
+- **Review Agent Activity…**（Claude Code 和 Codex）：列出读取凭据、在工作区外
+  写入这类发现；每条都由你回应，或者由你自己向供应商报告。
 - **`--query`**：以 JSON 输出菜单，方便脚本使用。
 
 详情：[功能说明](docs/features.md)。
@@ -220,6 +237,10 @@ Vibra 读取本地文件，不向任何地方发送任何东西。它被动读�
   History 是唯一会显示你输入内容的功能，它只在窗口打开期间把内容留在内存中，
   不写入任何东西。
 - 它绝不替你批准 Agent 的权限提示，只负责显示。
+- 事件监控会读取 Claude Code 和 Codex 转录中的工具活动，只保留封闭集合里的
+  取值，并把哈希后的 id 和你的回答写入
+  `~/Library/Application Support/Vibra/incidents.json`。发给供应商的报告只是
+  一份本地草稿，只有你能发送。
 
 **Canary 测试** 会在测试夹具中埋入假的密钥和消息文本，并检查它们都不会出现在
 返回的会话、其 JSON、`--query` 输出或错误中（按适配器逐一检查）。如果
