@@ -15,11 +15,12 @@ jobs:
       matrix:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
         run: swift --version
-      - name: Test
-        run: make test
       - name: Build the app bundle
         run: make app SIGN_IDENTITY=
+      - name: Test
+        run: make test
