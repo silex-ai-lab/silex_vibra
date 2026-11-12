@@ -1,5 +1,16 @@
 # Vibra — current status
 
+**0.4.0** (release prepared 2026-11-11, plan
+[PLAN-2026-11-11-release-0.4.0.md](PLAN-2026-11-11-release-0.4.0.md)). Adds,
+since 0.3.0: the first-use loop (**Needs You** first, across all agents, without
+a restart), Return to Session in Orca terminals, **Code checks** in Session
+Details, and **Review Agent Activity** with its local `incidents.json`. Fixes a
+vendor usage file with usage after today being compared instead of refused.
+Verified **2026-11-11** on macOS 27.0.1 / Swift 6.4: `make test` 501 tests
+in 60 suites, including the four privacy canaries; `make install` produced a
+bundle whose `CFBundleShortVersionString` reads 0.4.0; the installed binary's
+`--incidents --days 7` and `--query` exit 0; `tools/readme-anchors.sh` exits 0.
+
 **2026-10-05 — Idle CPU 27% → <1%.** A self-sustaining refresh loop: Vibra's
 own read-only Cursor query wrote SQLite's `-shm` wal-index, FSEvents reported
 it, and the `-shm` mtime in the database fingerprint made every refresh look
@@ -77,12 +88,14 @@ plan r1–r4, code gate r1 (both reviewer seats `IMPL-APPROVED` plus the
 implementer's written vote against diff `7e421da8`), final text confirmed.
 Record: [PLAN-2026-09-27-history-ui.md](PLAN-2026-09-27-history-ui.md).
 
-**0.3.0** (unreleased; branch `feat/history-query-settings-hermes`). Verified
+**0.3.0** (released 2026-11-07, tag `v0.3.0`). Verified
 **2026-09-26** on macOS 15 / Swift 6.1.2: `make test` 156 tests, `make bench`
 PASS (0 bytes on an unchanged refresh; cold 0.47 s, 254 sessions), History,
 Settings and `--query` checked against this machine's real data, Hermes
 discovery checked against a real `state.db`. Adds Phase 4: History,
-`--query`, Settings, Hermes.
+`--query`, Settings, Hermes. The same tag also shipped the performance
+suggestions and the Claude Code token-count fix, verified in
+[PLAN-2026-11-03-perf-suggestions.md](PLAN-2026-11-03-perf-suggestions.md).
 
 **0.2.0.** Last verified **2026-09-21** on macOS 15.7.3 / Swift 6.1.2 from a
 clean clone and a full clean rebuild; before that, **2026-09-20** on a Mac mini
@@ -99,8 +112,10 @@ continuously at 0.0% idle CPU, reports live agent state, alerts when a session
 wants you, focuses the terminal a session runs in, and produces a rolling
 usage report.
 
-Everything achievable without the user's involvement is done. What remains is
-blocked on a paid Apple Developer account (P3.x). *(Earlier this line also
+Homebrew distribution ships as a source formula (P3.3), and Sparkle was cut
+because an updater is network egress (P3.2). What remains on the roadmap is
+Developer ID signing (P3.1), blocked on a paid Apple Developer account, and the
+deferred OpenClaw adapter (P4.5). *(Earlier this line also
 listed P2.2 as having no viable target; P2.2 has since been done — Cursor and
 VS Code Copilot Chat, see the table below.)*
 
@@ -120,9 +135,11 @@ VS Code Copilot Chat, see the table below.)*
 | 4 | P4.3 Attention-rule settings | ✅ Done 2026-09-26 |
 | 4 | P4.4 Hermes adapter | ✅ Done 2026-09-26 — states fixture-only |
 | 4 | P4.5 OpenClaw adapter | ⏸ Deferred — not installed here |
+| 4 | P4.6 Code checks in Session Details | ✅ Done 2026-11-08 |
+| 4 | P4.7 Review Agent Activity | ✅ Done 2026-11-09 |
 | 3 | P3.1 Developer ID signing | ⛔ Blocked on a user decision |
-| 3 | P3.2 Sparkle auto-update | Behind P3.1 |
-| 3 | P3.3 Homebrew cask | Behind P3.1 |
+| 3 | P3.2 Sparkle auto-update | ⊘ Cut — an updater is network egress |
+| 3 | P3.3 Homebrew distribution | ✅ Done (source formula) — a signed cask still needs P3.1 |
 
 ## Measured
 
@@ -132,7 +149,7 @@ VS Code Copilot Chat, see the table below.)*
 | RSS (running app) | **43–76 MB**, varies between runs | < 60 MB | ⚠️ borderline |
 | Cold start | 0.64s, 13 MB read | — | ✅ |
 | Unchanged refresh | 0.03s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 308 in 41 suites | — | ✅ |
+| Tests | 501 in 60 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
 
 Reproduce with `make bench` and `make test`.
@@ -275,7 +292,7 @@ approval; the certificate is what makes that approval outlive rebuilds.
 
 ## What works, verified against real data
 
-- **Five adapters** — Claude Code, Codex and VS Code Copilot Chat JSONL logs; OpenCode and Cursor SQLite.
+- **Six adapters** — Claude Code, Codex and VS Code Copilot Chat JSONL logs; OpenCode, Cursor and Hermes SQLite. Hermes states are checked against fixtures only.
 - **Agents are detected, not assumed.** An agent with no state on disk is never
   polled, so supporting one nobody installed costs nothing.
 - **Live state classification.** Verified by driving a real Codex session:
@@ -301,7 +318,9 @@ approval; the certificate is what makes that approval outlive rebuilds.
   `~/.codex/hooks.json`, a Copilot hook, an OpenCode plugin, and replaced the
   Claude Code status line — all of which survived uninstalling its app, and
   kept executing on every tool call. Vibra is a passive reader by design, so
-  removing it is deleting one `.app`.
+  removing it leaves no hook behind. Deleting the app leaves only its saved data,
+  which `rm -rf ~/Library/Application\ Support/Vibra` and
+  `defaults delete ai.silexlab.vibra` remove.
 - **Secrets are never read.** `opencode.db` holds auth tokens beside session
   data, and `~/.claude/sessions/` holds `.key` files beside the JSON. The
   adapters use read-only access and explicit allowlists, and **canary tests**
