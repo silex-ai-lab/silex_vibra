@@ -9,6 +9,14 @@
   matches terminal names exactly. It reads one variable,
   `ORCA_TERMINAL_HANDLE`, from the agent's environment when you click.
 
+- **Code checks in Session Details.** For Claude Code and Codex, the window now
+  says whether a test, build or lint command ran after the session's last code
+  change, and what it returned. It reports only what the transcript shows. A
+  check whose exit status was hidden by a pipe reads as unknown unless the
+  runner's own summary line settles it. It never says a task is done. Vibra
+  reads command text and the end of check output for this, in memory, when the
+  window opens, and keeps none of it.
+
 - **A first-use loop.** The menu now leads with **Needs You** across all agents,
   then **Running**, with idle sessions in a **Recent** submenu; each row shows
   the agent, and a waiting row how long it has waited. **Session Details** opens

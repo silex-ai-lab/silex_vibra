@@ -114,6 +114,21 @@ public struct ClaudeCodeAdapter: AgentAdapter {
 
     public func historyExtractor() -> (any HistoryExtractor)? { ClaudeHistoryExtractor() }
 
+    // MARK: - Evidence
+
+    public func evidenceExtractor() -> (any EvidenceExtractor)? { ClaudeEvidenceExtractor() }
+
+    /// `<id>.jsonl` and `<id>/subagents/*.jsonl` beside it.
+    public func evidenceSources(for session: Session) -> [URL] {
+        if let file { return [file] }
+        guard let projectsRoot, let files = try? scanner.files(under: projectsRoot) else { return [] }
+        return files.filter { url in
+            if url.lastPathComponent == "\(session.id).jsonl" { return !isSubagentSource(url) }
+            let parts = url.standardizedFileURL.pathComponents
+            return parts.count >= 3 && parts[parts.count - 2] == "subagents" && parts[parts.count - 3] == session.id
+        }
+    }
+
     // MARK: - Full parse
 
     public func discoverSessions() throws -> [Session] {

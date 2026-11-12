@@ -499,6 +499,30 @@ if CommandLine.arguments.contains("--history-stats") {
     exit(finished ? 0 : 1)
 }
 
+// `Vibra --evidence-stats [--days N]` counts what Session Details would show
+// for each Claude Code and Codex session in the window. Counts only - never a
+// command, a path or output.
+if CommandLine.arguments.contains("--evidence-stats") {
+    let days = max(1, argument(after: "--days").flatMap(Int.init) ?? 14)
+    let adapters = AdapterRegistry.all()
+    nonisolated(unsafe) var finished = false
+    Task.detached {
+        let sessions = await SessionIngest(adapters: adapters, horizon: Double(days) * 86_400).refresh()
+        let ingest = EvidenceIngest(adapters: adapters)
+        var rows: [(agent: AgentKind, fold: EvidenceFold)] = []
+        for session in sessions where EvidenceCoverage.agents.contains(session.agent) {
+            if let fold = await ingest.collect(for: session) { rows.append((session.agent, fold)) }
+        }
+        print(EvidenceStats.format(rows), terminator: "")
+        finished = true
+    }
+    let deadline = Date().addingTimeInterval(300)
+    while !finished && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    exit(finished ? 0 : 1)
+}
+
 // `Vibra --show-report | --show-history | --show-settings [--snapshot <path>]`
 // launches the GUI, opens that window, optionally writes the window's own
 // rendered pixels to a PNG, and reports what it rendered. Used to confirm the
@@ -523,8 +547,14 @@ func detailDiagnostic(sessionID: String?) -> any RenderableWindow {
     if CommandLine.arguments.contains("--vanished") {
         snapshot.sessions.removeAll { $0.key == session.key }
     }
-    let controller = SessionDetailWindowController(onReturn: { _ in }, onHistory: { _ in })
+    let ingest = EvidenceIngest(adapters: AdapterRegistry.all())
+    let controller = SessionDetailWindowController(
+        onReturn: { _ in }, onHistory: { _ in }, evidence: { await ingest.evidence(for: $0) })
     controller.prepare(session: session, snapshot: snapshot)
+    let deadline = Date().addingTimeInterval(120)
+    while !controller.evidenceSettled && Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
     return controller
 }
 

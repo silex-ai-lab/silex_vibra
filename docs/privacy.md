@@ -30,6 +30,18 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   does runs only for the History window, and a test proves the status path
   never prepares it. A canary in a message row, the system prompt, `.env` and
   `auth.json` appears in no session, no `--query` output and no error.
+- **Code checks in Session Details read commands and check output, and show
+  neither.** For Claude Code and Codex, opening a session's details reads that
+  session's transcripts and its subagents'. Each tool record is parsed in memory,
+  including shell command text, edited paths and tool output. From a check's
+  output only the last 6 KB is examined. All of it is reduced to a kind, a result
+  and a timestamp, then dropped, and nothing is written. To find a Codex session's
+  subagents, Vibra also opens each rollout modified since that session started
+  and reads its first line, which it parses only when the line names this
+  session's id. A canary test (`evidenceSentinelsNeverLeak`) plants a sentinel in
+  a command, a path and tool output for both agents and asserts it reaches no
+  extractor state, result, row text or `--evidence-stats` output. `make test`
+  fails if that test did not run.
 - **Returning to a session in Orca reads one environment variable.** When you
   click a session running in an Orca terminal, Vibra asks the kernel for that
   agent process's start-up environment and keeps only `ORCA_TERMINAL_HANDLE`,

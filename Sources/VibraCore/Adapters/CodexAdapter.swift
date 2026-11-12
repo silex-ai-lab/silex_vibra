@@ -95,6 +95,45 @@ public struct CodexAdapter: AgentAdapter {
 
     public func historyExtractor() -> (any HistoryExtractor)? { CodexHistoryExtractor() }
 
+    // MARK: - Evidence
+
+    public func evidenceExtractor() -> (any EvidenceExtractor)? { CodexEvidenceExtractor() }
+
+    /// The root's rollout is named for its id. A subagent's is not, so any
+    /// rollout written since the session started is kept when its first
+    /// `session_meta` names this session as its root.
+    public func evidenceSources(for session: Session) -> [URL] {
+        if let file { return [file] }
+        guard let all = try? sources() else { return [] }
+        return all.filter { source in
+            if source.url.deletingPathExtension().lastPathComponent.hasSuffix(session.id) { return true }
+            guard source.modified >= session.startedAt,
+                  let first = firstLine(of: source.url),
+                  lineContains(first, session.id),
+                  let record = jsonObject(first),
+                  record["type"] as? String == "session_meta",
+                  let payload = record["payload"] as? [String: Any]
+            else { return false }
+            return payload["session_id"] as? String == session.id
+        }.map(\.url)
+    }
+
+    /// `session_meta` carries the whole prompt, so it can be large. Capped so
+    /// a file with no newline cannot be read whole.
+    private func firstLine(of url: URL, limit: Int = 1 << 20) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        var data = Data()
+        while data.count < limit,
+              let chunk = try? handle.read(upToCount: 64 * 1024), !chunk.isEmpty {
+            data.append(chunk)
+            if let newline = data.firstIndex(of: 0x0A) {
+                return String(data: data[..<newline], encoding: .utf8)
+            }
+        }
+        return nil
+    }
+
     // MARK: - Full parse
 
     public func discoverSessions() throws -> [Session] {

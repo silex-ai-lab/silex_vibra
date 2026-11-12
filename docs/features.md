@@ -27,6 +27,18 @@ source is being read normally, tokens, and buttons for **Return to Session**
 history Vibra reads), **Open Project Folder** and **Copy Path**. A session that
 exits keeps the details it had and says `No longer active`.
 
+For Claude Code and Codex the window also has a **Code checks** row. It says
+whether the session issued a test, build or lint command after its last code
+change, counting subagents, and what that command returned. An exit status
+counts only when the check is one simple command on its own. Anything else, such
+as a pipe, `&&`, a subshell or a background run, falls to the runner's own
+summary line, and a call that did not exit cleanly can never read as a pass from
+one. A run that selected no tests reads as not visible. If
+nothing decides, the result reads as not visible. The row describes what this
+session did. It does not say a task is done, and edits made through shell
+commands are not counted. `Vibra --evidence-stats [--days N]` prints the same
+results as counts, with no commands or paths.
+
 When there is nothing to show, the menu says why: `No active sessions` when the
 sources are readable, a list of agents to start when none has state on disk,
 and a notice instead of a claim of inactivity when a source cannot be read.
