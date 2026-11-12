@@ -44,8 +44,12 @@ final class UserNotificationSink: NotificationSink {
 
     /// Whether macOS will show Vibra's notifications, as the setup window words it.
     @MainActor func authorizationSummary() async -> NotificationAuthorization {
-        let settings = await center.notificationSettings()
-        switch settings.authorizationStatus {
+        // Only the status crosses back: Swift 6.1 refuses to send the
+        // non-Sendable settings object out of the async method.
+        let status = await withCheckedContinuation { (done: CheckedContinuation<UNAuthorizationStatus, Never>) in
+            center.getNotificationSettings { done.resume(returning: $0.authorizationStatus) }
+        }
+        switch status {
         case .authorized, .provisional, .ephemeral: return .allowed
         case .denied: return .denied
         case .notDetermined: return .notAsked
