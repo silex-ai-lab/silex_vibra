@@ -480,6 +480,12 @@ struct VendorUsageTests {
         #expect(failure(both, now: instant(noon)) == .futureDay)
     }
 
+    @Test(arguments: Shape.allCases)
+    private func aTooOldFileWithOnlyEmptyFutureDaysIsTooOld(_ shape: Shape) throws {
+        let padded = try page(shape, [("2025-05-01", 5), ("2025-08-04", nil)])
+        #expect(failure(padded, now: instant(noon)) == .tooOld)
+    }
+
     @Test func theFixedFloorFiresOnlyAboveIt() {
         // 10 percent of 1,000,000 is 100,000, so the fixed floor is the arm.
         let above = VendorUsage.reconcile(file(1_000_000), local: local(899_999), now: after())

@@ -6,7 +6,7 @@ since 0.3.0: the first-use loop (**Needs You** first, across all agents, without
 a restart), Return to Session in Orca terminals, **Code checks** in Session
 Details, and **Review Agent Activity** with its local `incidents.json`. Fixes a
 vendor usage file with usage after today being compared instead of refused.
-Verified **2026-11-11** on macOS 27.0.1 / Swift 6.4: `make test` 501 tests
+Verified **2026-11-11** on macOS 27.0.1 / Swift 6.4: `make test` 502 tests
 in 60 suites, including the four privacy canaries; `make install` produced a
 bundle whose `CFBundleShortVersionString` reads 0.4.0; the installed binary's
 `--incidents --days 7` and `--query` exit 0; `tools/readme-anchors.sh` exits 0.
@@ -149,7 +149,7 @@ VS Code Copilot Chat, see the table below.)*
 | RSS (running app) | **43–76 MB**, varies between runs | < 60 MB | ⚠️ borderline |
 | Cold start | 0.64s, 13 MB read | — | ✅ |
 | Unchanged refresh | 0.03s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 501 in 60 suites | — | ✅ |
+| Tests | 502 in 60 suites | — | ✅ |
 | Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
 
 Reproduce with `make bench` and `make test`.
