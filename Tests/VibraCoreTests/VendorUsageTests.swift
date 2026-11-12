@@ -400,6 +400,86 @@ struct VendorUsageTests {
 
     // MARK: - Reconcile
 
+    // MARK: - Future days
+
+    private enum Shape: CaseIterable { case anthropic, openai }
+
+    /// One bucket per `(day, tokens)`, every result under the key `k`. A nil
+    /// count is a bucket with an empty `results` list.
+    private func page(_ shape: Shape, _ buckets: [(day: String, tokens: Int?)]) throws -> Data {
+        switch shape {
+        case .anthropic:
+            let rows: [[String: Any]] = buckets.map { bucket in
+                ["starting_at": "\(bucket.day)T00:00:00Z", "results": bucket.tokens.map { tokens in [[
+                    "api_key_id": "k", "uncached_input_tokens": tokens, "cache_read_input_tokens": 0,
+                    "cache_creation": ["ephemeral_1h_input_tokens": 0, "ephemeral_5m_input_tokens": 0],
+                    "output_tokens": 0,
+                ]] } ?? []]
+            }
+            return try data(["has_more": false, "data": rows])
+        case .openai:
+            let rows: [[String: Any]] = buckets.map { bucket in
+                ["object": "bucket",
+                 "start_time": Int(instant("\(bucket.day)T00:00:00Z").timeIntervalSince1970),
+                 "results": bucket.tokens.map { [["api_key_id": "k", "input_tokens": $0, "output_tokens": 0]] } ?? []]
+            }
+            return try data(["object": "page", "has_more": false, "data": rows])
+        }
+    }
+
+    private let noon = "2025-08-03T12:00:00Z"
+    private let lastSecond = "2025-08-03T23:59:59Z"
+
+    @Test(arguments: Shape.allCases)
+    private func aBucketOnTheCurrentUTCDayImports(_ shape: Shape) throws {
+        for now in [noon, lastSecond] {
+            let parsed = try VendorUsage.parse(try page(shape, [("2025-08-03", 5)]), now: instant(now))
+            #expect(parsed.days == [VendorDay(day: day("2025-08-03"), tokens: 5)])
+        }
+    }
+
+    @Test(arguments: Shape.allCases)
+    private func aBucketOnTheNextUTCDayIsRefused(_ shape: Shape) throws {
+        let tomorrow = try page(shape, [("2025-08-04", 5)])
+        for now in [noon, lastSecond] {
+            #expect(failure(tomorrow, now: instant(now)) == .futureDay)
+        }
+    }
+
+    @Test(arguments: Shape.allCases)
+    private func aZeroTokenBucketOnTheNextUTCDayIsRefused(_ shape: Shape) throws {
+        let tomorrow = try page(shape, [("2025-08-04", 0)])
+        for now in [noon, lastSecond] {
+            #expect(failure(tomorrow, now: instant(now)) == .futureDay)
+        }
+    }
+
+    @Test(arguments: Shape.allCases)
+    private func aPastDayDoesNotCarryAFutureDayIn(_ shape: Shape) throws {
+        for now in [noon, lastSecond] {
+            let mixed = try page(shape, [("2025-08-01", 5), ("2025-08-04", 5)])
+            #expect(failure(mixed, now: instant(now)) == .futureDay)
+        }
+    }
+
+    @Test(arguments: Shape.allCases)
+    private func anEmptyBucketAfterTodayIsPaddingAndIsDropped(_ shape: Shape) throws {
+        let padded = try page(shape, [("2025-08-01", 5), ("2025-08-03", nil), ("2025-08-04", nil), ("2025-08-05", nil)])
+        for now in [noon, lastSecond] {
+            let parsed = try VendorUsage.parse(padded, now: instant(now))
+            #expect(parsed.days == [
+                VendorDay(day: day("2025-08-01"), tokens: 5),
+                VendorDay(day: day("2025-08-03"), tokens: 0),
+            ])
+        }
+    }
+
+    @Test(arguments: Shape.allCases)
+    private func aFileBothTooOldAndInTheFutureNamesTheFuture(_ shape: Shape) throws {
+        let both = try page(shape, [("2025-05-01", 5), ("2025-08-04", 5)])
+        #expect(failure(both, now: instant(noon)) == .futureDay)
+    }
+
     @Test func theFixedFloorFiresOnlyAboveIt() {
         // 10 percent of 1,000,000 is 100,000, so the fixed floor is the arm.
         let above = VendorUsage.reconcile(file(1_000_000), local: local(899_999), now: after())
@@ -510,6 +590,7 @@ struct VendorUsageTests {
             failure(try editingFirstResult(page) { $0["api_key_id"] = NSNull() }, now: after()),
             failure(try data(twoKeys), now: after()),
             failure(try editingFirstBucket(page) { $0["starting_at"] = "2025-06-01T00:00:00Z" }, now: after()),
+            failure(try editingFirstBucket(page) { $0["starting_at"] = "2025-08-05T00:00:00Z" }, now: after()),
         ]
         for error in samples {
             let text = try #require(error).description
@@ -517,6 +598,8 @@ struct VendorUsageTests {
             #expect(!text.contains("apikey_other"))
             #expect(!text.contains("2025-08-01"))
             #expect(!text.contains("1500"))
+            #expect(!text.contains("2025-08-05"))
         }
+        #expect(samples.last == .futureDay)
     }
 }

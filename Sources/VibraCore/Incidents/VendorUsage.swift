@@ -50,6 +50,8 @@ public enum VendorImportError: Error, Equatable, CustomStringConvertible {
     case noSingleKey
     /// The oldest bucket is older than `VendorUsage.maxAgeDays`.
     case tooOld
+    /// A bucket after the current UTC day has a result row.
+    case futureDay
     /// A total cannot be represented, which no real usage page reaches.
     case countTooLarge
 
@@ -65,6 +67,8 @@ public enum VendorImportError: Error, Equatable, CustomStringConvertible {
             "Every result with usage must name one API key. Fetch the page grouped by api_key_id for your own key."
         case .tooOld:
             "The oldest day in this file is more than \(VendorUsage.maxAgeDays) days old."
+        case .futureDay:
+            "A day in this file is after today (UTC). Fetch a page that ends today or earlier."
         case .countTooLarge:
             "A total in this file is too large to be real usage."
         }
@@ -128,6 +132,7 @@ public enum VendorUsage {
         let isOpenAI = root["object"] as? String == "page"
         let provider: VendorProvider = isOpenAI ? .openai : .anthropic
 
+        let today = UTCDay(date: now)
         var totals: [UTCDay: Int] = [:]
         var keys: Set<String> = []
         for bucket in buckets {
@@ -147,6 +152,12 @@ public enum VendorUsage {
             }
             guard let results = bucket["results"] as? [[String: Any]] else {
                 throw VendorImportError.unrecognisedShape(shape)
+            }
+            // A page lists every interval, empty ones included, so an empty
+            // bucket after today is padding. One with a row cannot have happened.
+            if day > today {
+                if results.isEmpty { continue }
+                throw VendorImportError.futureDay
             }
             var tokens = 0
             for result in results {

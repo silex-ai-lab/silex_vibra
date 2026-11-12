@@ -178,7 +178,9 @@ on.
 **Importing vendor usage.** The window can compare a usage file with this Mac's
 own usage, to spot quota someone else consumed. It needs an organization API
 usage page for exactly one API key. One complete page holds at most 31 days, and
-a file whose oldest day is more than 62 days old is refused. Pro, Max and ChatGPT
+a file whose oldest day is more than 62 days old is refused. So is a file with
+usage on a day after today (UTC); an empty day after today is ignored, because a
+page lists every day in its range. Pro, Max and ChatGPT
 plans appear in no file you can import. You fetch the file in your own terminal
 with your own admin key, and the window shows the command. A day is flagged when
 the vendor counted more than `max(10%, 100,000 tokens)` beyond what this Mac
