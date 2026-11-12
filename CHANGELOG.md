@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1
+
+- **Fix: Vibra builds with Swift 6.1 again.** 0.4.0 compiled with Swift 6.4
+  but not with the Swift 6.1 in Xcode 16 and the macOS 15 Command Line Tools,
+  so `brew install` failed there. Four places in the incident monitor, the
+  notification code and the import now keep main-actor and non-Sendable
+  values where Swift 6.1 requires. Behaviour is unchanged. The `v0.4.0` tag
+  was never released for this reason.
+- **CI.** Every push builds the app and runs the tests on the macOS 15 runners
+  (Swift 6.1.2), Apple Silicon and Intel. Tests that exceeded Swift 6.1's
+  type-check limit are rewritten with the same assertions, and the test runner
+  now launches on a machine with Xcode.
+
 ## 0.4.0
 
 - **Fix: a vendor usage file with usage after today is refused.** A day after
