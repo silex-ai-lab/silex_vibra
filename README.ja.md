@@ -136,7 +136,8 @@ open /Applications/Vibra.app
 `make install` は実行中のコピーを先に終了するので、変更を取り込んだ後に
 再実行しても安全です。
 
-Vibra には Dock アイコンもウィンドウもありません。**メニューバーの項目がアプリのすべてです。**
+Vibra には Dock アイコンがありません。**すべてメニューバーの項目から始まり**、Setup、
+Session Details、Review Agent Activity などのウィンドウはそのメニューから開きます。
 メニューバーの右側で `Vibra`、またはセッションが動いているときは `2▶ 1!` のような
 カウントを探してください。
 

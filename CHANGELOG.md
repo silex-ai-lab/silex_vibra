@@ -9,7 +9,7 @@
   padding, is ignored.
 
 - **Docs: removal instructions say what stays.** `make uninstall` and
-  `brew uninstall` remove only the app. The READMEs, the privacy page and
+  `brew uninstall` remove the installed files, not Vibra's saved data. The READMEs, the privacy page and
   STATUS now name the saved data left behind and the two commands that remove
   it: `rm -rf ~/Library/Application\ Support/Vibra` and
   `defaults delete ai.silexlab.vibra`. The translated READMEs gain Review Agent

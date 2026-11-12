@@ -108,7 +108,7 @@ refer to the 2026-09-20 run.
 ## Verdict
 
 **Usable day to day.** Phases 0, 0b, 1 and P2.1 are closed: Vibra runs
-continuously at 0.0% idle CPU, reports live agent state, alerts when a session
+continuously at under 1% CPU (0.4.0, measured below), reports live agent state, alerts when a session
 wants you, focuses the terminal a session runs in, and produces a rolling
 usage report.
 
@@ -143,20 +143,27 @@ VS Code Copilot Chat, see the table below.)*
 
 ## Measured
 
+Measured **2026-11-11** on 0.4.0, macOS 27.0.1, one run each, with three
+agent sessions writing to disk during the run.
+
 | Metric | Value | Target | |
 |---|---|---|---|
-| Idle CPU | 0.0% | < 2% | ✅ |
-| RSS (running app) | **43–76 MB**, varies between runs | < 60 MB | ⚠️ borderline |
-| Cold start | 0.64s, 13 MB read | — | ✅ |
-| Unchanged refresh | 0.03s, **0 bytes** | 0 bytes | ✅ |
+| CPU, running app | 0.44 s of CPU in 60 s (0.7%) | < 2% | ✅ |
+| RSS, running app | 78 MB | < 60 MB | ⚠️ over |
+| Cold refresh | 7.53 s, 176 MB read, 332 sessions | — | not compared with 0.3.0 on this corpus |
+| Unchanged refresh | **0 bytes** on a frozen copy of the transcripts (2 runs); 22 KB live, the bytes agents appended between refreshes | 0 bytes | ✅ |
 | Tests | 502 in 60 suites | — | ✅ |
-| Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
+| Bundle | 3300 KB (`du -sk`), ad-hoc signed | Developer ID | ⚠️ |
 
-Reproduce with `make bench` and `make test`.
+Reproduce with `make bench` and `make test`. On a machine where agents are
+writing, `make bench` reports the bytes they append; point `VIBRA_HOME` at a
+frozen copy (`cp -Rc`) to measure an unchanged refresh. The 0.2.0 figures were
+idle CPU 0.0%, RSS 43–76 MB, cold start 0.64 s with 13 MB read, and a 632 KB
+bundle, on a smaller corpus.
 
-Two honest notes on these numbers. **RSS is a range, not a figure** — measured
-at 43, 68, 70, 75 and 76 MB across runs; quoting any single value overstates
-the precision, and the <60 MB target is met on some runs and missed on others.
+Two notes from the 0.2.0 measurements still apply. **RSS is a range, not a
+figure**: it was 43, 68, 70, 75 and 76 MB across runs, so the single 0.4.0 value
+above is one sample, not a figure.
 Brief **CPU spikes of 5–12%** are correct behaviour: FSEvents firing a refresh
 when an agent writes to disk. Idle returns to 0.0% immediately.
 
@@ -318,13 +325,17 @@ approval; the certificate is what makes that approval outlive rebuilds.
   `~/.codex/hooks.json`, a Copilot hook, an OpenCode plugin, and replaced the
   Claude Code status line — all of which survived uninstalling its app, and
   kept executing on every tool call. Vibra is a passive reader by design, so
-  removing it leaves no hook behind. Deleting the app leaves only its saved data,
+  removing it leaves no hook behind. Deleting the app leaves its saved data,
   which `rm -rf ~/Library/Application\ Support/Vibra` and
   `defaults delete ai.silexlab.vibra` remove.
-- **Secrets are never read.** `opencode.db` holds auth tokens beside session
-  data, and `~/.claude/sessions/` holds `.key` files beside the JSON. The
-  adapters use read-only access and explicit allowlists, and **canary tests**
-  assert sentinel secrets reach no output. `make test` fails if a canary did
+- **Credential stores are not queried, and secrets are not kept or emitted.**
+  `opencode.db` holds auth tokens beside session data, and `~/.claude/sessions/`
+  holds `.key` files beside the JSON; the adapters open them read-only with
+  explicit column and file allowlists. Some features read more in memory than
+  they keep: incident and Code checks parsing reads raw tool records, and Return
+  to Session in Orca reads the agent's start-up environment, which can hold a
+  hook token, to keep only `ORCA_TERMINAL_HANDLE`. **Canary tests** assert
+  sentinel secrets reach no output. `make test` fails if a canary did
   not run. Both checks are mutation-tested.
 
 ## Known gaps

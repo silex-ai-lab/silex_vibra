@@ -136,7 +136,8 @@ open /Applications/Vibra.app
 `make install`은 실행 중인 복사본을 먼저 종료하므로, 변경 사항을 가져온 뒤
 다시 실행해도 안전합니다.
 
-Vibra에는 Dock 아이콘도 창도 없습니다. **메뉴 막대 항목이 앱의 전부입니다.**
+Vibra에는 Dock 아이콘이 없습니다. **모든 것은 메뉴 막대 항목에서 시작하며**, Setup,
+Session Details, Review Agent Activity 같은 창은 그 메뉴에서 엽니다.
 메뉴 막대 오른쪽에서 `Vibra`를 찾거나, 세션이 살아 있을 때는 `2▶ 1!` 같은
 숫자를 찾으세요.
 

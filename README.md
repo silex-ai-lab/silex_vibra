@@ -139,7 +139,8 @@ open /Applications/Vibra.app
 `make install` quits any running copy first, so you can safely run it again
 after pulling changes.
 
-Vibra has no Dock icon and no window. **The menu bar item is the whole app.**
+Vibra has no Dock icon. **It starts from the menu bar item**, and its windows,
+such as Setup, Session Details and Review Agent Activity, open from that menu.
 Look on the right-hand side of your menu bar for `Vibra`, or for a count such
 as `2▶ 1!` when sessions are live.
 

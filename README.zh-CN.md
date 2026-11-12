@@ -131,7 +131,8 @@ open /Applications/Vibra.app
 
 `make install` 会先退出正在运行的副本，因此拉取更新后可以放心重跑。
 
-Vibra 没有 Dock 图标，也没有窗口。**菜单栏项目就是整个应用。**
+Vibra 没有 Dock 图标。**一切从菜单栏项目开始**，Setup、Session Details、
+Review Agent Activity 等窗口都从这个菜单打开。
 在菜单栏右侧找 `Vibra`，有会话活跃时则是像 `2▶ 1!` 这样的计数。
 
 ### 卸载 Vibra
