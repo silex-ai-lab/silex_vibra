@@ -1,0 +1,41 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build the app bundle
+        run: make app SIGN_IDENTITY=
+      - name: Test
+        run: make test
+      - name: Launch the app
+        # First launch opens Setup, which asks UserNotifications for its
+        # settings; a handler with the wrong isolation traps on Swift 6.1.
+        run: |
+          build/Vibra.app/Contents/MacOS/Vibra &
+          pid=$!
+          sleep 20
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "still running after 20 s"
+            kill "$pid"
+          else
+            wait "$pid"
+            echo "exited early with status $?"
+            exit 1
+          fi

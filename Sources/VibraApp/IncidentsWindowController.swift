@@ -281,15 +281,25 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         importStatus.stringValue = "Reading local usage for the file's days…"
         let gate = importGate
         let monitor = self.monitor
-        Task.detached(priority: .utility) { [weak self] in
-            let outcome = await IncidentImport.run(url: url, now: Date())
-            var applied = false
-            if case .success(let result) = outcome {
-                applied = await monitor.replaceVendorIncidents(
-                    scope: result.scope, with: result.incidents, isCurrent: { gate.isCurrent(generation) })
-            }
-            await MainActor.run { self?.finishImport(outcome, applied: applied, generation: generation) }
+        Task(priority: .utility) { [weak self] in
+            let (outcome, applied) = await Self.importOffMain(
+                url: url, monitor: monitor, gate: gate, generation: generation)
+            self?.finishImport(outcome, applied: applied, generation: generation)
         }
+    }
+
+    /// Nonisolated, so the file read and reconcile run off the main actor while
+    /// the window itself never leaves it.
+    private nonisolated static func importOffMain(
+        url: URL, monitor: IncidentMonitor, gate: ImportGate, generation: Int
+    ) async -> (Result<VendorReconciliation, IncidentImport.Failure>, Bool) {
+        let outcome = await IncidentImport.run(url: url, now: Date())
+        var applied = false
+        if case .success(let result) = outcome {
+            applied = await monitor.replaceVendorIncidents(
+                scope: result.scope, with: result.incidents, isCurrent: { gate.isCurrent(generation) })
+        }
+        return (outcome, applied)
     }
 
     private func finishImport(_ outcome: Result<VendorReconciliation, IncidentImport.Failure>, applied: Bool, generation: Int) {

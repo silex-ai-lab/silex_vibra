@@ -50,7 +50,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         monitor: incidentMonitor,
         store: incidentStore,
         onJump: { [weak self] sessionID in self?.jumpToIncidentSession(sessionID) },
-        onChange: { [weak self] in Task { await self?.refreshIncidentCount() } })
+        onChange: { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in await self.refreshIncidentCount() }
+        })
     private var incidentTask: Task<Void, Never>?
     private var incidentReviewCount = 0
     private var hasBaseline = false
@@ -457,11 +460,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// Replays recent transcripts once at launch, then reads only what changed.
     private func startIncidentMonitor() {
         let monitor = incidentMonitor
-        incidentTask = Task.detached(priority: .utility) { [weak self] in
+        // The poll runs on the monitor's own actor; only the refreshes touch
+        // the main actor.
+        incidentTask = Task(priority: .utility) { [weak self] in
             while !Task.isCancelled {
                 await monitor.poll()
                 await self?.refreshIncidentCount()
-                await MainActor.run { self?.incidentsWindow.refreshIfVisible() }
+                self?.incidentsWindow.refreshIfVisible()
                 try? await Task.sleep(for: .seconds(30))
             }
         }

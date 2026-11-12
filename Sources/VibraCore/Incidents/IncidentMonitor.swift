@@ -122,27 +122,39 @@ public actor IncidentMonitor {
         var extracted: [ExtractedIncident] = []
         var bytes = 0
         if changed {
-            var reading = true
-            while reading {
-                // The read belongs inside the pool too: a Task's thread never
-                // drains one, so Foundation's buffers would pile up for the
-                // whole replay.
-                autoreleasepool {
-                    guard let batch = try? reader.read(url: source.url, from: state.offset) else {
-                        reading = false
-                        return
-                    }
-                    bytes += batch.bytesRead
-                    reading = batch.nextOffset > state.offset
-                    state.offset = batch.nextOffset
-                    extracted += state.extractor.fold(batch.lines)
-                }
-            }
+            (extracted, bytes) = Self.drain(&state, url: source.url, reader: reader)
         }
         state.lastSize = source.size
         state.lastModified = source.modified
         state.ids.formUnion(extracted.map(\.incident.id))
         tracked[source.url] = state
+        return (extracted, bytes)
+    }
+
+    /// Reads `url` from `state.offset` to its end and folds every batch.
+    /// Nonisolated so the pool's closure captures a parameter rather than
+    /// actor-isolated state, which Swift 6.1 refuses to send.
+    private nonisolated static func drain(
+        _ state: inout Tracked, url: URL, reader: IncrementalLineReader
+    ) -> (extracted: [ExtractedIncident], bytes: Int) {
+        var extracted: [ExtractedIncident] = []
+        var bytes = 0
+        var reading = true
+        while reading {
+            // The read belongs inside the pool too: a Task's thread never
+            // drains one, so Foundation's buffers would pile up for the
+            // whole replay.
+            autoreleasepool {
+                guard let batch = try? reader.read(url: url, from: state.offset) else {
+                    reading = false
+                    return
+                }
+                bytes += batch.bytesRead
+                reading = batch.nextOffset > state.offset
+                state.offset = batch.nextOffset
+                extracted += state.extractor.fold(batch.lines)
+            }
+        }
         return (extracted, bytes)
     }
 
