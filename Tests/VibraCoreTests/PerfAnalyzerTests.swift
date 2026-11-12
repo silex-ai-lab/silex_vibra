@@ -163,7 +163,7 @@ struct PerfAnalyzerTests {
         #expect(d2.events == 1)
         #expect(d2.rewrittenTokens == 100_000)
         #expect(d2.dominantCause == .idleOver1h)
-        let expected1: Double = 100_000 * (3.75 - 0.30) / 1_000_000
+        let expected1: Double = 100_000.0 * (3.75 - 0.30) / 1_000_000.0
         #expect(near(d2.suggestion.exposureUSD, expected1))
     }
 
@@ -179,7 +179,7 @@ struct PerfAnalyzerTests {
         #expect(d2.events == 1)
         #expect(d2.rewrittenTokens == 100_000)
         #expect(d2.dominantCause == .other)
-        let expected2: Double = 100_000 * (3.75 - 0.30) / 1_000_000
+        let expected2: Double = 100_000.0 * (3.75 - 0.30) / 1_000_000.0
         #expect(near(d2.suggestion.exposureUSD, expected2))
     }
 
@@ -263,7 +263,7 @@ struct PerfAnalyzerTests {
         let d3 = try explorationBurst(r)
         #expect(d3.bursts == 1)
         #expect(d3.burstTurns == 3)
-        let expected3: Double = 90_000 * 6 * 0.30 / 1_000_000
+        let expected3: Double = 90_000.0 * 6.0 * 0.30 / 1_000_000.0
         #expect(near(d3.suggestion.exposureUSD, expected3))
     }
 
@@ -280,7 +280,7 @@ struct PerfAnalyzerTests {
         )
         let r = report([source(samples)])
         let d3 = try explorationBurst(r)
-        let expected4: Double = 7 * 50_000 * 0.30 / 1_000_000
+        let expected4: Double = 7.0 * 50_000.0 * 0.30 / 1_000_000.0
         #expect(near(d3.suggestion.exposureUSD, expected4))
     }
 
@@ -297,7 +297,7 @@ struct PerfAnalyzerTests {
         )
         let r = report([source(samples)])
         let d3 = try explorationBurst(r)
-        let expected5: Double = (5 * 20_000 + 7 * 70_000) * 0.30 / 1_000_000
+        let expected5: Double = (5.0 * 20_000.0 + 7.0 * 70_000.0) * 0.30 / 1_000_000.0
         #expect(near(d3.suggestion.exposureUSD, expected5))
     }
 
@@ -324,7 +324,7 @@ struct PerfAnalyzerTests {
         let d3 = try explorationBurst(r)
         #expect(d3.bursts == 1)
         #expect(d3.burstTurns == 3)
-        let expected6: Double = (3 * 90_000 * 1.50 / 1_000_000 + 3 * 90_000 * 0.30 / 1_000_000)
+        let expected6: Double = (3.0 * 90_000.0 * 1.50 / 1_000_000.0 + 3.0 * 90_000.0 * 0.30 / 1_000_000.0)
         #expect(near(d3.suggestion.exposureUSD, expected6))
         #expect(d3.suggestion.isLead)
     }
@@ -388,9 +388,9 @@ struct PerfAnalyzerTests {
         #expect(d1.turnsAboveFloor == 60)
         #expect(d1.peakContext == 250_000)
         #expect(d1.floorTokens == 200_000)
-        let expected7: Double = 60 * (250_000 - 200_000) * 0.30 / 1_000_000
+        let expected7: Double = 60.0 * (250_000.0 - 200_000.0) * 0.30 / 1_000_000.0
         #expect(near(d1.suggestion.exposureUSD, expected7))
-        let expected8: Double = 60 * 250_000 * 0.30 / 1_000_000
+        let expected8: Double = 60.0 * 250_000.0 * 0.30 / 1_000_000.0
         #expect(near(d1.suggestion.sessionValueUSD, expected8))
         #expect(d1.suggestion.isLead)
     }
@@ -404,7 +404,7 @@ struct PerfAnalyzerTests {
         let r = report([source(samples)])
         let d1 = try contextCarry(r)
         #expect(d1.turnsAboveFloor == 60)
-        let expected9: Double = 60 * (10_000 * 3.75 + 40_000 * 3.0) / 1_000_000
+        let expected9: Double = 60.0 * (10_000.0 * 3.75 + 40_000.0 * 3.0) / 1_000_000.0
         #expect(near(d1.suggestion.exposureUSD, expected9))
     }
 
@@ -417,9 +417,9 @@ struct PerfAnalyzerTests {
         )
         let r = report([source(samples)])
         let d1 = try contextCarry(r)
-        let expected10: Double = 50 * (250_000 - 200_000) * 0.30 / 1_000_000
+        let expected10: Double = 50.0 * (250_000.0 - 200_000.0) * 0.30 / 1_000_000.0
         #expect(near(d1.suggestion.exposureUSD, expected10))
-        let expected11: Double = (400 * 190_000 + 50 * 250_000) * 0.30 / 1_000_000
+        let expected11: Double = (400.0 * 190_000.0 + 50.0 * 250_000.0) * 0.30 / 1_000_000.0
         #expect(near(d1.suggestion.sessionValueUSD, expected11))
         #expect(!d1.suggestion.isLead)
     }
@@ -482,7 +482,7 @@ struct PerfAnalyzerTests {
         #expect(d2.events == 1)
         #expect(d2.rewrittenTokens == 200_000)
         #expect(d2.dominantCause == .idleOver1h)
-        let expected12: Double = 200_000 * (3.75 - 0.30) / 1_000_000
+        let expected12: Double = 200_000.0 * (3.75 - 0.30) / 1_000_000.0
         #expect(near(d2.suggestion.exposureUSD, expected12))
     }
 
