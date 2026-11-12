@@ -59,7 +59,9 @@ final class UserNotificationSink: NotificationSink {
 
     /// Asks macOS. The answer may be a refusal: see `requestAuthorizationIfNeeded`.
     @MainActor func requestAuthorization() async -> NotificationAuthorization {
-        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            center.requestAuthorization(options: [.alert, .sound]) { _, _ in done.resume() }
+        }
         return await authorizationSummary()
     }
 
@@ -69,11 +71,8 @@ final class UserNotificationSink: NotificationSink {
         content.title = "Vibra"
         content.body = "Test notification. This is how Vibra tells you a session is waiting."
         let request = UNNotificationRequest(identifier: "vibra.setup.test", content: content, trigger: nil)
-        do {
-            try await center.add(request)
-            return true
-        } catch {
-            return false
+        return await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
+            center.add(request) { error in done.resume(returning: error == nil) }
         }
     }
 
