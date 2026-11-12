@@ -1,6 +1,6 @@
 # Plan: release 0.4.0
 
-Plan version 0.4, 2026-11-11. Branch `release/0.4.0`, base 839b6d8 (the head
+Plan version 0.5, 2026-11-11. Branch `release/0.4.0`, base 839b6d8 (the head
 of PR #8, identical in code to what `main` gets once the landing PR merges).
 
 ## Why this is the next task
@@ -59,7 +59,7 @@ Record paths (reviewed as evidence, not as the implementation): this plan.
 | # | Decision | Why |
 |---|---|---|
 | D1 | Version 0.4.0, git tag `v0.4.0`, matching the tap's `version "0.3.0"` and tag `v0.3.0` | Semver minor: new features, no removed ones. The dated tags (2026-09-2x) predate the tap and are not continued |
-| D2 | A bucket whose UTC day is after the current UTC day refuses the whole file with a new `VendorImportError.futureDay`, like `partialPage` and `tooOld`. A zero-token future bucket is refused too. The future-day check runs before the age check, so a file that is both too old and future-dated throws `.futureDay`. The error text names no day and no value from the file: "A day in this file is after today (UTC). Fetch a page that ends today or earlier." | One policy for every malformed page: refuse, never compare part of it. A bucket's start is an absolute instant (Anthropic `starting_at` ISO 8601, OpenAI `start_time` Unix seconds), and Vibra buckets it by UTC day, so a day after today's has not happened. `reconcile` today compares such a day with zero local tokens (`VendorUsage.swift:292` only skips the current day). Keeping the file's values out of error text is the contract at `VendorUsage.swift:42-43` |
+| D2 | A bucket whose UTC day is after the current UTC day and that has at least one result row refuses the whole file with a new `VendorImportError.futureDay`, like `partialPage` and `tooOld`. A future bucket whose row counts zero tokens is refused too. A future bucket with an empty `results` list is padding and is dropped, neither refused nor compared (amended in v0.5, see below). The future-day check runs before the age check, so a file that is both too old and future-dated throws `.futureDay`. The error text names no day and no value from the file: "A day in this file is after today (UTC). Fetch a page that ends today or earlier." | One policy for every malformed page: refuse, never compare part of it. A bucket's start is an absolute instant (Anthropic `starting_at` ISO 8601, OpenAI `start_time` Unix seconds), and Vibra buckets it by UTC day, so a day after today's has not happened. `reconcile` today compares such a day with zero local tokens (`VendorUsage.swift:292` only skips the current day). Keeping the file's values out of error text is the contract at `VendorUsage.swift:42-43` |
 | D3 | ROADMAP P3.3 is renamed "Homebrew distribution" and marked "Done (source formula)". A prebuilt, signed cask still needs P3.1. The row records why the "depends on P3.1" rule does not apply to a source formula | The formula builds from source on the user's Mac, so no unsigned binary is distributed. Its caveat says the build is ad-hoc signed |
 | D4 | ROADMAP P3.2 Sparkle becomes "Cut". Tap users update with `brew upgrade`; source installs update with `git pull` and `make install` | P1.2 decided "no network, ever". An updater is network egress by definition. This is a product decision the user can overturn |
 | D5 | Translations carry the same claims as the English README, not a word-for-word copy. Every claim the English README makes about features, jump-back targets, privacy and removal appears in each translation | The readme-restyle-i18n convention. Each reviewer reads the translated privacy and removal text against the English |
@@ -73,7 +73,7 @@ Each task ends in a check. Commits are small and conventional.
 
 | # | Owner | Depends on | Task | Files | Acceptance |
 |---|---|---|---|---|---|
-| 1 | planner | — | Failing tests first, then refuse future-dated buckets | `Sources/VibraCore/Incidents/VendorUsage.swift`, `Tests/VibraCoreTests/VendorUsageTests.swift`, `docs/features.md` import paragraph | For each shape (Anthropic, OpenAI), with `now` at 12:00Z and again at 23:59:59Z: a bucket on the current UTC day imports, a bucket on the next UTC day throws `.futureDay`, a zero-token next-day bucket throws `.futureDay`, and a file mixing a past day with a next-day bucket throws `.futureDay` (no partial import). The new tests fail on the base, and the commit message quotes the assertion's diff. `errorTextNeverEchoesAKeyOrAValue` covers `.futureDay` and passes. A file both too old and future-dated throws `.futureDay`. `features.md` names the refusal |
+| 1 | planner | — | Failing tests first, then refuse future-dated buckets | `Sources/VibraCore/Incidents/VendorUsage.swift`, `Tests/VibraCoreTests/VendorUsageTests.swift`, `docs/features.md` import paragraph | For each shape (Anthropic, OpenAI), with `now` at 12:00Z and again at 23:59:59Z: a bucket on the current UTC day imports, a bucket on the next UTC day throws `.futureDay`, a zero-token next-day row throws `.futureDay`, empty next-day buckets after a past day are dropped and the file imports, and a file mixing a past day with a next-day bucket throws `.futureDay` (no partial import). The new tests fail on the base, and the commit message quotes the assertion's diff. `errorTextNeverEchoesAKeyOrAValue` covers `.futureDay` and passes. A file both too old and future-dated throws `.futureDay`. `features.md` names the refusal |
 | 2 | planner | — | English README | `README.md` | "More it can do" gains a Code checks bullet linking `docs/features.md`, which must not contradict "It never says a task is done", and a Review Agent Activity bullet. Both name "Claude Code and Codex". "To remove it completely" becomes the D6a "Removing Vibra" block |
 | 3 | deepseek | 2 | Translated READMEs | `README.zh-CN.md`, `README.ja.md`, `README.ko.md`, `tools/readme-anchors.sh` | Each translation has the Review Agent Activity table row, both "More it can do" bullets, Orca in the jump-back list, the whole `incidents.json` privacy bullet (hashed ids and answers stored, a vendor report is a local draft only you send) and the D6a removal text. `tools/readme-anchors.sh` (executable, run as `tools/readme-anchors.sh` from the repo root) checks each of the four READMEs for the fixed strings `Review Agent Activity`, `Code checks`, `Orca`, `incidents.json`, `rm -rf ~/Library/Application\ Support/Vibra`, `defaults delete ai.silexlab.vibra`, `⌘U`, `⌘Y`, prints a table, and exits non-zero on any gap |
 | 4 | planner | — | ROADMAP, STATUS, privacy | `docs/ROADMAP.md`, `docs/STATUS.md`, `docs/privacy.md` | ROADMAP P3.2 and P3.3 rows and sections per D3 and D4. STATUS: (a) a new 0.4.0 entry, placed as the page's newest version entry, names the version, lists the four changes and the future-day fix, and carries the verification Task 6 measures with its date, macOS and Swift versions, like the older entries; (b) the 0.3.0 entry keeps its 2026-09-26 record and Phase 4 content, "(unreleased; branch …)" becomes "released 2026-11-07, tag `v0.3.0`", and one clause says the performance and token-count work in the same tag was verified in its own plan; (c) the capability table gains P4.6 and P4.7 rows and its P3 rows match ROADMAP; (d) the Verdict no longer says everything remaining is blocked on P3.x; (e) "Five adapters" becomes six, naming Hermes with its fixture-only states; (f) the Tests row carries Task 6's measured "N tests in M suites", taken from the `Test run with N tests in M suites passed` line in `build/test.log`. (g) `docs/STATUS.md:304` ("removing it is deleting one `.app`") and `docs/privacy.md:7-9` name the two data-removal commands. Sweep check: `grep -n -i -E "deleting one|remove it completely|whole uninstall" README*.md docs/*.md` finds no line outside `docs/PLAN-*` and `docs/development.md:116` (which is about the local signing key) that calls deleting the app complete removal |
@@ -169,3 +169,27 @@ removal block says to quit Vibra first and leaves no "remove it completely"
 wording, STATUS's removal sentence is found by phrase, feature names stay in
 English in the translations as they already do, the Homebrew paragraph gets a
 one-line pointer to the block, and the tap caveats are checked in publishing.
+
+### v0.5 amendment after the plan gate (needs confirmation)
+
+While implementing Task 1 the planner read Anthropic's reference for
+`GET /v1/organizations/usage_report/messages` (platform.claude.com, fetched
+2026-11-11). `data` is "one per `bucket_width` interval, including intervals with
+no usage (their `results` list is empty)", and the reference does not state that
+intervals stop at the current time. The import window's own example command asks
+for `starting_at=2026-11-01&limit=31`, a range that runs past today. Under v0.4's
+D2 an empty bucket after today would refuse the exact page Vibra tells the user to
+fetch (inferred risk, not observed: no real page was fetched). v0.5 keeps every
+refusal v0.4 pinned for a bucket with a row, including a zero-token row, and drops
+an empty future bucket instead. One test per shape pins the padding case.
+Implemented in cb78085.
+
+### Plan gate on v0.5: passed
+
+- Codex (`codex-plan-r5`): PLAN-APPROVED
+- DeepSeek (`deepseek-plan-r5`): PLAN-APPROVED
+- PLANNER (claude): PLAN-APPROVED
+
+DeepSeek's round-5 suggestions are applied in code: a too-old file with only
+empty future days stays `.tooOld` (test added), and the padding guard was shown
+to be pinned by removing it (both padding tests fail, 4838111).
