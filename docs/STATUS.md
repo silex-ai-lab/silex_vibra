@@ -108,7 +108,8 @@ refer to the 2026-09-20 run.
 ## Verdict
 
 **Usable day to day.** Phases 0, 0b, 1 and P2.1 are closed: Vibra runs
-continuously at under 1% CPU (0.4.0, measured below), reports live agent state, alerts when a session
+continuously (0.4.0 averaged 0.7% CPU over one 60 s sample with agents
+writing, measured below), reports live agent state, alerts when a session
 wants you, focuses the terminal a session runs in, and produces a rolling
 usage report.
 
@@ -143,7 +144,7 @@ VS Code Copilot Chat, see the table below.)*
 
 ## Measured
 
-Measured **2026-11-11** on 0.4.0, macOS 27.0.1, one run each, with three
+Measured **2026-11-11** on 0.4.0, macOS 27.0.1, one run each unless noted, with three
 agent sessions writing to disk during the run.
 
 | Metric | Value | Target | |
@@ -157,15 +158,15 @@ agent sessions writing to disk during the run.
 
 Reproduce with `make bench` and `make test`. On a machine where agents are
 writing, `make bench` reports the bytes they append; point `VIBRA_HOME` at a
-frozen copy (`cp -Rc`) to measure an unchanged refresh. The 0.2.0 figures were
-idle CPU 0.0%, RSS 43–76 MB, cold start 0.64 s with 13 MB read, and a 632 KB
-bundle, on a smaller corpus.
+frozen copy (`cp -Rc`) to measure an unchanged refresh. The table before 0.4.0
+showed idle CPU 0.0%, RSS 43–76 MB, cold start 0.64 s with 13 MB read, and a
+632 KB bundle, on a smaller corpus; the 0.2.0 verification below measured 42–46
+MB RSS.
 
-Two notes from the 0.2.0 measurements still apply. **RSS is a range, not a
-figure**: it was 43, 68, 70, 75 and 76 MB across runs, so the single 0.4.0 value
-above is one sample, not a figure.
-Brief **CPU spikes of 5–12%** are correct behaviour: FSEvents firing a refresh
-when an agent writes to disk. Idle returns to 0.0% immediately.
+Two notes from those earlier measurements, not rechecked on 0.4.0. **RSS was a
+range**: 43, 68, 70, 75 and 76 MB across runs, so the single 0.4.0 value above
+is one sample. **CPU spiked to 5–12%** when an agent wrote to disk and FSEvents
+fired a refresh, and returned to 0.0% idle right after.
 
 ## 0.2.0 — 2026-09-21, macOS 15.7.3 / Swift 6.1.2
 
@@ -336,7 +337,8 @@ approval; the certificate is what makes that approval outlive rebuilds.
   to Session in Orca reads the agent's start-up environment, which can hold a
   hook token, to keep only `ORCA_TERMINAL_HANDLE`. **Canary tests** assert
   sentinel secrets reach no output. `make test` fails if a canary did
-  not run. Both checks are mutation-tested.
+  not run. The canary assertions and the did-not-run check are both
+  mutation-tested.
 
 ## Known gaps
 
