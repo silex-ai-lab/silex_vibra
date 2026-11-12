@@ -219,3 +219,67 @@ Both seats rejected revision f1cd9dd.
 | STATUS "runs continuously at under 1% CPU" overstates one 60 s sample; the 5–12% spike note is not rechecked (Codex 1) | The Verdict states the 0.7% average over one 60 s sample with agents writing; the spike and RSS notes are labelled as earlier measurements not rechecked on 0.4.0 |
 | The 43–76 MB RSS range is attributed to 0.2.0, whose verification measured 42–46 MB (DeepSeek 1) | Attributed to the table before 0.4.0; the 0.2.0 figure is named separately |
 | Non-blocking, folded in: "one run each unless noted"; publishing steps ordered so the GitHub release follows the tap merge; the two mutation-tested checks named (DeepSeek) | STATUS, Publishing step 2 |
+
+### Code gate: passed on revision 5262b12d8ff8e0f775de08e4f49e3660bb323b14 (base 839b6d8, HEAD 8e95a04)
+
+- DeepSeek (`deepseek-impl-r3`): IMPL-APPROVED
+- Codex (`codex-impl-r3`): IMPL-APPROVED
+- PLANNER (claude): IMPL-APPROVED
+
+Round-3 non-blocking notes from DeepSeek (Task 1 row wording, Setup also opening at first launch, the probe file header, citing the mutation run for the did-not-run check) are left for a later change, so the approved revision stays unchanged. Publishing waits for the user.
+
+## Dispatch ledger
+
+```
+2026-11-12T06:22:12Z	deepseek-plan-r1	deepseek	plan v0.1 a9e7ac64c22bc51a	sent
+2026-11-12T06:22:14Z	codex-plan-r1	codex	plan v0.1 a9e7ac64c22bc51a	sent
+2026-11-12T06:22:20Z	deepseek-plan-r1	deepseek	plan v0.1	delivered
+2026-11-12T06:22:20Z	codex-plan-r1	codex	plan v0.1	delivered
+2026-11-12T06:22:33Z	deepseek-plan-r1	deepseek	access external dir $SCRATCH/*	question
+2026-11-12T06:22:33Z	deepseek-plan-r1	deepseek	allow once $SCRATCH (standing authorization)	answered
+2026-11-12T06:24:18Z	codex-plan-r1	codex	plan v0.1	verdict PLAN-REJECTED
+2026-11-12T06:29:57Z	deepseek-plan-r2	deepseek	plan v0.2 c0dd748914069674	sent
+2026-11-12T06:29:59Z	codex-plan-r2	codex	plan v0.2 c0dd748914069674	sent
+2026-11-12T06:30:06Z	deepseek-plan-r1	deepseek	plan v0.1	verdict PLAN-REJECTED
+2026-11-12T06:30:06Z	deepseek-plan-r2	deepseek	plan v0.2	delivered
+2026-11-12T06:30:06Z	codex-plan-r2	codex	plan v0.2	delivered
+2026-11-12T06:30:50Z	codex-plan-r2	codex	plan v0.2	verdict PLAN-APPROVED
+2026-11-12T06:33:32Z	deepseek-plan-r2	deepseek	plan v0.2	verdict PLAN-REJECTED
+2026-11-12T06:33:32Z	deepseek-plan-r3	deepseek	plan v0.3 90a89a1f8d7941f5	sent
+2026-11-12T06:33:34Z	codex-plan-r3	codex	plan v0.3 90a89a1f8d7941f5	sent
+2026-11-12T06:33:34Z	deepseek-plan-r3	deepseek	plan v0.3	delivered
+2026-11-12T06:33:34Z	codex-plan-r3	codex	plan v0.3	delivered
+2026-11-12T06:34:25Z	codex-plan-r3	codex	plan v0.3	verdict PLAN-REJECTED
+2026-11-12T06:35:40Z	deepseek-plan-r3	deepseek	plan v0.3	verdict PLAN-APPROVED
+2026-11-12T06:35:40Z	deepseek-plan-r4	deepseek	plan v0.4 dfd6331dcd4351a4	sent
+2026-11-12T06:35:42Z	codex-plan-r4	codex	plan v0.4 dfd6331dcd4351a4	sent
+2026-11-12T06:35:42Z	deepseek-plan-r4	deepseek	plan v0.4	delivered
+2026-11-12T06:35:42Z	codex-plan-r4	codex	plan v0.4	delivered
+2026-11-12T06:36:26Z	codex-plan-r4	codex	plan v0.4	verdict PLAN-APPROVED
+2026-11-12T06:37:41Z	deepseek-plan-r4	deepseek	plan v0.4	verdict PLAN-APPROVED
+2026-11-12T06:38:16Z	deepseek-task3-a1	deepseek	base c4dbd91	sent
+2026-11-12T06:41:21Z	codex-plan-r5	codex	plan v0.5 c38c2ed83940a4bc	sent
+2026-11-12T06:41:21Z	codex-plan-r5	codex	plan v0.5	delivered
+2026-11-12T06:42:22Z	codex-plan-r5	codex	plan v0.5	verdict PLAN-APPROVED
+2026-11-12T06:43:16Z	deepseek-task3-a1	deepseek	base c4dbd91	done succeeded
+2026-11-12T06:43:16Z	deepseek-plan-r5	deepseek	plan v0.5	sent
+2026-11-12T06:45:28Z	deepseek-plan-r5	deepseek	plan v0.5	verdict PLAN-APPROVED
+2026-11-12T06:47:50Z	deepseek-impl-r1	deepseek	base 839b6d8 rev 40d6aab	sent
+2026-11-12T06:47:51Z	codex-impl-r1	codex	base 839b6d8 rev 40d6aab	sent
+2026-11-12T06:47:51Z	deepseek-impl-r1	deepseek	rev 40d6aab	delivered
+2026-11-12T06:47:51Z	codex-impl-r1	codex	rev 40d6aab	delivered
+2026-11-12T06:54:16Z	codex-impl-r1	codex	rev 40d6aab	verdict IMPL-REJECTED
+2026-11-12T06:57:13Z	deepseek-impl-r1	deepseek	rev 40d6aab	verdict IMPL-REJECTED
+2026-11-12T06:57:26Z	deepseek-impl-r2	deepseek	base 839b6d8 rev f1cd9dd	sent
+2026-11-12T06:57:28Z	codex-impl-r2	codex	base 839b6d8 rev f1cd9dd	sent
+2026-11-12T06:57:28Z	deepseek-impl-r2	deepseek	rev f1cd9dd	delivered
+2026-11-12T06:57:28Z	codex-impl-r2	codex	rev f1cd9dd	delivered
+2026-11-12T06:58:50Z	codex-impl-r2	codex	rev f1cd9dd	verdict IMPL-REJECTED
+2026-11-12T07:00:02Z	deepseek-impl-r2	deepseek	rev f1cd9dd	verdict IMPL-REJECTED
+2026-11-12T07:00:03Z	deepseek-impl-r3	deepseek	base 839b6d8 rev 5262b12	sent
+2026-11-12T07:00:05Z	codex-impl-r3	codex	base 839b6d8 rev 5262b12	sent
+2026-11-12T07:00:05Z	deepseek-impl-r3	deepseek	rev 5262b12	delivered
+2026-11-12T07:00:05Z	codex-impl-r3	codex	rev 5262b12	delivered
+2026-11-12T07:01:38Z	deepseek-impl-r3	deepseek	rev 5262b12	verdict IMPL-APPROVED
+2026-11-12T07:01:58Z	codex-impl-r3	codex	rev 5262b12	verdict IMPL-APPROVED
+```
