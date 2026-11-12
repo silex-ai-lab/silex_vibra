@@ -97,8 +97,8 @@ Both this repository and the official tap are public. No GitHub account,
 invitation, or repository access approval is needed.
 
 Apple Silicon and Intel Macs are supported. CI builds, tests and launches the
-app on every push on macOS 15 with Swift 6.1.2, on both. Check `swift --version` before
-installing. If Swift is missing, run `xcode-select --install`. If it is older
+app on every push, on macOS 15 with Swift 6.1.2, on both Apple Silicon and
+Intel. Check `swift --version` before installing. If Swift is missing, run `xcode-select --install`. If it is older
 than Swift 6.1, update the Command Line Tools through Software Update.
 
 With [Homebrew](https://brew.sh), macOS 14 or later, and Swift 6.1 or later:

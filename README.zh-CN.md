@@ -92,7 +92,7 @@ Vibra 是一个住在 Mac 菜单栏里的免费小应用。它替你盯着所有
 任何人都可以依据 [Apache-2.0 许可证](LICENSE) 免费安装和使用 Vibra。
 本仓库和官方 tap 均为公开仓库，不需要 GitHub 账号、邀请或仓库访问授权。
 
-支持 Apple Silicon 和 Intel Mac。每次推送，CI 都会在 macOS 15、Swift 6.1.2 上，分别用 Apple Silicon 和 Intel 构建、测试并启动应用。安装前请运行 `swift --version`，确认版本为 Swift 6.1 或更高。
+支持 Apple Silicon 和 Intel Mac。每次推送，CI 都会在 macOS 15、Swift 6.1.2 上，分别在 Apple Silicon 和 Intel 机器上构建、测试并启动应用。安装前请运行 `swift --version`，确认版本为 Swift 6.1 或更高。
 如果没有 Swift，请先运行 `xcode-select --install`；如果版本过旧，请通过“软件更新”更新 Command Line Tools。
 
 已安装 [Homebrew](https://brew.sh)，并具备 macOS 14 或更高版本及 Swift 6.1 或更高版本时：
