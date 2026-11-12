@@ -27,7 +27,6 @@ struct PerfAnalyzerTests {
     private var now: Date { date("2026-11-03T21:00:00Z") }
     private var window: ReportWindow { ReportWindow(now: now, days: 7, calendar: calendar) }
 
-    /// Minutes after the fixture's day start, one day before `now`.
     /// Concatenates parts that each type-check alone; one long `+` chain of
     /// mapped ranges exceeds Swift 6.1's type-checking time limit.
     private func joined(_ parts: [UsageSample]...) -> [UsageSample] { parts.flatMap { $0 } }
@@ -38,6 +37,7 @@ struct PerfAnalyzerTests {
         return abs(value - expected) < 1e-9
     }
 
+    /// Minutes after the fixture's day start, one day before `now`.
     private func at(_ minutes: Double) -> Date { now.addingTimeInterval(-86_400 + minutes * 60) }
 
     /// Nine days before `now`: outside the seven-day window.

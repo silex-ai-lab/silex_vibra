@@ -2,14 +2,16 @@
 
 ## 0.4.1
 
-- **Fix: Vibra builds with Swift 6.1 again.** 0.4.0 compiled with Swift 6.4
-  but not with the Swift 6.1 in Xcode 16 and the macOS 15 Command Line Tools,
-  so `brew install` failed there. Four places in the incident monitor, the
-  notification code and the import now keep main-actor and non-Sendable
-  values where Swift 6.1 requires. Behaviour is unchanged. The `v0.4.0` tag
-  was never released for this reason.
-- **CI.** Every push builds the app and runs the tests on the macOS 15 runners
-  (Swift 6.1.2), Apple Silicon and Intel. Tests that exceeded Swift 6.1's
+- **Fix: Vibra builds with Swift 6.1.** 0.4.0 compiled with Swift 6.4 but not
+  with Swift 6.1.2, the compiler on GitHub's macOS 15 runners, where the
+  Homebrew tap's CI build failed. Seven sites in the incident monitor, the
+  menu controller, the incidents window and the notification code now keep
+  main-actor and non-Sendable values where Swift 6.1 requires, and the
+  notification handlers are `@Sendable` so they cannot trap when the system
+  calls them on its own queue. Behaviour is unchanged. The `v0.4.0` tag was
+  never released for this reason.
+- **CI.** Every push builds the app, runs the tests and launches the app on
+  the macOS 15 runners (Swift 6.1.2), Apple Silicon and Intel. Tests that exceeded Swift 6.1's
   type-check limit are rewritten with the same assertions, and the test runner
   now launches on a machine with Xcode.
 

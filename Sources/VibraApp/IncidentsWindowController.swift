@@ -281,7 +281,7 @@ final class IncidentsWindowController: NSObject, RenderableWindow, NSTableViewDa
         importStatus.stringValue = "Reading local usage for the file's days…"
         let gate = importGate
         let monitor = self.monitor
-        Task { [weak self] in
+        Task(priority: .utility) { [weak self] in
             let (outcome, applied) = await Self.importOffMain(
                 url: url, monitor: monitor, gate: gate, generation: generation)
             self?.finishImport(outcome, applied: applied, generation: generation)

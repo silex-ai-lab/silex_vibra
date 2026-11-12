@@ -2,8 +2,8 @@
 
 **0.4.1** (2026-11-12). 0.4.0 plus a build fix: 0.4.0 did not compile with
 Swift 6.1, which the macOS 15 Homebrew runners use. CI now builds and tests
-every push on macOS 15 (Swift 6.1.2), Apple Silicon and Intel, and both pass
-502 tests.
+every push on macOS 15 (Swift 6.1.2), Apple Silicon and Intel: both pass 502
+tests and keep the launched app running for 20 seconds.
 
 **0.4.0** (tagged, not released; plan
 [PLAN-2026-11-11-release-0.4.0.md](PLAN-2026-11-11-release-0.4.0.md)). Adds,

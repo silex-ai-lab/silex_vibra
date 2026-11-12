@@ -462,7 +462,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let monitor = incidentMonitor
         // The poll runs on the monitor's own actor; only the refreshes touch
         // the main actor.
-        incidentTask = Task { [weak self] in
+        incidentTask = Task(priority: .utility) { [weak self] in
             while !Task.isCancelled {
                 await monitor.poll()
                 await self?.refreshIncidentCount()

@@ -45,9 +45,12 @@ final class UserNotificationSink: NotificationSink {
     /// Whether macOS will show Vibra's notifications, as the setup window words it.
     @MainActor func authorizationSummary() async -> NotificationAuthorization {
         // Only the status crosses back: Swift 6.1 refuses to send the
-        // non-Sendable settings object out of the async method.
+        // non-Sendable settings object out of the async method. Each handler
+        // is `@Sendable` because UserNotifications calls it on its own queue,
+        // and on Swift 6.1 a handler written in a main-actor method otherwise
+        // inherits that isolation and traps (see main.swift).
         let status = await withCheckedContinuation { (done: CheckedContinuation<UNAuthorizationStatus, Never>) in
-            center.getNotificationSettings { done.resume(returning: $0.authorizationStatus) }
+            center.getNotificationSettings { @Sendable settings in done.resume(returning: settings.authorizationStatus) }
         }
         switch status {
         case .authorized, .provisional, .ephemeral: return .allowed
@@ -60,7 +63,7 @@ final class UserNotificationSink: NotificationSink {
     /// Asks macOS. The answer may be a refusal: see `requestAuthorizationIfNeeded`.
     @MainActor func requestAuthorization() async -> NotificationAuthorization {
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            center.requestAuthorization(options: [.alert, .sound]) { _, _ in done.resume() }
+            center.requestAuthorization(options: [.alert, .sound]) { @Sendable _, _ in done.resume() }
         }
         return await authorizationSummary()
     }
@@ -72,7 +75,7 @@ final class UserNotificationSink: NotificationSink {
         content.body = "Test notification. This is how Vibra tells you a session is waiting."
         let request = UNNotificationRequest(identifier: "vibra.setup.test", content: content, trigger: nil)
         return await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
-            center.add(request) { error in done.resume(returning: error == nil) }
+            center.add(request) { @Sendable error in done.resume(returning: error == nil) }
         }
     }
 
