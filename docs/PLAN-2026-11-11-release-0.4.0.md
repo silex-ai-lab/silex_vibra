@@ -193,3 +193,18 @@ Implemented in cb78085.
 DeepSeek's round-5 suggestions are applied in code: a too-old file with only
 empty future days stays `.tooOld` (test added), and the padding guard was shown
 to be pinned by removing it (both padding tests fail, 4838111).
+
+### Code gate round 1 → changes
+
+Both seats rejected revision 40d6aab.
+
+| Defect (who) | Change |
+|---|---|
+| READMEs in four languages say Vibra has no window (Codex 1, DeepSeek 2) | All four now say it starts from the menu bar item and its windows open from that menu |
+| STATUS "Secrets are never read" is false: Orca reads the start-up environment, incident and Code checks parsing read raw tool records (Codex 2, DeepSeek 1) | Reworded to "credential stores are not queried, secrets are not kept or emitted", naming both in-memory reads |
+| STATUS Measured table and Verdict present 0.2.0 figures as current (Codex 3, DeepSeek 3) | Re-measured 0.4.0 on 2026-11-11 with conditions; 0.2.0 figures kept as labelled history. `make bench` live read 22 KB on the warm pass while three agents wrote; on an APFS clone of the transcripts (`VIBRA_HOME`) it read 0 bytes in 2 runs. Cold refresh 7.53 s is not compared with 0.3.0 |
+| Release note says every new test failed on the base (DeepSeek 4) | It now says the refusal tests were red on the base (15 issues) and the padding and precedence tests are pinned by the guard-removal run. Task 1's "the new tests fail on the base" is read the same way: the refusal tests were red on the base; `anEmptyBucketAfterTodayIsPaddingAndIsDropped` and `aTooOldFileWithOnlyEmptyFutureDaysIsTooOld` were added with or after the fix and shown to fail with the guard removed |
+| Non-blocking, folded in: `brew uninstall` also removes `bin/vibra`; "leaves only its saved data"; `brew upgrade` before the tap moves; findings limited to Claude Code (DeepSeek) | CHANGELOG, STATUS, release note |
+| Non-blocking, declined: "Both checks are mutation-tested" ambiguity (DeepSeek) | The sentence follows the canary assertion and the did-not-run check, unchanged from before this release |
+
+Publishing order follows from the release note: the tap PR merges before the GitHub release is published.
