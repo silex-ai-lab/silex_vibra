@@ -56,6 +56,10 @@ public protocol AgentAdapter: Sendable {
     /// Every transcript that belongs to `session`: its own and its subagents'.
     func evidenceSources(for session: Session) -> [URL]
 
+    /// A fresh per-transcript extractor for the incident monitor, or nil when
+    /// this adapter has no transcript the monitor can read.
+    func incidentExtractor() -> (any IncidentExtractor)?
+
     /// Questions from a database store since `cutoff`. History window only.
     func storedQuestions(since cutoff: Date) -> [QuestionRecord]
 
@@ -86,6 +90,9 @@ public extension AgentAdapter {
 
     /// Default: no evidence transcripts.
     func evidenceSources(for session: Session) -> [URL] { [] }
+
+    /// Default: not monitored.
+    func incidentExtractor() -> (any IncidentExtractor)? { nil }
 
     /// Default: no stored history.
     func storedQuestions(since cutoff: Date) -> [QuestionRecord] { [] }

@@ -57,6 +57,7 @@ on all your agent sessions and tells you as soon as one of them needs you.
 | 🔎 You hunt through tabs for the right one | Click the row or the notification to jump to its terminal tab or app window. |
 | 👀 You can't tell which agents are still busy | The menu bar shows it at a glance. `2▶` means two are working, `2!` means two need you. |
 | 🧾 You wonder what all this work used | **Usage Report…** (⌘U) shows 7 days of tokens and what they would cost at API prices. |
+| 🛡️ An agent did something you did not sanction | **Review Agent Activity…** lists denied calls that ran later, credential reads, writes outside the workspace, force pushes and unrestricted sessions. You answer each one, or draft a report to the vendor and send it yourself. |
 
 Not every agent reports every state, and some cannot be jumped to. The
 [Supported agents](#supported-agents) table shows exactly what works for each one.
@@ -114,8 +115,8 @@ Quit an older Vibra copy before launching the Homebrew app. Homebrew does not
 replace `/Applications/Vibra.app` or update login items. This build is ad-hoc
 signed and not notarized. See the tap's [migration and signing notes](https://github.com/silex-ai-lab/homebrew-tap#switch-from-a-manual-installation).
 
-Quit Vibra before updating with `brew upgrade silex-ai-lab/tap/vibra` or
-removing it with `brew uninstall silex-ai-lab/tap/vibra`.
+Quit Vibra before updating with `brew upgrade silex-ai-lab/tap/vibra`. To
+remove Vibra and its saved data, see [Removing Vibra](#removing-vibra).
 
 #### Manual source build
 
@@ -138,14 +139,26 @@ open /Applications/Vibra.app
 `make install` quits any running copy first, so you can safely run it again
 after pulling changes.
 
-Vibra has no Dock icon and no window. **The menu bar item is the whole app.**
+Vibra has no Dock icon. **It starts from the menu bar item**, and its windows,
+such as Setup, Session Details and Review Agent Activity, open from that menu.
 Look on the right-hand side of your menu bar for `Vibra`, or for a count such
 as `2▶ 1!` when sessions are live.
 
-To remove it completely:
+### Removing Vibra
+
+Quit Vibra first. Then remove the app the way you installed it:
 
 ```sh
-make uninstall
+brew uninstall silex-ai-lab/tap/vibra   # Homebrew
+make uninstall                          # manual build, from the repository
+```
+
+Either one leaves saved data behind: your answers in the Review Agent Activity
+window and Vibra's settings. To remove those too:
+
+```sh
+rm -rf ~/Library/Application\ Support/Vibra
+defaults delete ai.silexlab.vibra
 ```
 
 ### First launch
@@ -209,6 +222,13 @@ instead.
   for Claude Code and Codex, plus tips on what cost your Claude Code sessions
   the most.
 - **History…** (⌘Y): the questions you asked your agents.
+- **Code checks** in Session Details (Claude Code and Codex): whether a test,
+  build or lint command ran after the session's last code change, and what it
+  returned. It never says a task is done. See
+  [features](docs/features.md#the-menu).
+- **Review Agent Activity…** (Claude Code and Codex): findings such as
+  credential reads or writes outside the workspace, each for you to answer or
+  report to the vendor yourself.
 - **`--query`**: the menu as JSON, for scripts.
 
 Details: [features](docs/features.md).
@@ -237,6 +257,10 @@ the session files and databases the agents already write (paths in each guide).
   message text. History, the one feature that shows what you typed, keeps it in
   memory only while its window is open and writes nothing.
 - It never approves an agent's permission prompt for you. It only shows it.
+- The incident monitor reads tool activity in Claude Code and Codex transcripts,
+  keeps only closed values, and writes hashed ids and your answers to
+  `~/Library/Application Support/Vibra/incidents.json`. A report to a vendor is a
+  local draft that only you can send.
 
 **Canary tests** plant fake secrets and message text in test fixtures and check
 that none of it shows up in returned sessions, their JSON, `--query` output or

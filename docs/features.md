@@ -145,6 +145,57 @@ read, exact token counts per agent, and every suggestion that fired with its
 evidence. `VIBRA_NOW=<ISO 8601 time>` runs either at a fixed time. Neither
 prints message text.
 
+## Review Agent Activity
+
+The menu's **Review Agent Activity…** lists what Vibra saw agents do that you may
+not have sanctioned. It covers Claude Code and Codex only, and it observes. It
+never blocks or interrupts an agent.
+
+| Finding | Severity | What it means |
+|---|---|---|
+| A denied call ran later | review | A call was denied and the identical call later returned, with no message from you in between. You or a rule may have approved the retry. Claude Code only |
+| A credential read | review | A named reader was pointed at a credential: `~/.aws`, `~/.ssh`, `.netrc`, a package or GitHub token, an agent's own credentials, a keychain lookup, or a `.env` outside the workspace |
+| This project's .env was named | info | The same, for a `.env` inside the workspace. One per session |
+| A write outside the workspace | review | A tool edit whose path, as written, is outside the workspace. One finding per session and destination family, sibling repositories or elsewhere. A later write reopens a closed one |
+| A force push | review | `git push --force`, `-f` or a `+` refspec. `--force-with-lease` alone is exempt |
+| Guardrails were off | info | The session ran in `bypassPermissions` or `danger-full-access` |
+| The vendor rejected the credentials | info | An `authentication_failed` record. Claude Code only |
+| Vendor usage this Mac cannot explain | review | From a usage file you import |
+
+**What it cannot see.** Readers are named commands with known options, so `sed`,
+`awk`, `xxd`, `strings`, `gh auth token`, scripts and interpreter one-liners are
+not analysed, and an unknown option declines that command. A shell finding that
+may not have run says so. Paths are compared as written, so a symlink or a
+`--add-dir` grant looks like an outside write. Shell redirection is not analysed.
+
+**Answers.** Each finding can be marked Expected, Resolved or Reported, and
+reopened. Notifications carry a count only, at most one a minute, and backfilled
+findings never notify on a first run. A finding that completed while Vibra was
+closed notifies at the next launch. After launch the list fills in once the replay
+finishes, 20 to 25 seconds for 700 MB of transcripts on the machine it was measured
+on.
+
+**Importing vendor usage.** The window can compare a usage file with this Mac's
+own usage, to spot quota someone else consumed. It needs an organization API
+usage page for exactly one API key. One complete page holds at most 31 days, and
+a file whose oldest day is more than 62 days old is refused. So is a file with
+usage on a day after today (UTC); an empty day after today is ignored, because a
+page lists every day in its range. Pro, Max and ChatGPT
+plans appear in no file you can import. You fetch the file in your own terminal
+with your own admin key, and the window shows the command. A day is flagged when
+the vendor counted more than `max(10%, 100,000 tokens)` beyond what this Mac
+recorded, which is a starting guess. Your other machines and apps look the same.
+Subscription use on this Mac can mask excess.
+
+**Reporting.** A finding can become a local draft you edit. Vibra states what it
+saw and what else could explain it, and never says an agent was malicious or a key
+was stolen. You can copy it, open it as an email with no recipient, or open the
+vendor's page. Neither Claude Code's nor Codex's security policy publishes an
+email address, so Vibra does not invent one.
+
+`Vibra --incidents [--days N] [--json]` prints the same closed values. It reads
+your answers and writes nothing.
+
 ## History, settings and `--query`
 
 **History…** (⌘Y in the menu) lists the questions you typed into Claude Code,

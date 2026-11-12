@@ -118,6 +118,10 @@ public struct ClaudeCodeAdapter: AgentAdapter {
 
     public func evidenceExtractor() -> (any EvidenceExtractor)? { ClaudeEvidenceExtractor() }
 
+    // MARK: - Incidents
+
+    public func incidentExtractor() -> (any IncidentExtractor)? { ClaudeIncidentExtractor() }
+
     /// `<id>.jsonl` and `<id>/subagents/*.jsonl` beside it.
     public func evidenceSources(for session: Session) -> [URL] {
         if let file { return [file] }

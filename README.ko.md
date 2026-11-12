@@ -59,6 +59,7 @@ Vibra는 Mac의 메뉴 막대에 들어가는 작은 무료 앱입니다. 모든
 | 🔎 맞는 탭을 찾아 이리저리 뒤진다 | 행이나 알림을 클릭하면 해당 터미널 탭이나 앱 창으로 이동합니다. |
 | 👀 어떤 에이전트가 아직 일하는 중인지 모르겠다 | 메뉴 막대에서 한눈에 보입니다. `2▶`는 두 개가 작업 중, `2!`는 두 개가 당신을 기다린다는 뜻입니다. |
 | 🧾 이 작업에 얼마나 썼는지 궁금하다 | **Usage Report…**(⌘U)가 7일간의 토큰과, API 가격으로 치면 얼마인지를 보여 줍니다. |
+| 🛡️ 에이전트가 당신이 허락하지 않은 일을 했다 | **Review Agent Activity…**가 거부된 뒤 나중에 실행된 호출, 자격 증명 읽기, 워크스페이스 밖 쓰기, 강제 푸시, 제한 없이 실행된 세션을 나열합니다. 각 항목에 답하거나, 공급업체에 보낼 보고서를 직접 작성해 보내면 됩니다. |
 
 모든 에이전트가 모든 상태를 보고하지는 않으며, 이동할 수 없는 에이전트도 있습니다.
 에이전트별로 무엇이 되는지는 [지원하는 에이전트](#지원하는-에이전트) 표에 정확히 나와 있습니다.
@@ -111,7 +112,8 @@ Command Line Tools만 있으면 되며 전체 Xcode는 필요하지 않습니다
 실행하기 전에 기존 Vibra를 종료하세요. Homebrew는 `/Applications/Vibra.app`이나 로그인 항목을 변경하지 않습니다.
 이 빌드는 ad-hoc 서명이며 공증되지 않았습니다. [이전 설치에서 전환하는 방법과 서명 안내](https://github.com/silex-ai-lab/homebrew-tap#switch-from-a-manual-installation)를 확인하세요.
 
-업데이트하거나 제거하기 전에 Vibra를 종료한 다음 `brew upgrade silex-ai-lab/tap/vibra` 또는 `brew uninstall silex-ai-lab/tap/vibra`를 실행하세요.
+업데이트하기 전에 Vibra를 종료한 다음 `brew upgrade silex-ai-lab/tap/vibra`를 실행하세요.
+Vibra와 저장된 데이터를 제거하려면 [Vibra 제거](#vibra-제거)를 참고하세요.
 
 #### 소스에서 직접 빌드
 
@@ -134,14 +136,26 @@ open /Applications/Vibra.app
 `make install`은 실행 중인 복사본을 먼저 종료하므로, 변경 사항을 가져온 뒤
 다시 실행해도 안전합니다.
 
-Vibra에는 Dock 아이콘도 창도 없습니다. **메뉴 막대 항목이 앱의 전부입니다.**
+Vibra에는 Dock 아이콘이 없습니다. **모든 것은 메뉴 막대 항목에서 시작하며**, Setup,
+Session Details, Review Agent Activity 같은 창은 그 메뉴에서 엽니다.
 메뉴 막대 오른쪽에서 `Vibra`를 찾거나, 세션이 살아 있을 때는 `2▶ 1!` 같은
 숫자를 찾으세요.
 
-완전히 제거하려면:
+### Vibra 제거
+
+먼저 Vibra를 종료합니다. 그다음 설치한 방식대로 앱을 제거합니다:
 
 ```sh
-make uninstall
+brew uninstall silex-ai-lab/tap/vibra   # Homebrew
+make uninstall                          # manual build, from the repository
+```
+
+어느 쪽이든 저장된 데이터는 남습니다. Review Agent Activity 창의 답변과
+Vibra 설정입니다. 그것까지 지우려면:
+
+```sh
+rm -rf ~/Library/Application\ Support/Vibra
+defaults delete ai.silexlab.vibra
 ```
 
 ### 첫 실행
@@ -185,7 +199,7 @@ Homebrew 앱은 `$(brew --prefix vibra)/Vibra.app`에 있으며 직접 설치한
 기록이 없음(픽스처 테스트가 다루는지는 가이드에 나와 있음). **—**: 표시되지 않음
 (예: Codex와 Hermes에는 승인 상태가 없음).
 
-행을 클릭하면 Claude Code와 Codex는 터미널 탭(iTerm2, Terminal, herdr)이나 호스트 앱으로,
+행을 클릭하면 Claude Code와 Codex는 터미널 탭(iTerm2, Terminal, herdr, Orca)이나 호스트 앱으로,
 VS Code는 해당 창으로 이동하고, Cursor는 앞으로 가져옵니다. OpenCode와 Hermes 세션은
 이동할 수 없습니다. 해당 행을 클릭하면 상세 정보가 열립니다.
 
@@ -205,6 +219,13 @@ VS Code는 해당 창으로 이동하고, Cursor는 앞으로 가져옵니다. O
   날짜별로 보여 주며, Claude Code 세션에서 무엇이 가장 비용을 많이 썼는지에 대한
   팁도 제공합니다.
 - **History…**(⌘Y): 당신이 에이전트에게 물은 질문.
+- **Code checks**(Claude Code와 Codex): Session Details에서 세션이 마지막으로 코드를
+  변경한 뒤 테스트, 빌드, lint 명령이 실행되었는지, 그리고 그 명령이 무엇을
+  반환했는지를 보여 줍니다. 작업이 끝났다고 말하는 일은 없습니다. 자세한 내용은
+  [기능](docs/features.md#the-menu).
+- **Review Agent Activity…**(Claude Code와 Codex): 자격 증명 읽기나 워크스페이스 밖
+  쓰기 같은 발견 항목을 나열하며, 각 항목에 당신이 답하거나 직접 공급업체에
+  보고할 수 있습니다.
 - **`--query`**: 메뉴를 JSON으로 출력. 스크립트용입니다.
 
 자세한 내용: [기능](docs/features.md).
@@ -232,6 +253,10 @@ Vibra는 로컬 파일을 읽고 아무 데도 전송하지 않습니다. 에이
   입력한 내용을 보여 주는 유일한 기능인 History는 창이 열려 있는 동안에만 메모리에
   보관하고, 아무것도 기록하지 않습니다.
 - 에이전트의 권한 프롬프트를 대신 승인하지 않습니다. 보여 주기만 합니다.
+- 인시던트 모니터는 Claude Code와 Codex 트랜스크립트의 도구 활동을 읽고, 정해진
+  종류의 값만 유지하며, 해시된 id와 당신의 답변을
+  `~/Library/Application Support/Vibra/incidents.json`에 기록합니다. 공급업체에
+  보내는 보고서는 로컬 초안이며, 보낼 수 있는 것은 당신뿐입니다.
 
 **카나리 테스트**는 테스트 픽스처에 가짜 비밀과 메시지 텍스트를 심고, 그것이 반환되는
 세션, 그 JSON, `--query` 출력, 오류 어디에도 나타나지 않는지 검증합니다(어댑터별).

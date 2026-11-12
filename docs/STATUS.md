@@ -1,5 +1,16 @@
 # Vibra — current status
 
+**0.4.0** (release prepared 2026-11-11, plan
+[PLAN-2026-11-11-release-0.4.0.md](PLAN-2026-11-11-release-0.4.0.md)). Adds,
+since 0.3.0: the first-use loop (**Needs You** first, across all agents, without
+a restart), Return to Session in Orca terminals, **Code checks** in Session
+Details, and **Review Agent Activity** with its local `incidents.json`. Fixes a
+vendor usage file with usage after today being compared instead of refused.
+Verified **2026-11-11** on macOS 27.0.1 / Swift 6.4: `make test` 502 tests
+in 60 suites, including the four privacy canaries; `make install` produced a
+bundle whose `CFBundleShortVersionString` reads 0.4.0; the installed binary's
+`--incidents --days 7` and `--query` exit 0; `tools/readme-anchors.sh` exits 0.
+
 **2026-10-05 — Idle CPU 27% → <1%.** A self-sustaining refresh loop: Vibra's
 own read-only Cursor query wrote SQLite's `-shm` wal-index, FSEvents reported
 it, and the `-shm` mtime in the database fingerprint made every refresh look
@@ -77,12 +88,14 @@ plan r1–r4, code gate r1 (both reviewer seats `IMPL-APPROVED` plus the
 implementer's written vote against diff `7e421da8`), final text confirmed.
 Record: [PLAN-2026-09-27-history-ui.md](PLAN-2026-09-27-history-ui.md).
 
-**0.3.0** (unreleased; branch `feat/history-query-settings-hermes`). Verified
+**0.3.0** (released 2026-11-07, tag `v0.3.0`). Verified
 **2026-09-26** on macOS 15 / Swift 6.1.2: `make test` 156 tests, `make bench`
 PASS (0 bytes on an unchanged refresh; cold 0.47 s, 254 sessions), History,
 Settings and `--query` checked against this machine's real data, Hermes
 discovery checked against a real `state.db`. Adds Phase 4: History,
-`--query`, Settings, Hermes.
+`--query`, Settings, Hermes. The same tag also shipped the performance
+suggestions and the Claude Code token-count fix, verified in
+[PLAN-2026-11-03-perf-suggestions.md](PLAN-2026-11-03-perf-suggestions.md).
 
 **0.2.0.** Last verified **2026-09-21** on macOS 15.7.3 / Swift 6.1.2 from a
 clean clone and a full clean rebuild; before that, **2026-09-20** on a Mac mini
@@ -95,12 +108,15 @@ refer to the 2026-09-20 run.
 ## Verdict
 
 **Usable day to day.** Phases 0, 0b, 1 and P2.1 are closed: Vibra runs
-continuously at 0.0% idle CPU, reports live agent state, alerts when a session
+continuously (0.4.0 averaged 0.7% CPU over one 60 s sample with agents
+writing, measured below), reports live agent state, alerts when a session
 wants you, focuses the terminal a session runs in, and produces a rolling
 usage report.
 
-Everything achievable without the user's involvement is done. What remains is
-blocked on a paid Apple Developer account (P3.x). *(Earlier this line also
+Homebrew distribution ships as a source formula (P3.3), and Sparkle was cut
+because an updater is network egress (P3.2). What remains on the roadmap is
+Developer ID signing (P3.1), blocked on a paid Apple Developer account, and the
+deferred OpenClaw adapter (P4.5). *(Earlier this line also
 listed P2.2 as having no viable target; P2.2 has since been done — Cursor and
 VS Code Copilot Chat, see the table below.)*
 
@@ -120,28 +136,37 @@ VS Code Copilot Chat, see the table below.)*
 | 4 | P4.3 Attention-rule settings | ✅ Done 2026-09-26 |
 | 4 | P4.4 Hermes adapter | ✅ Done 2026-09-26 — states fixture-only |
 | 4 | P4.5 OpenClaw adapter | ⏸ Deferred — not installed here |
+| 4 | P4.6 Code checks in Session Details | ✅ Done 2026-11-08 |
+| 4 | P4.7 Review Agent Activity | ✅ Done 2026-11-09 |
 | 3 | P3.1 Developer ID signing | ⛔ Blocked on a user decision |
-| 3 | P3.2 Sparkle auto-update | Behind P3.1 |
-| 3 | P3.3 Homebrew cask | Behind P3.1 |
+| 3 | P3.2 Sparkle auto-update | ⊘ Cut — an updater is network egress |
+| 3 | P3.3 Homebrew distribution | ✅ Done (source formula) — a signed cask still needs P3.1 |
 
 ## Measured
 
+Measured **2026-11-11** on 0.4.0, macOS 27.0.1, one run each unless noted, with three
+agent sessions writing to disk during the run.
+
 | Metric | Value | Target | |
 |---|---|---|---|
-| Idle CPU | 0.0% | < 2% | ✅ |
-| RSS (running app) | **43–76 MB**, varies between runs | < 60 MB | ⚠️ borderline |
-| Cold start | 0.64s, 13 MB read | — | ✅ |
-| Unchanged refresh | 0.03s, **0 bytes** | 0 bytes | ✅ |
-| Tests | 308 in 41 suites | — | ✅ |
-| Bundle | 632 KB, ad-hoc signed | Developer ID | ⚠️ |
+| CPU, running app | 0.44 s of CPU in 60 s (0.7%) | < 2% | ✅ |
+| RSS, running app | 78 MB | < 60 MB | ⚠️ over |
+| Cold refresh | 7.53 s, 176 MB read, 332 sessions | — | not compared with 0.3.0 on this corpus |
+| Unchanged refresh | **0 bytes** on a frozen copy of the transcripts (2 runs); 22 KB live, the bytes agents appended between refreshes | 0 bytes | ✅ |
+| Tests | 502 in 60 suites | — | ✅ |
+| Bundle | 3300 KB (`du -sk`), ad-hoc signed | Developer ID | ⚠️ |
 
-Reproduce with `make bench` and `make test`.
+Reproduce with `make bench` and `make test`. On a machine where agents are
+writing, `make bench` reports the bytes they append; point `VIBRA_HOME` at a
+frozen copy (`cp -Rc`) to measure an unchanged refresh. The table before 0.4.0
+showed idle CPU 0.0%, RSS 43–76 MB, cold start 0.64 s with 13 MB read, and a
+632 KB bundle, on a smaller corpus; the 0.2.0 verification below measured 42–46
+MB RSS.
 
-Two honest notes on these numbers. **RSS is a range, not a figure** — measured
-at 43, 68, 70, 75 and 76 MB across runs; quoting any single value overstates
-the precision, and the <60 MB target is met on some runs and missed on others.
-Brief **CPU spikes of 5–12%** are correct behaviour: FSEvents firing a refresh
-when an agent writes to disk. Idle returns to 0.0% immediately.
+Two notes from those earlier measurements, not rechecked on 0.4.0. **RSS was a
+range**: 43, 68, 70, 75 and 76 MB across runs, so the single 0.4.0 value above
+is one sample. **CPU spiked to 5–12%** when an agent wrote to disk and FSEvents
+fired a refresh, and returned to 0.0% idle right after.
 
 ## 0.2.0 — 2026-09-21, macOS 15.7.3 / Swift 6.1.2
 
@@ -275,7 +300,7 @@ approval; the certificate is what makes that approval outlive rebuilds.
 
 ## What works, verified against real data
 
-- **Five adapters** — Claude Code, Codex and VS Code Copilot Chat JSONL logs; OpenCode and Cursor SQLite.
+- **Six adapters** — Claude Code, Codex and VS Code Copilot Chat JSONL logs; OpenCode, Cursor and Hermes SQLite. Hermes states are checked against fixtures only.
 - **Agents are detected, not assumed.** An agent with no state on disk is never
   polled, so supporting one nobody installed costs nothing.
 - **Live state classification.** Verified by driving a real Codex session:
@@ -301,12 +326,19 @@ approval; the certificate is what makes that approval outlive rebuilds.
   `~/.codex/hooks.json`, a Copilot hook, an OpenCode plugin, and replaced the
   Claude Code status line — all of which survived uninstalling its app, and
   kept executing on every tool call. Vibra is a passive reader by design, so
-  removing it is deleting one `.app`.
-- **Secrets are never read.** `opencode.db` holds auth tokens beside session
-  data, and `~/.claude/sessions/` holds `.key` files beside the JSON. The
-  adapters use read-only access and explicit allowlists, and **canary tests**
-  assert sentinel secrets reach no output. `make test` fails if a canary did
-  not run. Both checks are mutation-tested.
+  removing it leaves no hook behind. Deleting the app leaves its saved data,
+  which `rm -rf ~/Library/Application\ Support/Vibra` and
+  `defaults delete ai.silexlab.vibra` remove.
+- **Credential stores are not queried, and secrets are not kept or emitted.**
+  `opencode.db` holds auth tokens beside session data, and `~/.claude/sessions/`
+  holds `.key` files beside the JSON; the adapters open them read-only with
+  explicit column and file allowlists. Some features read more in memory than
+  they keep: incident and Code checks parsing reads raw tool records, and Return
+  to Session in Orca reads the agent's start-up environment, which can hold a
+  hook token, to keep only `ORCA_TERMINAL_HANDLE`. **Canary tests** assert
+  sentinel secrets reach no output. `make test` fails if a canary did
+  not run. The canary assertions and the did-not-run check are both
+  mutation-tested.
 
 ## Known gaps
 

@@ -39,6 +39,20 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         evidence: { [weak self] session in await self?.readEvidence(for: session) ?? nil }
     )
     private lazy var notifier = AttentionNotifier(sink: notificationSink)
+    private let incidentStore = IncidentStore()
+    private lazy var incidentMonitor = IncidentMonitor(
+        adapters: AdapterRegistry.all(),
+        store: incidentStore,
+        deliver: { [weak self] notification in
+            Task { @MainActor in self?.notificationSink.deliver(notification) }
+        })
+    private lazy var incidentsWindow = IncidentsWindowController(
+        monitor: incidentMonitor,
+        store: incidentStore,
+        onJump: { [weak self] sessionID in self?.jumpToIncidentSession(sessionID) },
+        onChange: { [weak self] in Task { await self?.refreshIncidentCount() } })
+    private var incidentTask: Task<Void, Never>?
+    private var incidentReviewCount = 0
     private var hasBaseline = false
 
     init(store: SessionStore) {
@@ -68,6 +82,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             self?.jumpFromNotification(sessionID: sessionID, key: key)
         }
 
+        startIncidentMonitor()
+
         store.onChange = { [weak self] previous, snapshot in
             guard let self else { return }
             let sessions = snapshot.sessions
@@ -87,7 +103,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 current: sessions
             )
             self.hasBaseline = true
-            self.notificationSink.removeDelivered(except: self.notifier.outstandingKeys)
+            self.notificationSink.removeDelivered(
+                except: self.notifier.outstandingKeys.union([IncidentMonitor.notificationKey]))
         }
         render(store.sessions)
         store.start()
@@ -133,6 +150,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// the menu bar it points at is gone — so leaving it behind is noise the
     /// user has to dismiss by hand.
     func shutdown() {
+        incidentTask?.cancel()
+        notificationSink.withdraw(keys: [IncidentMonitor.notificationKey])
         notifier.withdrawAll()
     }
 
@@ -204,6 +223,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let report = NSMenuItem(title: "Usage Report…", action: #selector(showReport), keyEquivalent: "u")
         report.target = self
         menu.addItem(report)
+        let review = NSMenuItem(
+            title: incidentReviewCount > 0 ? "Review Agent Activity… (\(incidentReviewCount))" : "Review Agent Activity…",
+            action: #selector(showIncidents), keyEquivalent: "")
+        review.target = self
+        menu.addItem(review)
         let history = NSMenuItem(title: "History…", action: #selector(showHistory), keyEquivalent: "y")
         history.target = self
         menu.addItem(history)
@@ -283,6 +307,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// A session no longer in the snapshot is not jumped to, and its
     /// notification is removed.
     private func jumpFromNotification(sessionID: String, key: String) {
+        if key == IncidentMonitor.notificationKey {
+            notificationSink.withdraw(keys: [key])
+            incidentsWindow.show()
+            return
+        }
         // Gone from the snapshot: exited, or aged out. Nothing to jump to, and
         // nothing the notification says is still true.
         guard let session = store.sessions.first(where: { $0.id == sessionID }) else {
@@ -423,6 +452,30 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func showReport() { reportWindow.show() }
     @objc private func showHistory() { historyWindow.show() }
+    @objc private func showIncidents() { incidentsWindow.show() }
+
+    /// Replays recent transcripts once at launch, then reads only what changed.
+    private func startIncidentMonitor() {
+        let monitor = incidentMonitor
+        incidentTask = Task.detached(priority: .utility) { [weak self] in
+            while !Task.isCancelled {
+                await monitor.poll()
+                await self?.refreshIncidentCount()
+                await MainActor.run { self?.incidentsWindow.refreshIfVisible() }
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
+    }
+
+    private func refreshIncidentCount() async {
+        let rows = await incidentMonitor.rows()
+        incidentReviewCount = rows.filter { $0.disposition == .open && $0.incident.kind.rule.severity == .review }.count
+    }
+
+    private func jumpToIncidentSession(_ sessionID: String) {
+        guard let session = store.sessions.first(where: { $0.id == sessionID }) else { return }
+        explainFailure(TerminalJumper.jump(to: session), for: session)
+    }
     @objc private func showSettings() { settingsWindow.show() }
     @objc private func showSetup() { setupWindow.show() }
 }

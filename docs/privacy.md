@@ -4,7 +4,10 @@ Vibra never asks these tools to change what they write. It is a passive reader
 of files that already exist.
 
 **It installs nothing into your agents** — no hooks, no plugins, no statusline,
-no wrapper binaries. Uninstalling Vibra is deleting one `.app`.
+no wrapper binaries. Uninstalling Vibra is deleting the app, then its saved
+data: `rm -rf ~/Library/Application\ Support/Vibra` removes your answers in the
+Review Agent Activity window, and `defaults delete ai.silexlab.vibra` removes its
+settings.
 
 Vibra reads local files and sends nothing anywhere. Specifically:
 
@@ -59,14 +62,38 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   path or branch. A canary test covers it.
 - Notification bodies name the project, or a scheduled task plus its project;
   they never carry a title the agent derived from a prompt.
-- The only thing Vibra persists between runs is its four settings, in the
+- Vibra persists two things between runs. Its four settings live in the
   `ai.silexlab.vibra` preferences domain: the three thresholds in Settings, and
   `onboardingCompleted`, the boolean that records the first-run window was
-  closed. (The `--show-* --snapshot <path>` diagnostics write a PNG where you
-  tell them to.)
+  closed. Your answers in the Review Agent Activity window live in
+  `~/Library/Application Support/Vibra/incidents.json`, as hashed incident ids,
+  the answer and its date, and one notification timestamp. An answer older than
+  90 days is pruned. A file that cannot be read is renamed
+  `incidents.corrupt-<time>.json`, kept beside it, and the window says your
+  answers were reset. (The `--show-* --snapshot <path>` diagnostics write a PNG
+  where you tell them to.)
+- **The incident monitor is always on, and reads what Session Details reads.**
+  At launch it parses every Claude Code and Codex transcript modified in the last
+  7 days, and afterwards every line appended to them, including tool inputs, shell
+  command text, edited paths and tool results. All of it is reduced in memory to
+  closed values: a kind, a credential class, a tool class, a date, a token count
+  and a hashed id. Only the hashed ids, your answers and one timestamp are
+  written. A retried call is compared through a fingerprint held in memory and
+  never stored. `--incidents` prints those closed values and nothing else. A
+  canary test (`incidentSentinelsNeverLeak`) plants a sentinel in a command, a
+  path, tool output, a prompt, a secret-shaped session id and a vendor key id, and
+  asserts it reaches no incident, JSON, store file, report draft or `mailto:` URL.
+  `make test` fails if that test did not run.
+- **Reports leave only when you send them.** A report is a draft on this Mac that
+  you can edit. Open Email Draft hands it to your mail app with no recipient, and
+  the vendor page opens in your browser with no query string. Vibra makes no
+  request and cannot see whether you sent anything.
+- **A vendor usage file is read and dropped.** You fetch it yourself with your own
+  key, Vibra parses it in memory, never stores it and never sees the key. Findings
+  from it live until the app quits. The answer you give is kept by hashed id.
 - `VIBRA_HOME`, `VIBRA_PREFS_DOMAIN` and `VIBRA_DEBUG_MENU_DUMP` are diagnostic
-  environment overrides: a fixture data tree, a separate preferences domain and
-  a place to write the menu dump. Unset, Vibra uses the real ones and writes no
+  environment overrides: a fixture data tree (`incidents.json` follows it), a
+  separate preferences domain and a place to write the menu dump. Unset, Vibra uses the real ones and writes no
   dump.
 - Adapters never log or print raw rows.
 - **The Usage Report's performance suggestions** read, from Claude Code

@@ -8,8 +8,10 @@ import Foundation
 /// last command's rules: `check && grep x` is not an error when `grep` or the
 /// check exits 1.
 ///
-/// Pure. It sees command text and returns two enums, so nothing it reads can
-/// outlive the call. `tools/evidence-oracle` runs the same case file.
+/// Pure. `classify` returns two enums; `simpleCommands` returns the words of
+/// each simple command, which the incident rules read and drop in the same
+/// call. Neither keeps anything. `tools/evidence-oracle` runs the same case
+/// file as `classify`.
 enum CommandClassifier {
     private enum Separator { case and, or, semicolon, pipe, background, newline }
 
@@ -346,5 +348,78 @@ enum CommandClassifier {
             segments[segments.count - 1].separator = nil
         }
         return segments
+    }
+
+    // MARK: - Incident rules
+
+    /// The words of each simple command in `script`, with leading `NAME=value`
+    /// assignments and the wrappers an incident rule must look past removed,
+    /// and whether the script is a single foreground simple command.
+    ///
+    /// Separate from `classify` on purpose, and with its own wrapper list, so a
+    /// change to the check runner table cannot silently move an incident rule.
+    /// A wrapper's own options are consumed; an option this does not know ends
+    /// the unwrapping, leaving it as the command word, which matches no reader.
+    static func simpleCommands(in script: String) -> (commands: [[String]], soleForeground: Bool) {
+        let segments = split(script)
+        let commands = segments.map { unwrap($0.words) }.filter { !$0.isEmpty }
+        let sole = segments.count == 1
+            && segments[0].separator != .background
+            && !commands.isEmpty
+        return (commands, sole)
+    }
+
+    private static func unwrap(_ raw: [String]) -> [String] {
+        var index = 0
+        while index < raw.count {
+            let name = basename(raw[index])
+            switch name {
+            case "sudo":
+                index = skipOptions(
+                    raw, from: index + 1,
+                    valueOptions: ["-u", "-g", "-p", "-C", "-U", "-r", "-t"],
+                    flags: ["-E", "-H", "-n", "-S", "-k", "-A", "-b", "-i", "-s"])
+            case "env":
+                index = skipOptions(raw, from: index + 1, valueOptions: ["-u"], flags: ["-i", "-0", "-v"])
+            case "time":
+                index = skipOptions(raw, from: index + 1, valueOptions: [], flags: ["-p"])
+            case "command", "nohup":
+                index += 1
+            default:
+                if isAssignment(raw[index]) {
+                    index += 1
+                } else {
+                    return Array(raw[index...])
+                }
+            }
+        }
+        return []
+    }
+
+    private static func skipOptions(
+        _ words: [String], from start: Int, valueOptions: Set<String>, flags: Set<String>
+    ) -> Int {
+        var index = start
+        while index < words.count, words[index].hasPrefix("-"), words[index] != "-" {
+            let word = words[index]
+            let name = word.split(separator: "=", maxSplits: 1).first.map(String.init) ?? word
+            if valueOptions.contains(name) {
+                index += word.contains("=") ? 1 : 2
+                continue
+            }
+            if flags.contains(name) {
+                index += 1
+                continue
+            }
+            break
+        }
+        return min(index, words.count)
+    }
+
+    private static func isAssignment(_ word: String) -> Bool {
+        guard let equals = word.firstIndex(of: "="), equals != word.startIndex else { return false }
+        let name = word[word.startIndex..<equals]
+        guard let first = name.first, first.isLetter || first == "_" else { return false }
+        return name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
     }
 }

@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
+
+- **Fix: a vendor usage file with usage after today is refused.** A day after
+  the current UTC day used to be compared with this Mac's usage, which is zero
+  for that day, and could be flagged as usage this Mac cannot explain. The file
+  is now refused. An empty day after today, which a usage page lists as
+  padding, is ignored.
+
+- **Docs: removal instructions say what stays.** `make uninstall` and
+  `brew uninstall` remove the installed files, not Vibra's saved data. The READMEs, the privacy page and
+  STATUS now name the saved data left behind and the two commands that remove
+  it: `rm -rf ~/Library/Application\ Support/Vibra` and
+  `defaults delete ai.silexlab.vibra`. The translated READMEs gain Review Agent
+  Activity, Code checks and Orca.
+
+- **Review Agent Activity.** Vibra now watches Claude Code and Codex transcripts
+  for denied calls that ran later, credential reads, writes outside the workspace,
+  force pushes, unrestricted sessions and authentication failures. You answer each
+  finding, or draft a report to the vendor and send it yourself. A usage file you
+  fetch with your own key can be imported to flag days this Mac cannot explain.
+  No network requests. The feature adds the first file Vibra persists beyond
+  preferences, `~/Library/Application Support/Vibra/incidents.json`, holding hashed
+  ids and your answers. See [docs/features.md](docs/features.md) and
+  [docs/privacy.md](docs/privacy.md).
 
 - **Return to Session works in Orca.** Clicking a Claude Code or Codex session
   running in an Orca terminal now switches Orca to that terminal. Before, it
@@ -32,6 +55,8 @@
   plus the project, never a title derived from a prompt.
 - **Removed: the per-row token count.** Tokens are in the row's tooltip and in
   the detail window, where an unpublished count reads `None reported`.
+
+## 0.3.0 — 2026-11-07
 
 - **Homebrew installation.** The official `silex-ai-lab/tap` provides a source
   formula for `brew install silex-ai-lab/tap/vibra`. It installs the app in the

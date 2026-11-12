@@ -99,6 +99,10 @@ public struct CodexAdapter: AgentAdapter {
 
     public func evidenceExtractor() -> (any EvidenceExtractor)? { CodexEvidenceExtractor() }
 
+    // MARK: - Incidents
+
+    public func incidentExtractor() -> (any IncidentExtractor)? { CodexIncidentExtractor() }
+
     /// The root's rollout is named for its id. A subagent's is not, so any
     /// rollout written since the session started is kept when its first
     /// `session_meta` names this session as its root.

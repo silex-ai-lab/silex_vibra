@@ -3,7 +3,7 @@
 
 APP_NAME    := Vibra
 BUNDLE_ID   := ai.silexlab.vibra
-VERSION := 0.3.0
+VERSION := 0.4.0
 CONFIG      := release
 BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
@@ -30,7 +30,7 @@ TEST_BUILD_FLAGS := $(if $(SWIFT_BUILD_SYSTEM),--build-system $(SWIFT_BUILD_SYST
 
 # Each privacy canary is checked by its exact Swift Testing line, so a renamed
 # or deleted canary fails the run instead of being matched by a substring.
-CANARIES := canaryTokenNeverLeaks perfPrivacySentinelsNeverLeak evidenceSentinelsNeverLeak
+CANARIES := canaryTokenNeverLeaks perfPrivacySentinelsNeverLeak evidenceSentinelsNeverLeak incidentSentinelsNeverLeak
 
 # NOT `swift test`. On a machine without Xcode, SwiftPM builds the suite as an
 # .xctest bundle it cannot execute: it prints "Build complete!", runs ZERO

@@ -59,6 +59,7 @@ Vibra は Mac のメニューバーに常駐する、小さな無料アプリで
 | 🔎 目的のタブを探して回っている | 行または通知をクリックすると、そのターミナルタブやアプリのウィンドウに移動します。 |
 | 👀 どのエージェントがまだ動いているかわからない | メニューバーを見ればひと目でわかります。`2▶` は 2 つが作業中、`2!` は 2 つがあなたを待っているという意味です。 |
 | 🧾 これだけの作業で何を使ったのか気になる | **Usage Report…**（⌘U）が 7 日分のトークンと、API 料金で換算した場合の金額を表示します。 |
+| 🛡️ エージェントがあなたの許可なく何かをした | **Review Agent Activity…** は、拒否されたのに後から実行された呼び出し、認証情報の読み取り、ワークスペース外への書き込み、強制プッシュ、制限なしで実行されたセッションを一覧にします。それぞれにあなたが答えるか、ベンダーへの報告書を下書きして、あなた自身で送信できます。 |
 
 すべてのエージェントがすべての状態を報告するわけではなく、移動できないエージェントもあります。
 各エージェントで何が使えるかは [対応エージェント](#対応エージェント) の表にまとめています。
@@ -111,7 +112,8 @@ Command Line Tools で十分で、Xcode 全体は不要です。`vibra --query` 
 起動前に古い Vibra を終了してください。Homebrew は `/Applications/Vibra.app` やログイン項目を変更しません。
 このビルドは ad-hoc 署名で、公証されていません。[移行と署名の注意事項](https://github.com/silex-ai-lab/homebrew-tap#switch-from-a-manual-installation)を確認してください。
 
-更新または削除の前に Vibra を終了し、`brew upgrade silex-ai-lab/tap/vibra` または `brew uninstall silex-ai-lab/tap/vibra` を実行してください。
+更新の前に Vibra を終了し、`brew upgrade silex-ai-lab/tap/vibra` を実行してください。
+Vibra と保存データを削除するには、[Vibra の削除](#vibra-の削除) を参照してください。
 
 #### ソースから手動でビルド
 
@@ -134,14 +136,26 @@ open /Applications/Vibra.app
 `make install` は実行中のコピーを先に終了するので、変更を取り込んだ後に
 再実行しても安全です。
 
-Vibra には Dock アイコンもウィンドウもありません。**メニューバーの項目がアプリのすべてです。**
+Vibra には Dock アイコンがありません。**すべてメニューバーの項目から始まり**、Setup、
+Session Details、Review Agent Activity などのウィンドウはそのメニューから開きます。
 メニューバーの右側で `Vibra`、またはセッションが動いているときは `2▶ 1!` のような
 カウントを探してください。
 
-完全に削除するには、次を実行します。
+### Vibra の削除
+
+まず Vibra を終了します。次に、インストールした方法でアプリを削除します：
 
 ```sh
-make uninstall
+brew uninstall silex-ai-lab/tap/vibra   # Homebrew
+make uninstall                          # manual build, from the repository
+```
+
+どちらでも、保存されたデータは残ります。Review Agent Activity ウィンドウの
+あなたの回答と、Vibra の設定です。それらも削除するには：
+
+```sh
+rm -rf ~/Library/Application\ Support/Vibra
+defaults delete ai.silexlab.vibra
 ```
 
 ### 初回起動
@@ -183,7 +197,7 @@ Homebrew 版は `$(brew --prefix vibra)/Vibra.app`、手動インストール版
 （フィクスチャテストでカバーしているかはガイドに記載）。**—**：表示されない
 （例：Codex と Hermes には承認状態がない）。
 
-行をクリックすると、Claude Code と Codex ではターミナルタブ（iTerm2、Terminal、herdr）または
+行をクリックすると、Claude Code と Codex ではターミナルタブ（iTerm2、Terminal、herdr、Orca）または
 ホストアプリに、VS Code ではそのウィンドウに移動し、Cursor は前面に表示されます。
 OpenCode と Hermes のセッションには移動できません。その行をクリックすると
 詳細が開きます。
@@ -203,6 +217,13 @@ OpenCode と Hermes のセッションには移動できません。その行を
 - **Usage Report…**（⌘U）：7 日分のトークンと API 換算値。Claude Code と Codex は日別に表示し、
   Claude Code のセッションで何が一番コストを使ったかのヒントも出します。
 - **History…**（⌘Y）：あなたがエージェントに尋ねた質問。
+- **Code checks**（Claude Code と Codex）：Session Details で、セッションが最後に
+  コードを変更した後にテスト、ビルド、lint のコマンドが実行されたかどうかと、
+  そのコマンドが何を返したかを表示します。タスクが完了したとは決して言いません。
+  詳しくは [機能](docs/features.md#the-menu)。
+- **Review Agent Activity…**（Claude Code と Codex）：認証情報の読み取りや
+  ワークスペース外への書き込みなどの検出項目を一覧にし、それぞれにあなたが
+  答えるか、あなた自身でベンダーに報告できます。
 - **`--query`**：メニューを JSON で出力。スクリプト向けです。
 
 詳細は [機能](docs/features.md)。
@@ -230,6 +251,10 @@ Vibra はローカルファイルを読み取り、どこにも送信しませ�
   入力内容を表示する唯一の機能である History は、ウィンドウを開いている間だけメモリに保持し、
   何も書き込みません。
 - エージェントの許可プロンプトをあなたに代わって承認することはありません。表示するだけです。
+- インシデントモニターは Claude Code と Codex のトランスクリプト内のツール活動を
+  読み、あらかじめ決まった種類の値だけを保持し、ハッシュ化した id とあなたの回答を
+  `~/Library/Application Support/Vibra/incidents.json` に書き込みます。ベンダーへの
+  報告はローカルの下書きで、送信できるのはあなただけです。
 
 **カナリアテスト** はテスト用フィクスチャに偽のシークレットとメッセージ本文を仕込み、返される
 セッション、その JSON、`--query` 出力、エラーのどこにも現れないことを検証します（アダプターごと）。
