@@ -222,8 +222,10 @@ subagents). OpenCode, Cursor and VS Code are not covered: their prompt text
 lives in stores Vibra deliberately does not read beyond session metadata.
 
 **Settings…** (⌘,) has three numbers: when a mid-turn session counts as
-stalled (default 5 min), when an unanswered "your turn" fades to idle (8 h),
-and how far back the menu looks (12 h). They are stored in the
+stalled (default 5 min), when an unanswered "your turn" fades to idle (2 h),
+and how far back the menu looks (12 h). A "your turn" you go back to, by
+clicking its row or its notification, drops to idle at once and stays there
+until the session has new activity. They are stored in the
 `ai.silexlab.vibra` preferences domain, apply on the next refresh without a
 relaunch, and can also be set from a shell:
 

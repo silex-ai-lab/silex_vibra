@@ -14,6 +14,9 @@ final class SessionStore {
     var sessions: [Session] { snapshot.sessions }
 
     private var attentionClock = AttentionClock()
+    /// Loaded once and written only when you hand a turn back, so a CLI
+    /// diagnostic running beside the app never overwrites the app's record.
+    private var handled: HandledTurns
     private let ingest: SessionIngest
     private let settingsStore: any SettingsStore
 
@@ -59,6 +62,7 @@ final class SessionStore {
         self.overrides = overrides
         let settings = VibraSettings.load(from: settingsStore)
         self.settings = settings
+        self.handled = HandledTurns.load(from: settingsStore)
         self.ingest = SessionIngest(
             adapters: adapters,
             horizon: overrides.map(\.horizon) ?? settings.activityWindowSeconds
@@ -146,12 +150,24 @@ final class SessionStore {
             activityWindow: overrides?.activityWindow,
             desktopIndex: desktopIndex
         )
+        handled.prune(keeping: fresh)
+        publish(handled.applied(to: fresh), health: health)
+    }
 
+    /// You went back to this session, so its "your turn" is dealt with until
+    /// it has new activity. Applied at once, without waiting for a refresh.
+    func markHandled(_ session: Session) {
+        handled.markHandled(session, now: Date())
+        handled.save(to: settingsStore)
+        publish(handled.applied(to: snapshot.sessions), health: snapshot.health)
+    }
+
+    private func publish(_ sessions: [Session], health: [AgentKind: SourceHealth]) {
         var next = snapshot
         next.health = health
-        if fresh != snapshot.sessions {
-            next.sessions = fresh
-            next.attention = attentionClock.advance(to: fresh, now: Date())
+        if sessions != snapshot.sessions {
+            next.sessions = sessions
+            next.attention = attentionClock.advance(to: sessions, now: Date())
         }
         guard next != snapshot else { return }
         let previous = snapshot.sessions

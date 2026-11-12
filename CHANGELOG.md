@@ -7,6 +7,14 @@
   prompt, showed under Needs You as "your turn", though no one was expected to
   reply. Vibra now reads who started the turn and lists these as idle. A turn
   you started still shows as your turn.
+- **A "your turn" you have dealt with clears.** Clicking a Needs You row or
+  its notification, and landing in the session, marks that turn handled: it
+  drops to idle at once, stays idle across a relaunch, and comes back only
+  when the session has new activity. An approval prompt is not cleared this
+  way; it stays until it is answered.
+- **"Your turn" fades after 2 h, not 8 h.** An unanswered turn still shows
+  until then. The Settings window keeps the 1 h to 48 h range.
+
 ## 0.4.1
 
 - **Fix: Vibra builds with Swift 6.1.** 0.4.0 compiled with Swift 6.4 but not

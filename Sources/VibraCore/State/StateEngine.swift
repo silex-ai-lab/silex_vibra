@@ -40,7 +40,7 @@ public struct StateEngineConfig: Sendable, Equatable {
     public init(
         workingWindow: TimeInterval = 30,
         stallThreshold: TimeInterval = 300,
-        attentionDecay: TimeInterval = 8 * 3600
+        attentionDecay: TimeInterval = 2 * 3600
     ) {
         self.workingWindow = workingWindow
         self.stallThreshold = stallThreshold

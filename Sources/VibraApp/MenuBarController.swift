@@ -283,6 +283,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func openDetails(_ sender: NSMenuItem) {
         guard let session = sender.representedObject as? Session else { return }
+        // With no session to return to, its details are as far as you can go.
+        if ReturnRoute.of(session) == .none { store.markHandled(session) }
         detailWindow.show(session: session, snapshot: store.snapshot)
     }
 
@@ -293,7 +295,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// (tmux, screen, herdr), whose pty the terminal emulator never sees.
     @objc private func jumpToSession(_ sender: NSMenuItem) {
         guard let session = sender.representedObject as? Session else { return }
-        explainFailure(TerminalJumper.jump(to: session), for: session)
+        let outcome = TerminalJumper.jump(to: session)
+        if case .jumped = outcome { store.markHandled(session) }
+        explainFailure(outcome, for: session)
     }
 
     /// A clicked notification jumps like a clicked menu row, and on success the
@@ -327,6 +331,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         guard ReturnRoute.of(session) != .none else {
             notifier.dismiss(key: key)
             _ = dismissDeadEndNotifications()
+            store.markHandled(session)
             detailWindow.show(session: session, snapshot: store.snapshot)
             return
         }
@@ -334,6 +339,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         switch outcome {
         case .jumped:
             notifier.dismiss(key: key)
+            store.markHandled(session)
         case .notLocatable, .noControllingTerminal:
             // By key, not by session: the clicked notification is removed even
             // when it was left behind by an earlier run and never tracked here.
