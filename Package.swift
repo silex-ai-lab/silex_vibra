@@ -15,11 +15,26 @@ let needsCLTTestingFlags = FileManager.default.fileExists(
 let testSwiftSettings: [SwiftSetting] = needsCLTTestingFlags
     ? [.unsafeFlags(["-F", cltFrameworks])]
     : []
+// With Xcode, the compiler finds Testing on its own, but the test runner is an
+// executable rather than a .testTarget, so nothing adds Xcode's framework
+// directory to its rpath and it fails to launch.
+let xcodeDeveloper = ProcessInfo.processInfo.environment["DEVELOPER_DIR"]
+    ?? "/Applications/Xcode.app/Contents/Developer"
+let xcodePlatform = xcodeDeveloper + "/Platforms/MacOSX.platform/Developer"
+let needsXcodeTestingRpath = !needsCLTTestingFlags && FileManager.default.fileExists(
+    atPath: xcodePlatform + "/Library/Frameworks/Testing.framework"
+)
+
 let testLinkerSettings: [LinkerSetting] = needsCLTTestingFlags
     ? [.unsafeFlags([
         "-F", cltFrameworks,
         "-Xlinker", "-rpath", "-Xlinker", cltFrameworks,
         "-Xlinker", "-rpath", "-Xlinker", cltLib,
+      ])]
+    : needsXcodeTestingRpath
+    ? [.unsafeFlags([
+        "-Xlinker", "-rpath", "-Xlinker", xcodePlatform + "/Library/Frameworks",
+        "-Xlinker", "-rpath", "-Xlinker", xcodePlatform + "/usr/lib",
       ])]
     : []
 
