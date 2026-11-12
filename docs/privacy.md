@@ -4,9 +4,10 @@ Vibra never asks these tools to change what they write. It is a passive reader
 of files that already exist.
 
 **It installs nothing into your agents** — no hooks, no plugins, no statusline,
-no wrapper binaries. Uninstalling Vibra is deleting one `.app` and the folder
-`~/Library/Application Support/Vibra`, which holds your answers in the Review
-Agent Activity window.
+no wrapper binaries. Uninstalling Vibra is deleting the app, then its saved
+data: `rm -rf ~/Library/Application\ Support/Vibra` removes your answers in the
+Review Agent Activity window, and `defaults delete ai.silexlab.vibra` removes its
+settings.
 
 Vibra reads local files and sends nothing anywhere. Specifically:
 

@@ -32,8 +32,8 @@ Current state: see [STATUS.md](STATUS.md).
 | 4 | P4.6 Code checks in Session Details | **Done** 2026-11-08, [plan](PLAN-2026-11-08-delivery-evidence.md) |
 | 4 | P4.7 Review Agent Activity | **Done** 2026-11-09, [plan](PLAN-2026-11-09-agent-incidents.md) |
 | 3 | P3.1 Developer ID signing | Blocked on a user decision |
-| 3 | P3.2 Sparkle auto-update | Not started |
-| 3 | P3.3 Homebrew cask | Not started |
+| 3 | P3.2 Sparkle auto-update | **Cut** 2026-11-11 — an updater is network egress |
+| 3 | P3.3 Homebrew distribution | **Done (source formula)** — a signed cask still needs P3.1 |
 
 ---
 
@@ -427,17 +427,28 @@ change.** Confirmed empirically: an ad-hoc signed bundle gets
 `authorization granted: false` with "Notifications are not allowed for this
 application". No code change substitutes for a signature.
 
-## P3.2 — Sparkle auto-update
+## P3.2 — Sparkle auto-update — **CUT** 2026-11-11
 
-### Critical decisions
+**Why.** P1.2 decided "no network, ever", and the README promises no network
+egress at all. An auto-updater makes requests by definition, so it would break
+the promise for every user. It is also the highest-value target in any app: an
+updater whose signature check fails open is a remote code execution channel.
 
-**Verify an EdDSA signature before installing anything.** An auto-updater is
-the highest-value target in the app; an unverified one is a remote code
-execution channel.
+**How users update instead.** Homebrew users run
+`brew upgrade silex-ai-lab/tap/vibra`. A source install updates with `git pull`
+and `make install`. Both are steps the user starts.
 
-## P3.3 — Homebrew cask
+## P3.3 — Homebrew distribution — **DONE (source formula)**
 
-Depends on P3.1: a cask distributing an unsigned bundle is hostile to users.
+The official tap, `silex-ai-lab/homebrew-tap`, ships a formula that builds Vibra
+from a checksum-verified source archive on the user's own Mac, ad-hoc signs it,
+and says so in its caveats. Its `test` block checks that the formula's version
+matches the bundle's.
+
+**Why the "depends on P3.1" rule does not apply.** That rule was written for a
+cask, which distributes a prebuilt bundle. An unsigned prebuilt bundle is hostile
+to users. A source formula distributes no binary, so the rule's reason does not
+hold. A prebuilt, signed and notarized cask still depends on P3.1.
 
 ---
 
