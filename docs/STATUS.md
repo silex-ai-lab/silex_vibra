@@ -1,5 +1,11 @@
 # Vibra — current status
 
+**0.4.2** (2026-11-12). Needs You lists only turns waiting on you. A Codex
+app automation run, or a fleet seat that finished a `Dispatch <id>:` prompt,
+ends idle. A "your turn" you go back to from the menu or a notification clears
+until the session has new activity. An unanswered turn fades after 2 h, not
+8 h. CI passes 513 tests on macOS 15 (Swift 6.1.2), Apple Silicon and Intel.
+
 **0.4.1** (2026-11-12). 0.4.0 plus a build fix: 0.4.0 did not compile with
 Swift 6.1, which the macOS 15 Homebrew runners use. CI now builds and tests
 every push on macOS 15 (Swift 6.1.2), Apple Silicon and Intel: both pass 502
