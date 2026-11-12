@@ -190,6 +190,8 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
     var scheduledTask: String?
     var entrypoint: String?
     var sawFirstPrompt = false
+    /// The latest typed prompt came from a fleet planner, not a human.
+    var lastPromptIsDispatch = false
     var parsedRecords = 0
 
     mutating func fold(_ line: String) {
@@ -220,6 +222,12 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
             scheduledTask = scheduledTaskName(in: content)
         }
 
+        if type == "user",
+           let message = record["message"] as? [String: Any],
+           let content = message["content"] as? String {
+            lastPromptIsDispatch = isFleetDispatch(content)
+        }
+
         guard type == "assistant" else { return }
         guard let message = record["message"] as? [String: Any] else { return }
 
@@ -246,7 +254,7 @@ struct ClaudeCheckpoint: AdapterCheckpoint {
         } else {
             switch lastAssistantStopReason {
             case "tool_use": lastEvent = .producing
-            case "end_turn": lastEvent = .turnComplete
+            case "end_turn": lastEvent = lastPromptIsDispatch ? .settled : .turnComplete
             default: lastEvent = .unknown
             }
         }

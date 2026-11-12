@@ -20,6 +20,13 @@ public enum LastEventKind: String, Codable, Sendable {
     case unknown
 }
 
+/// A fleet planner's prompt to one of its seats. The orca and herdr fleet
+/// skills open every dispatch with `Dispatch <id>:` and the planner reads the
+/// reply file, so the seat finishing that turn is not waiting on a human.
+func isFleetDispatch(_ prompt: String) -> Bool {
+    prompt.prefixMatch(of: /Dispatch `?[\w.-]+`?:/) != nil
+}
+
 /// Thresholds for turning "when did something last happen" into a state.
 public struct StateEngineConfig: Sendable, Equatable {
     /// Activity newer than this means the session is actively producing.

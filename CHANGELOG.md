@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Fix: a finished job no longer asks for you.** A Codex app scheduled task's
+  run, and a Codex or Claude Code fleet seat that finished a `Dispatch <id>:`
+  prompt, showed under Needs You as "your turn", though no one was expected to
+  reply. Vibra now reads who started the turn and lists these as idle. A turn
+  you started still shows as your turn.
 ## 0.4.1
 
 - **Fix: Vibra builds with Swift 6.1.** 0.4.0 compiled with Swift 6.4 but not

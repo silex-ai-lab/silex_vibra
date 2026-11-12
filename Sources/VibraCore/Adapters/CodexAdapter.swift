@@ -236,6 +236,9 @@ struct CodexCheckpoint: AdapterCheckpoint {
     var latest: Date?
     var lastRecordType: String?
     var lastEventKind: String?
+    /// False when the latest turn was started by a Codex app automation or a
+    /// fleet dispatch: its end is a delivered result, not a question.
+    var lastTurnIsHumans = true
 
     mutating func fold(_ line: String) {
         guard let record = jsonObject(line) else { return }
@@ -250,6 +253,20 @@ struct CodexCheckpoint: AdapterCheckpoint {
            let payload = record["payload"] as? [String: Any],
            let eventType = payload["type"] as? String {
             lastEventKind = eventType
+            if eventType == "task_started" {
+                let attribution = payload["turn_attribution"] as? [String: Any]
+                let trigger = attribution?["turn_trigger"] as? String ?? "user"
+                lastTurnIsHumans = !trigger.hasPrefix("automation")
+            }
+        }
+
+        if type == "response_item",
+           let payload = record["payload"] as? [String: Any],
+           payload["role"] as? String == "user",
+           let content = payload["content"] as? [[String: Any]],
+           let text = content.first?["text"] as? String,
+           isFleetDispatch(text) {
+            lastTurnIsHumans = false
         }
 
         if let raw = record["timestamp"] as? String, let ts = parseISODate(raw) {
@@ -300,7 +317,7 @@ struct CodexCheckpoint: AdapterCheckpoint {
         let lastEvent: LastEventKind
         switch lastEventKind {
         case "task_complete":
-            lastEvent = .turnComplete
+            lastEvent = lastTurnIsHumans ? .turnComplete : .settled
         case "task_started", "item_completed", "token_count":
             lastEvent = .producing
         default:
