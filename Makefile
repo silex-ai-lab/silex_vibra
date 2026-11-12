@@ -3,7 +3,7 @@
 
 APP_NAME    := Vibra
 BUNDLE_ID   := ai.silexlab.vibra
-VERSION := 0.4.1
+VERSION := 0.4.2
 CONFIG      := release
 BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app

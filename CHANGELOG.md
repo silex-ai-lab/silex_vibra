@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.2
 
 - **Fix: a finished job no longer asks for you.** A Codex app scheduled task's
   run, and a Codex or Claude Code fleet seat that finished a `Dispatch <id>:`
