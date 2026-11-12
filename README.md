@@ -115,8 +115,8 @@ Quit an older Vibra copy before launching the Homebrew app. Homebrew does not
 replace `/Applications/Vibra.app` or update login items. This build is ad-hoc
 signed and not notarized. See the tap's [migration and signing notes](https://github.com/silex-ai-lab/homebrew-tap#switch-from-a-manual-installation).
 
-Quit Vibra before updating with `brew upgrade silex-ai-lab/tap/vibra` or
-removing it with `brew uninstall silex-ai-lab/tap/vibra`.
+Quit Vibra before updating with `brew upgrade silex-ai-lab/tap/vibra`. To
+remove Vibra and its saved data, see [Removing Vibra](#removing-vibra).
 
 #### Manual source build
 
@@ -143,10 +143,21 @@ Vibra has no Dock icon and no window. **The menu bar item is the whole app.**
 Look on the right-hand side of your menu bar for `Vibra`, or for a count such
 as `2▶ 1!` when sessions are live.
 
-To remove it completely:
+### Removing Vibra
+
+Quit Vibra first. Then remove the app the way you installed it:
 
 ```sh
-make uninstall
+brew uninstall silex-ai-lab/tap/vibra   # Homebrew
+make uninstall                          # manual build, from the repository
+```
+
+Either one leaves saved data behind: your answers in the Review Agent Activity
+window and Vibra's settings. To remove those too:
+
+```sh
+rm -rf ~/Library/Application\ Support/Vibra
+defaults delete ai.silexlab.vibra
 ```
 
 ### First launch
@@ -210,6 +221,13 @@ instead.
   for Claude Code and Codex, plus tips on what cost your Claude Code sessions
   the most.
 - **History…** (⌘Y): the questions you asked your agents.
+- **Code checks** in Session Details (Claude Code and Codex): whether a test,
+  build or lint command ran after the session's last code change, and what it
+  returned. It never says a task is done. See
+  [features](docs/features.md#the-menu).
+- **Review Agent Activity…** (Claude Code and Codex): findings such as
+  credential reads or writes outside the workspace, each for you to answer or
+  report to the vendor yourself.
 - **`--query`**: the menu as JSON, for scripts.
 
 Details: [features](docs/features.md).
