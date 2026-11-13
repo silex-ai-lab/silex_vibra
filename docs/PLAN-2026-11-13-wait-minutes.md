@@ -671,7 +671,7 @@ tokens, USD 0.2770).
 | An unreadable transcript made the oracle raise a traceback that prints its path | sol 1 | `jsonl_lines` yields nothing for a file it cannot read, as Vibra's reader does (`try?`), and prints nothing. The selftest makes a `chmod 000` file whose path carries sentinels and asserts exit 0 with empty stdout and stderr |
 | `--from 9999-12-31` overflowed the oracle's date type | sol 2 | Both implementations accept `--from/--to` years 1970 to 9998 and exit 2 outside it; `oracle_selftest.py` and `WaitWindowTests` pin 9998-12-31, 9999-12-31, 1969-12-31 and 1970-01-01. `features.md` states the range |
 | The pilot cited the discarded run's timings and stated a cause for the snapshot difference | sol 3 | The discarded runs' numbers are gone; the difference between the two snapshots is stated as observed, with possible explanations labelled unverified, including the round-1 rule changes |
-| Non-blocking folded | claude 1, 2, 3, 4 | The oracle trims whitespace with Foundation's `whitespacesAndNewlines` set instead of `str.strip()` (U+001C-U+001F stay), pinned in the selftest; the task 7 row points here; `agreement_run.sh` prints each run's real exit code; this entry |
+| Non-blocking folded | claude 1, 2, 3, 4 | The oracle trims whitespace with Foundation's `whitespacesAndNewlines` set instead of `str.strip()` (U+001C-U+001F stay), pinned in the selftest (that case was dropped by a later edit in round 3 and restored in round 4); the task 7 row points here; `agreement_run.sh` prints each run's real exit code; this entry |
 | Non-blocking answered | sol 1, 2 | CI on Swift 6.1.2 runs when the branch is pushed after the gate and is recorded before merge. The snapshot copies from two days before `from`, a superset of the one-day ingestion cutoff; both programs apply the cutoff themselves, so the extra files change nothing, and the superset avoids `find -newer` dropping a file whose time equals the marker |
 
 The agreement run was repeated at `187e1f5` (after the oracle trim change):
@@ -679,15 +679,16 @@ identical in both orders and on live data, the committed output unchanged.
 
 **Round 3** at `67e444d`, diff hash `afa268e6f2b2476740a1b3bcc1522bc96c329cf0`
 (67 paths). reviewer-sol: IMPL-REJECTED, 2 blocking (100,504 input and 2,968
-output tokens, USD 0.2538). reviewer-claude: its round-3 reply had not
-arrived when the fixes below began; it is superseded by round 4, and its
-round-3 dispatch is closed as superseded.
+output tokens, USD 0.2538). reviewer-claude (`claude-fable-5-2`):
+IMPL-APPROVED, two non-blocking notes; its reply arrived at 15:33 UTC, while
+the fixes below were under way, and the ledger closes that dispatch as
+`superseded` because round 4 re-judges the changed diff.
 
 | Objection | From | Change |
 |---|---|---|
 | Where DST skips midnight, Swift's upper end was the start of `--to` plus a calendar day, which kept 01:00 and added an hour (`America/Sao_Paulo`, 2018-11-04) | sol 1 | Each end is now the local midnight of its own civil date, resolved independently, in both. Shared fixture `midnight-dst` holds a wait ending in the extra hour (now out) and one at `lo` (in); `WaitWindowTests` pins both ends. An oracle mutation reproducing the old Swift rule fails on that fixture |
 | A local day that does not exist (`Pacific/Apia`, 2011-12-30) was rejected by Swift and accepted by the oracle | sol 2 | Shared policy: a `--from` date, or the day after `--to`, whose local day does not exist is a usage error (exit 2) in both; checked by a local round trip. Pinned in both suites, with 2011-12-31 accepted; a mutation removing the oracle's check fails |
-| Non-blocking folded | sol 2 | The oracle's unreadable-file test injects a `PermissionError` instead of relying on `chmod 000` |
+| Non-blocking folded | sol 2, claude 1, 2 | The oracle's unreadable-file test injects a `PermissionError` instead of relying on `chmod 000`; the oracle treats U+200B as whitespace, as Foundation does (the one scalar where the two sets differ, per the reviewer's enumeration), with a selftest case; `features.md` quotes the measured range of run times |
 | Non-blocking answered | sol 1 | CI on Swift 6.1.2 before merge, as recorded above |
 
 The agreement run was repeated at `f7ca514`: identical in both orders and on

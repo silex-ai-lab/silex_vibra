@@ -118,6 +118,8 @@ for tz, argv, code in (("America/Sao_Paulo", ["--from", "2018-11-04", "--to", "2
     check("skipped day %s %s" % (tz, argv), with_tz(tz, lambda: w.run(argv, {"VIBRA_HOME": "/nonexistent"})[0]), code)
 check("skipped midnight window", with_tz("America/Sao_Paulo", lambda: w.parse_window(["--from", "2018-11-04", "--to", "2018-11-04"], 0)),
       (1_541_300_400_000, 1_541_383_200_000))
+check("trim keeps U+001F like Swift", (w.trim("\x1f a \u2003"), w.is_injected_wrapper("\x1f<user_shell_command>ls</user_shell_command>", {"user_shell_command"})), ("\x1f a", False))
+check("U+200B is whitespace like Foundation", (w.trim("\u200b"), w.lstrip_spaces("\u200b# AGENTS.md")), ("", "# AGENTS.md"))
 check("buckets", [w.bucket(n) for n in (1, 2, 3, 4, 7, 8, 30)], ["1", "2-3", "2-3", "4-7", "4-7", "8+", "8+"])
 
 if failures:
