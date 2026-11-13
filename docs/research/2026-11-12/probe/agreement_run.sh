@@ -1,9 +1,13 @@
 #!/bin/bash
 # Frozen-snapshot agreement run for --wait-stats (plan task 7). Prints counts, sizes, timings and diff
 # results only; the snapshot lives in the caller's private directory and is deleted at the end.
-# usage: agreement_run.sh <vibra binary> <repo> <private snapshot dir> <from> <to>
+# usage: agreement_run.sh <repo> <private snapshot dir> <from> <to>
+# Builds VibraApp from the repo's working tree first, so the binary cannot be stale.
 set -euo pipefail
-bin="$1"; repo="$2"; snap="$3"; from="$4"; to="$5"
+repo="$1"; snap="$2"; from="$3"; to="$4"
+( cd "$repo" && swift build --build-system native --product VibraApp >/dev/null 2>&1 )
+bin="$(cd "$repo" && swift build --build-system native --show-bin-path 2>/dev/null)/VibraApp"
+echo "binary built from $(git -C "$repo" rev-parse --short HEAD)$(git -C "$repo" diff --quiet HEAD -- Sources || echo ' plus uncommitted Sources changes'), sha256 $(shasum -a 256 "$bin" | cut -c1-16)"
 export TZ=America/Los_Angeles
 rm -rf "$snap"; mkdir -p "$snap"
 marker=$(mktemp); touch -t "$(date -j -v-2d -f %Y-%m-%d "$from" +%Y%m%d)0000" "$marker"
