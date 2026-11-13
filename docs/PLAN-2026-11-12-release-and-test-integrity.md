@@ -1,6 +1,6 @@
 # Plan: notarized release pipeline, and test-weakening evidence in Code checks
 
-Version: v0.2. Status: draft for the plan gate, round 2. Date: 2026-11-12.
+Version: v0.3. Status: draft for the plan gate, round 3. Date: 2026-11-12.
 
 ## What the owner asked for
 
@@ -24,8 +24,11 @@ advanced since 2026-10-01 while distribution has not: P3.1 Developer ID has been
 |---|---|
 | Fleet | orca-agent-fleet, standard roster, transport Orca (own handle resolved, runtime reachable) |
 | Planner | Claude Code, `claude-opus-5-5`, calling pane |
-| coder-deepseek | OpenCode 2.0.20, `deepseek/deepseek-flash`, footer shows DeepSeek V4.1 Flash |
+| reviewer-claude | Claude Code started with `claude --model fable --permission-mode default --add-dir $SCRATCH` (Fable, a model other than the planner's); joined at round 3 |
 | reviewer-codex | Codex CLI 0.167.2, TUI shows GPT-6-Sol medium Fast; weekly limit 22% left at start |
+| coder-deepseek | OpenCode 2.0.20, `deepseek/deepseek-flash`, footer shows DeepSeek V4.1 Flash. Codes, never votes |
+| Gates | Both reviewers' literal approvals plus the planner's written sign-off |
+| Roster change | Rounds 1-2 ran under the earlier standard roster (DeepSeek and Codex voting). The owner's rule of 2026-11-12 (the skill now says two reviewer approvals pass a gate and DeepSeek only codes) was adopted before round 3: reviewer-claude added, DeepSeek's votes now advisory. Its round-1 objections stay answered below; its round-2 PLAN-APPROVED is recorded, not counted |
 | Branch | `feat/release-and-test-integrity` from `origin/main` at `35fdc05` |
 | Not stacked on | PR #13 (`docs/swift-6.1-floor`, README only, open). This run edits no README, so the two do not conflict |
 | `$SCRATCH` | `/var/folders/x3/8mdzc51d11j_z0l1mt77lpmr0000gn/T//fleet-MVz3zM` |
@@ -134,13 +137,23 @@ Types (task 1, the foundation):
 
 ```swift
 public enum TestEditEffect: String, Sendable, CaseIterable {
-    case assertionCallsRemoved, skipMarkerAdded, focusMarkerAdded, expectedFailureMarkerAdded, testFunctionsRemoved
+    case fewerAssertionMatches, moreSkipMatches, moreFocusMatches, moreExpectedFailureMatches, fewerTestFunctionMatches
 }
 /// Pattern-match counts in an edit's removed and inserted text. Numbers only.
-public struct PatternCounts: Sendable, Equatable { public var assertion, skip, focus, expectedFailure, testFunction: Int }
+public struct PatternCounts: Sendable, Equatable {
+    public var assertion, skip, focus, expectedFailure, testFunction: Int
+    public init(assertion: Int, skip: Int, focus: Int, expectedFailure: Int, testFunction: Int)
+}
+/// Opaque per-session key for one file: a hash of its path. Never printed.
+public struct PathKey: Sendable, Hashable { /* hash value only */ }
 public enum CodeChangeTarget: Sendable, Equatable {
     case source
     case test(path: PathKey, before: PatternCounts?, after: PatternCounts?)   // nil: text not available
+}
+public struct CodeChange: Sendable, Equatable {
+    public let at: Date            // the edit call's open time, as today
+    public let completedAt: Date?  // its successful result's record time
+    public let target: CodeChangeTarget
 }
 public struct ObservedCheck: Sendable, Equatable {
     public let at: Date            // issued, as today
@@ -148,17 +161,20 @@ public struct ObservedCheck: Sendable, Equatable {
     public let kind: CheckKind, result: CheckResult
 }
 public enum EvidenceEvent: Sendable, Equatable {
-    case codeChange(Date, CodeChangeTarget)
+    case codeChange(CodeChange)
     case check(ObservedCheck)
 }
 ```
+
+Existing Code checks logic keeps using `CodeChange.at`, so today's rows do not
+change.
 
 `PathKey` is an opaque per-session key for "the same file" (a hash of the path,
 computed in the extractor, never printed). It exists only so edits to one file
 can be netted; no path reaches any output.
 
-`completedAt` comes from the `tool_result` record's timestamp (Claude Code) and
-the `item_completed` record's timestamp (Codex).
+`completedAt` (on checks and changes) comes from the `tool_result` record's
+timestamp (Claude Code) and the `item_completed` record's timestamp (Codex).
 
 **Test path.** A changed path is a test path when a directory component is one
 of `test`, `tests`, `__tests__`, `spec`, `specs`, `Tests`, `testing`, or the
@@ -186,10 +202,12 @@ non-overlapping leftmost search (Python `re.findall`, Swift `NSRegularExpression
 | assertion | `\bassert\w*\b\|\bXCTAssert\w*\|#expect\b\|#require\b\|\bexpect\(\|\.should\b\|\bt\.(?:Error\|Fatal)f?\(\|\brequire\.\w+\(` |
 | skip | `pytest\.mark\.skip\w*\|\.skip\(\|\bxit\(\|\bxdescribe\(\|\bXCTSkip\w*\|@Disabled\b\|\.disabled\b\|\bt\.Skip\w*\(\|#\[ignore\]\|@unittest\.skip\w*` |
 | focus | `\.only\(\|\bfit\(\|\bfdescribe\(` |
-| expectedFailure | `pytest\.mark\.xfail\b\|\bwithKnownIssue\b\|@unittest\.expectedFailure\b\|\.failing\(` |
+| expectedFailure | `pytest\.mark\.xfail\b\|\bwithKnownIssue\b\|\bXCTExpectFailure\b\|@unittest\.expectedFailure\b\|\.failing\(` |
 | testFunction | `\bdef test_\w*\|\bfunc test\w*\|@Test\b\|\bit\(\|\btest\(\|#\[test\]\|\bfunc Test\w+\(` |
 
 (`\|` above is a table escape for `|`.) The oracle implements the same table.
+`.todo(` is deliberately in no family: turning `it(` into `it.todo(` already
+lowers the test-function count, and adding a new todo weakens nothing.
 
 **When the clause shows.** All of these must hold:
 
@@ -198,41 +216,48 @@ non-overlapping leftmost search (Python `re.findall`, Swift `NSRegularExpression
 2. The test check immediately before P (no other test check between them) is F,
    and F **failed**. Build and lint checks between them do not break adjacency.
 3. F has a `completedAt`.
-4. Consider test-path changes with `F.completedAt < change.at < P.at` (both
-   strict). Group them by `PathKey`. A file with any change whose counts are
-   nil is dropped (no claim about it). For each remaining file, net =
-   sum(after) − sum(before) per count.
+4. Consider test-path changes with `F.completedAt < change.at` and
+   `change.completedAt < P.at` (both strict): the edit started after F's
+   result was recorded and finished before P was issued. Group them by
+   `PathKey`. A file with any change whose counts are nil, or any change in the
+   window whose `completedAt` is nil, is dropped (no claim about it). For each
+   remaining file, net = sum(after) − sum(before) per count.
 5. An effect is present when, for at least one file: assertion net < 0
-   (`assertionCallsRemoved`), skip net > 0 (`skipMarkerAdded`), focus net > 0
-   (`focusMarkerAdded`), expectedFailure net > 0
-   (`expectedFailureMarkerAdded`), testFunction net < 0
-   (`testFunctionsRemoved`). No effect: no clause.
+   (`fewerAssertionMatches`), skip net > 0 (`moreSkipMatches`), focus net > 0
+   (`moreFocusMatches`), expectedFailure net > 0
+   (`moreExpectedFailureMatches`), testFunction net < 0
+   (`fewerTestFunctionMatches`). No effect: no clause.
 
 Netting per file makes "skip added, then removed before the pass" and "assertion
-moved within the file" produce no clause.
+moved within the file" produce no clause. Only the first passing run after the
+failure can carry the clause; a second run with no edit between hides it
+(stated in `docs/features.md`).
 
 The existing rule is unchanged: a check at the same instant as a change counts
 as before it, so a change at exactly P.at makes the row `changedAfterLastCheck`
 and no clause can show.
 
-**Wording.**
-`… It exited with status 0. Between a failed test run that finished 12 m ago and this run, edits to a test file left fewer assertion calls in the edited text and added a skip marker. Vibra compares only the edited text, not the whole file.`
-Effect phrases, in `TestEditEffect.allCases` order, joined with commas and a
-final "and": "left fewer assertion calls in the edited text", "added a skip
-marker", "added a focus marker (.only)", "added an expected-failure marker",
-"left fewer test functions in the edited text". The existing limit sentence
-stays last.
+**Wording.** It names pattern matches, never calls, markers or functions,
+because a string containing a pattern word matches like code.
+`… It exited with status 0. Between a failed test run that finished 12 m ago and this run, edits to test files changed Vibra's text-pattern counts in the edited text: fewer assertion matches, more skip matches. Vibra matches text patterns in the edited text only; it does not parse code or read the whole file.`
+Effect phrases, in `TestEditEffect.allCases` order, joined with ", ": "fewer
+assertion matches", "more skip matches", "more focus (.only) matches", "more
+expected-failure matches", "fewer test-function matches". The existing limit
+sentence stays last.
 
 **Shape change.** `DeliveryEvidence.checkedAfterLastChange(ObservedCheck)`
 becomes `checkedAfterLastChange(ObservedCheck, testEdits: Set<TestEditEffect>)`.
 Every caller migrates; `caseName` is unchanged. `--evidence-stats`: `change
 agent=<a>` becomes `change agent=<a> target=<source|test.compared|test.unseen>`
-(`test.compared` = counts present, `test.unseen` = nil), and each reported row
-with effects adds one `qualified agent=<a> effect=<e>` line per effect.
+(`test.compared` = counts present, `test.unseen` = nil), and a new counted group
+`qualified agent=<a> effect=<e> n=<k>` (rows whose clause names that effect),
+aggregated and sorted like the other groups.
 
 **Known limits, written in `docs/features.md` and `docs/privacy.md`.** A
 whole-file `Write`, a notebook edit, a shell edit and every Codex edit produce
-no clause. Strings containing the pattern words count like code.
+no clause. Strings and identifiers containing the pattern words count like
+code; the wording says "matches" for that reason. A re-run after the first pass
+hides the clause.
 
 **Privacy.** Edit text is read only to count pattern matches, in the extractor,
 and dropped; the path is reduced to an opaque key. `evidenceSentinelsNeverLeak`
@@ -284,8 +309,8 @@ workflows run:
 
 1. `make app ARCHS="arm64 x86_64" HARDENED=1 SIGN_IDENTITY=<"" in dry run, $MACOS_SIGN_IDENTITY in release>`
 2. `codesign --verify --strict` on the bundle; `make dmg`.
-3. Mount the DMG read-only and check the **mounted** app: `lipo -archs` lists
-   `x86_64 arm64`; `codesign -d --verbose` flags include `runtime`; the
+3. Mount the DMG read-only and check the **mounted** app: `lipo -archs`
+   contains both `x86_64` and `arm64` (any order); `codesign -d --verbose` flags include `runtime`; the
    entitlements (if kept) are present; its CDHash equals the pre-DMG bundle's.
    Release only: `TeamIdentifier` equals `$APPLE_TEAM_ID`.
 4. Release only: `xcrun notarytool submit --wait` with the API key; on a
@@ -307,7 +332,9 @@ workflows run:
   `permissions: contents: write` on this job only, top-level
   `permissions: contents: read`. No `workflow_dispatch`: the dry run lives in
   `build.yml`, so it runs on branches without the protected environment.
-- No third-party actions except `actions/checkout`, pinned by full commit SHA.
+- No third-party actions except `actions/checkout`, pinned by full commit SHA,
+  with `persist-credentials: false`. The `gh release create` step sets
+  `GH_TOKEN: ${{ github.token }}` explicitly.
 - Fails unless the tag equals `v$(VERSION)` from the Makefile and
   `docs/releases/v$(VERSION).md` exists.
 - Keychain: create `$RUNNER_TEMP/release.keychain-db` with
@@ -347,17 +374,17 @@ to date (it still says 1 star). No README edit in this run.
 | # | Owner | Task | Depends on | Acceptance |
 |---|---|---|---|---|
 | 1 | planner | Foundation: the types above, every caller migrated, behaviour unchanged (`.source` for every change, `completedAt` filled where available, empty `testEdits`) | — | `make test` count equals the count measured just before the change; `--evidence-stats --days 30` on the planner's data identical apart from the renamed change line |
-| 2 | deepseek | Claude and Codex extractors: test path, `PathKey`, comment stripping, counts, `completedAt`; synthetic fixtures | 1 | `EvidenceExtractorTests`: each regex family; boundary non-matches `wait(`, `exit(`, `split(`, `.shoulder`, `latest(`, `asser`; a commented-out assertion counted as removed; `#expect` kept; `conftest.py` and `tests/test_x.py` test paths; `tests/fixtures/a.py` and `test_data/x` not; `Write`, `NotebookEdit`, Codex as nil counts; `completedAt` from the result record for both agents; `make test` green |
-| 3 | deepseek | `DeliveryEvidence.build` per "When the clause shows"; wording; `--evidence-stats` lines | 2 | `DeliveryEvidenceTests`: clause on fail → assertion-removing edit → pass; no clause when a passed or unknown test check sits between F and P; no clause when the edit is before `F.completedAt` (made while F ran); no clause when F has no `completedAt`; skip added then removed → none; assertion removed then restored → none; assertion moved within one file → none; nil-count edit on the only file → none; passed build → none; two effects in order; a build check between F and P keeps adjacency; change at exactly P.at → case `changedAfterLastCheck`. `EvidenceStatsTests` updated |
-| 4 | planner | Oracle mirrors tasks 2-3 in `tools/evidence-oracle`; selftest with the task 3 cases; real-data run | 3 | `oracle_selftest.py` passes; on the planner's 30-day data `diff <(Vibra --evidence-stats --days 30) <(evidence_oracle.py --days 30)` is empty; the `qualified … n=` lines are recorded here (the probe's 3 is an upper-bound guide only, the rule differs), and one rendered clause from a real row is quoted here (content-free by construction); if the count is 0, that is recorded and the launch kit drops the test-edit line |
+| 2 | deepseek | Claude and Codex extractors: test path, `PathKey`, comment stripping, counts, `completedAt` for checks and changes; synthetic fixtures | 1 | `EvidenceExtractorTests`: each regex family, including `XCTExpectFailure` and `.failing(`; boundary non-matches `wait(`, `exit(`, `split(`, `.shoulder`, `latest(`, `asser`; a commented-out assertion counted as removed; `#expect` kept; `conftest.py` and `tests/test_x.py` test paths; `tests/fixtures/a.py` and `test_data/x` not; `Write`, `NotebookEdit`, Codex as nil counts; `completedAt` from the result record for both agents, for checks and for edits; `make test` green |
+| 3 | deepseek | `DeliveryEvidence.build` per "When the clause shows"; wording; `--evidence-stats` lines | 2 | `DeliveryEvidenceTests`: clause on fail → assertion-removing edit → pass; no clause when a passed or unknown test check sits between F and P; no clause when the edit is before `F.completedAt` (made while F ran); no clause when F has no `completedAt`; no clause when the edit opens before P and its result lands after P is issued; a string-only change (`"assert(x)"` text removed inside a string literal) produces the clause with the pinned "matches" wording; skip added then removed → none; assertion removed then restored → none; assertion moved within one file → none; nil-count edit on the only file → none; passed build → none; two effects in order; a build check between F and P keeps adjacency; change at exactly P.at → case `changedAfterLastCheck`. `EvidenceStatsTests` updated |
+| 4 | planner | Oracle mirrors tasks 2-3 in `tools/evidence-oracle`; selftest with the task 3 cases; real-data run | 3 | `oracle_selftest.py` passes; on the planner's 30-day data `diff <(Vibra --evidence-stats --days 30) <(evidence_oracle.py --days 30)` is empty; the `qualified … n=` lines are recorded here (the probe's 3 is an upper-bound guide only, the rule differs), and, if at least one row qualifies, one rendered clause from a real row is quoted here (content-free by construction); if the count is 0, that is recorded and the launch kit drops the test-edit line |
 | 5 | planner | Check the OWASP ids against the OWASP PDF; amend the mapping table (a change here needs a confirmation round before task 6) | — | The table cites the PDF page for each id |
 | 6 | deepseek | `IncidentKind.owaspAgentic`, the JSON field, the vendor-report line | 5 | Tests pin the mapping for every kind and the JSON field; `incidentSentinelsNeverLeak` still passes |
 | 7 | deepseek | Privacy canary extension for edit text and test paths | 2 | The extended `evidenceSentinelsNeverLeak` passes, and fails when the planner mutates the extractor to put `new_string` in the row text (mutation run recorded) |
 | 8 | deepseek | Makefile `ARCHS`, `HARDENED`, packaging-only `dmg`; `packaging/Vibra.entitlements`; `tools/release/package.sh` | — | On this Mac: plain `make app` unchanged (`codesign -d` shows ad-hoc, no runtime flag); `make dmg` without a bundle fails and builds nothing; `package.sh --dry-run` passes all its mounted-app checks if Command Line Tools here can build x86_64, otherwise the task 9 CI log is the proof and the local failure is recorded; `shellcheck tools/release/package.sh` clean |
 | 9 | deepseek | `build.yml` dry-run job | 8 | Green on the branch's CI run; the log shows the mounted-app checks and the 20 s launch |
 | 10 | deepseek | `release.yml` per spec | 8 | `actionlint` clean; the release path of `package.sh` reviewed line by line against the spec in the code gate. Its real proof is task 14 |
-| 11 | planner | Live check of the hardened build on this Mac, with and without the entitlement: menu fills, Return to Session in iTerm and Orca, `--query` exits 0 | 8 | Recorded here with date and what was seen; entitlement kept only if Return to Session fails without it |
-| 12 | planner | Docs: CHANGELOG, `docs/features.md`, `docs/privacy.md`, ROADMAP (P3.1 "pipeline built, awaiting certificate"; P1.4 untouched), `docs/RUNBOOK-developer-id.md`, `docs/releases/v0.5.0.md` (draft notes), `plan/LAUNCH-KIT.md`, `plan/STATUS.md` | 3, 6, 10 | `tools/readme-anchors.sh` exits 0; every claim in the new text names a probe, test or task here |
+| 11 | planner | Live check of the hardened build on this Mac, with and without the entitlement: menu fills, Return to Session in iTerm and Orca, `--query` exits 0 | 8 | Recorded here with date, what was seen, the signing identity of each variant, and the Automation (TCC) grant state before each test (reset with `tccutil reset AppleEvents ai.silexlab.vibra` between variants); entitlement kept only if Return to Session fails without it |
+| 12 | planner | Docs: CHANGELOG, `docs/features.md`, `docs/privacy.md`, ROADMAP (P3.1 "pipeline built, awaiting certificate"; P1.4 untouched), `docs/RUNBOOK-developer-id.md`, `docs/releases/v0.5.0.md` (draft notes), `plan/LAUNCH-KIT.md`, `plan/STATUS.md` | 3, 4, 6, 10 | `tools/readme-anchors.sh` exits 0; every claim in the new text names a probe, test or task here |
 | 13 | owner (optional) | Label the 3 probe recoveries legitimate or not; the planner prints session ids and timestamps only | — | Result recorded here; informs wording later, gates nothing |
 | 14 | planner, with the owner | Real release, after the code gate, the merge, the owner's go-ahead and the secrets: bump to 0.5.0, tag `v0.5.0`, `release.yml` runs | 12, secrets | The run log shows notarization Accepted, `stapler validate` ok, both `spctl` checks accepted as Notarized Developer ID, `lipo` both arches, `TeamIdentifier` match; the draft release carries the DMG, its `.sha256` (checked against a fresh download) and `docs/releases/v0.5.0.md` as body; a downloaded copy with `com.apple.quarantine` opens without the unidentified-developer block, Vibra's Setup reports notification authorization granted. Only then ROADMAP P3.1 becomes Done and the launch kit applies |
 
@@ -410,3 +437,13 @@ Round 1 on v0.1 (`6dc87e0`): codex PLAN-REJECTED (5), deepseek PLAN-REJECTED (9)
 | `codesign` will not see the temporary keychain (deepseek 8) | Search-list, unlock, partition-list and `find-identity` steps specified; decoded keys in `$RUNNER_TEMP`, removed before upload and in `always()` |
 | Research file still claims ImpossibleBench transcripts (deepseek 9) | Corrected in `research-literature.md`, errata added (`docs/research/2026-11-12`) |
 | Folded non-blocking | `--triple`/`--scratch-path` cross-build (codex); prevalence framed as token counts (codex); why the clause beats the waiting metric, Write/Codex limits stated, three stats labels, baseline count, entitlement decided by test, CI fallback for x86_64, runbook CSR step fixed, `APPLE_TEAM_ID` used for TeamIdentifier, `test_data` excluded, STATUS star count (deepseek). Runbook "G2 Sub-CA" kept with its "if the page offers it" guard |
+
+## Round-2 objections → changes
+
+Round 2 on v0.2 (`b68f071`): codex PLAN-REJECTED (2), deepseek PLAN-APPROVED (advisory after the roster change).
+
+| Objection (who) | Change |
+|---|---|
+| An edit opened before P can finish after P starts; changes carry no completion time (codex 1) | `CodeChange` carries `completedAt`; rule 4 requires `change.completedAt < P.at`; nil drops the file; task 3 fixture for the straddling edit |
+| "Fewer assertion calls / a skip marker" overclaims when only string text matched (codex 2) | Effects renamed to pattern matches (`fewerAssertionMatches` …); wording says "text-pattern counts", "matches", "does not parse code"; task 3 pins a string-only fixture with that wording |
+| Folded non-blocking | Counted `qualified … n=` lines (deepseek 1); re-run hides the clause, documented (deepseek 2); `XCTExpectFailure` added, `.failing(` kept (Jest `test.failing`) (deepseek 3); `.todo(` omission made deliberate (deepseek 4); `lipo` contains-both (deepseek 5); task 12 depends on 4 (deepseek 6); `PathKey: Hashable`, `PatternCounts.init` (deepseek 7); `persist-credentials: false`, explicit `GH_TOKEN` (deepseek 8); "edits to test files" (deepseek 9); task 4 quote conditional (codex); task 11 records identity and TCC state (codex) |
