@@ -617,3 +617,23 @@ test or acceptance in the approved plan:
 
 PLANNER (claude): PLAN-APPROVED, plan v0.5 at `2dcedb3`. Both reviewers'
 literal approvals were read in their reply files.
+
+## Execution record
+
+Toolchain note: on this Mac (Swift 6.4 Command Line Tools, no Xcode) the
+default SwiftPM build system cannot load the Swift Testing macro plugin, as
+the Makefile already documents, so every test run here is
+`make test SWIFT_BUILD_SYSTEM=native`. At `BASE` that gives 564 tests, all
+passing. CI (Swift 6.1.2, the floor) runs when the branch is pushed, which
+happens only after the code gate.
+
+| Task | Result | Evidence |
+|---|---|---|
+| 1 | Done, `fabe0db` (planner) | 564 tests before and after; `--wait-stats` argument cases: `--days 1` and no flag exit 0; `--days 0`, `x`, `-3`, a bare `--days`, `--from` or `--to` alone, `from > to`, `2026-02-30`, `2026-1-01`, `--days` with `--from/--to`, and `--to` without a value each exit 2 with a usage line; a bad `VIBRA_NOW` exits 2 |
+| 2 | Done, `8222ece` (planner) | `oracle_selftest.py`: 8 shared scenarios byte for byte plus unit cases. My first unit expectations used 2025 epoch constants; `date -u -j` confirmed the oracle's 2026 values, and the test constants were fixed. Mutations (`pilot/oracle-mutations.txt`): the same-response rule, the automation-turn rule, the human-command rule, result consumption, the `isMeta` skip, the half-open window and the cap boundary each turn it red. The `isMeta` mutation first survived (the only `isMeta` fixture was a user record History drops anyway), so an `isMeta` assistant `end_turn` record was added to `claude-basic` |
+| 3 | Done, `44f2148` (DeepSeek, reviewed) | 570 tests (planner run). After task 3, the tag census (`probe/wait-rule-after-task3-30d.txt`) leaves Claude Code 1 and Codex 4 tag-led prompts plus 2 `realtime_delegation` (kept on purpose); listed in `wait-pilot.md` |
+| 4 | Done, `e35ce32` (DeepSeek; three spec deviations fixed by the planner) | 602 tests. The planner's review found: a Codex `<user_shell_command>` sent beside another `input_text` block was missed (the code joined the blocks); an assistant record without `message` returned early instead of clearing; a `tool_use` without a name was not registered. All three fixed to the spec; the first, the one real data can produce, is pinned in the shared fixtures (`6f8fa7c`) |
+| 5 | Done, `e3b6540` (DeepSeek, reviewed) | 616 tests; all 8 scenarios byte-identical through `WaitIngest` (tests) and through the CLI binary (planner's `cli-scenarios.py`); live 7-day run 2026-11-05..11: Swift and oracle identical (23 lines) |
+| 6 | Done, `569e647` (DeepSeek) | 617 tests, `waitSentinelsNeverLeak` in `CANARIES`. Planner mutation run in a separate worktree (`pilot/canary-mutations.txt`): a `WaitFold` field holding the prompt text fails it naming `SENTINEL_PROMPT_2b7`; a `HumanWait` field holding tool input fails it naming `SENTINEL_INPUT_6e4`; restored green |
+| 7 | Done, `94659b9` (planner) | Snapshot (950 files, 2,479,108 KB), `TZ=America/Los_Angeles`, `--from 2026-10-14 --to 2026-11-12`: Swift and oracle `diff` empty in both orders (28 lines); live run identical between the two, and differs from the snapshot only in `open agent=claudeCode` 84 vs 85. Snapshot deleted after the run. Round-4 notes: the probe now counts `<user_shell_command>` closures separately, and the preview row's "3 of them" is confirmed (`turn wait closed by user_shell_command 3`); the notification fixture quoting `<command-name>` is in `claude-dispatch` |
+| 8 | Done, `5647c15` (planner) | `tools/readme-anchors.sh` exits 0; every number in the new text is from `wait-pilot.md` |
