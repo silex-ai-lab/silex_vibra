@@ -113,6 +113,7 @@ public struct ClaudeCodeAdapter: AgentAdapter {
     // MARK: - History
 
     public func historyExtractor() -> (any HistoryExtractor)? { ClaudeHistoryExtractor() }
+    public func waitExtractor() -> (any WaitExtractor)? { ClaudeWaitExtractor() }
 
     // MARK: - Evidence
 

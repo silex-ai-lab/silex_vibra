@@ -94,6 +94,7 @@ public struct CodexAdapter: AgentAdapter {
     // MARK: - History
 
     public func historyExtractor() -> (any HistoryExtractor)? { CodexHistoryExtractor() }
+    public func waitExtractor() -> (any WaitExtractor)? { CodexWaitExtractor() }
 
     // MARK: - Evidence
 
