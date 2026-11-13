@@ -1,6 +1,6 @@
 # Plan: minutes your agents waited on you (research direction C)
 
-Version: v0.4. Status: draft for the plan gate, round 3. Date: 2026-11-13.
+Version: v0.5. Status: draft for the plan gate, round 4. Date: 2026-11-13.
 
 ## What the owner asked for
 
@@ -56,7 +56,7 @@ date window per wait), not results.
 | Claude Code slash-command records: leading `<command-name>` / `<command-message>`, and whether a `<command-name>` element is present | 100 / 63, all 163 with the element; `<bash-input>` 32 | `command-records-30d.txt` |
 | Prompts that pass History's rule and still start with a tag | Claude Code: `artifact-content-authored-by-others` 1 (of 980). Codex attended: `task-notification` 9, `heartbeat` 7, `user_shell_command` 3, `command-name` 2, `command-message` 2, `realtime_delegation` 2, `local-command-stdout` 1 (of 178) | `wait-rule-30d.txt` |
 | Codex turns started by an automation (`turn_trigger` `automation_heartbeat_…`) | 18 of 374 `task_started` | `wait-rule-30d.txt` |
-| Codex turn waits folded under the v0.4 Codex rules and wrapper list (preview; History rule approximated) | 128 closed; cleared by an assistant `message` 15, `reasoning` 1, `turn_aborted` 2, an automation `task_started` 1; 19 open at end | `wait-rule-30d.txt` |
+| Codex turn waits folded under the v0.5 Codex rules, wrapper list and human-command rule (preview; History rule approximated) | 132 closed (3 of them by a `<user_shell_command>`); cleared by an assistant `message` 15, `reasoning` 1, `turn_aborted` 2, an automation `task_started` 1; 19 open at end | `wait-rule-30d.txt` |
 | Codex human prompts with no `task_started` since the last `task_complete` | 0 (a turn's prompt is written after its `task_started`) | `wait-rule-30d.txt` |
 | Codex automation prompts, by leading tag | `heartbeat` 18 of 18 (v0.3 run of the same probe; in v0.4 `heartbeat` is a wrapper, so they no longer pass) | `wait-rule-30d.txt` at commit `52ed678` |
 | Claude Code transcripts with no human prompt but human-answered dialogs (dispatch-only fleet seats) | 4 transcripts, 6 dialogs | `wait-rule-30d.txt` |
@@ -175,17 +175,25 @@ one line at a time, so prompts keep their position among the other records),
 so there is one definition of "the human typed".
 
 A **human command** is the human acting without asking a question: a Claude
-Code `type == "user"` record that touches wait state, has no `tool_result`
-block, and whose text (the string content, or the joined `text` blocks)
-contains a `<command-name>…</command-name>` element (a slash command or
-skill; Claude Code writes a custom command or skill with `<command-message>`
+Code `type == "user"` record that touches wait state, yields no History
+record, has no `tool_result` block, and whose text (the string content, or
+the joined `text` blocks), after trimming, either starts with
+`<command-name>` or `<command-message>` and contains a
+`<command-name>…</command-name>` element (a slash command or skill; a record
+that only quotes the element further in, such as a notification, does not
+qualify; Claude Code writes a custom command or skill with `<command-message>`
 first and a built-in with `<command-name>` first, and all 163 measured
-records of either form carry the element, `command-records-30d.txt`) or
-starts, after trimming, with `<bash-input>` (a `!` shell run); or, outside an
+records of either form carry the element, `command-records-30d.txt`), or
+starts with `<bash-input>` (a `!` shell run); or, outside an
 automation turn, a Codex user `message` with an `input_text` block that is
-exactly one `<user_shell_command>` element. It is not a question, so History
-still drops it. A record that would be both a human prompt and a human
-command is one human event.
+exactly one `<user_shell_command>` element and which yields no History
+record. It is not a question, so History still drops it.
+
+**Classification is exclusive, in this order**: a record that yields a
+History record is a dispatch prompt (its text satisfies `isFleetDispatch`, or
+it is in a Codex automation turn) or else a human prompt; only a record that
+yields no History record can be a human command. So a dispatch whose text
+also holds a `<command-name>` element is a dispatch prompt and nothing else.
 
 A **dispatch prompt** is a History record whose text satisfies
 `isFleetDispatch`: a fleet planner, not a human, wrote it. In a Codex turn
@@ -408,8 +416,11 @@ printed: no id, path, cwd, prompt or tool text.
 ### Privacy
 
 Prompt text exists only inside the composed History extractor, as today, and
-is dropped after the dispatch check; a human command's text is read only for
-its leading tag. Tool input is never read; only the tool
+is dropped after the dispatch check; a record that yields no History record
+has its text searched only for a leading `<command-name>`,
+`<command-message>` or `<bash-input>` tag and a `<command-name>` element
+(Claude Code) or for one whole `<user_shell_command>` block
+(Codex), and is then dropped. Tool input is never read; only the tool
 `name`, `id`, `tool_use_id`, `permissionDecision.source` and `.decision` and
 timestamps are. A new canary `waitSentinelsNeverLeak` feeds both extractors
 records whose prompt text, tool input, tool result, cwd, session id and file
@@ -436,7 +447,9 @@ automation turn followed by a human turn (and the aborted variant), a
 dispatch-only transcript with a dialog (contributes nothing), a session whose
 prompt precedes the window and whose dialog answer falls inside it (counted),
 a `<command-message>`-first slash command, a non-`rollout-` Codex file
-(ignored),
+(ignored), an open human turn wait followed by a dispatch whose text holds a
+`<command-name>` element (no closed wait, no human event, and the dispatched
+turn's end opens nothing),
 a tool_use id repeated after its result consumed it plus a duplicate result,
 half-open window edges (`end == lo`,
 `end == hi`), a DST transition day (`TZ=America/Los_Angeles`, 2026-11-01),
@@ -458,7 +471,9 @@ snapshot is never committed or sent anywhere, and is deleted after the run.
 `docs/research/2026-11-12/wait-pilot.md`: the frozen-window output of both
 implementations, the agreement result, the method and limits (n=1, one
 machine, auto mode, and every item in "Known limits"), blocked minutes with
-and without over-cap waits, and what it says about a UI surface. Every
+and without over-cap waits, which tag-led prompts still pass History after
+task 3 (and that the origin of the Claude-style tags in Codex was not
+established), and what it says about a UI surface. Every
 number in it comes from the command output quoted there.
 
 ### Notifications on/off protocol (task 9, owner, after merge)
@@ -486,7 +501,7 @@ separate the banner's effect from these; the comparison is descriptive.
 | 2 | planner | Oracle first: `tools/wait-oracle/wait_oracle.py` implements the spec from the transcripts directly (its own History rule, including the task 3 change; reads `VIBRA_HOME`, `TZ`, `VIBRA_NOW` like Vibra), `oracle_selftest.py`, and the shared fixtures with their hand-written expected outputs | — | `oracle_selftest.py` passes every shared scenario byte for byte, plus unit cases for each rule bullet; a mutation of each of: the same-response rule, the automation-turn rule, the human-command rule, result consumption, the `isMeta` skip, the half-open window, the cap boundary, fails it (recorded); the sentinel scenario prints no sentinel |
 | 3 | deepseek | History changes: Codex subagent sessions unattended; the wrapper-tag additions; `codexSourceIsSubagent` and `codexTurnIsAutomation` extracted, with `CodexCheckpoint` calling them | 1 | `QueryAndHistoryTests`: a `source: {"subagent": {"other": "guardian"}}` session and a `thread_spawn` session yield no questions; `source: "cli"` and `"vscode"` still do; the decision is taken from the first `session_meta` and survives a later `session_meta` and a batch split between the meta record and the prompts; each added tag, as the whole block, yields no question (Claude and Codex), and the same tag mid-text does not drop typed text; existing `CodexAdapterTests` for subagent and automation sessions pass unchanged; `realtime_delegation` still yields a question; `make test` green. Then the planner reruns `wait_rule_probe.py` with both lists as shipped and records how many tag-led prompts still pass History |
 | 4 | deepseek | `ClaudeWaitExtractor` and `CodexWaitExtractor` per spec; adapters return them | 1, 3 | `WaitExtractorTests` (synthetic records): turn wait end_turn → prompt; one response as several records (text then tool_use with the same `message.id`, or several end_turn blocks) opens once at the last end_turn block; a new response id after end_turn clears; a wrapper-only user record (`<task-notification>`) is not a prompt; `isMeta`, sidechain and timestamp-less records change nothing; timestamp `ms` from the string (`.5`, `.123456`, `+02:00` offset); dispatch prompt clears and its turn opens nothing; a human prompt after a dispatched turn re-arms; a slash command in both forms (`<command-name>` first, and `<command-message>` first with a `<command-name>` element after it) and a `!` run (`<bash-input>`) close an open wait and are not questions; a `<local-command-stdout>` record does not close it; a Codex `<user_shell_command>` closes it; a Codex automation `task_started` clears an open wait and its prompt and `task_complete` open nothing; the sequence automation `task_started` → `task_complete` → user `task_started` → human prompt → `task_complete` → human prompt gives exactly one turn wait (from the second `task_complete`) and the session is eligible; the same with `turn_aborted` ending the automation turn; a transcript whose only prompts are dispatches yields an empty fold even with an `AskUserQuestion` answered in it; a tool_use id repeated after its result consumed it, then a second result, yields one wait; a `<task-notification>` after end_turn followed by agent records and a new end_turn starts the wait at the later end_turn; `stop_sequence` and `max_tokens` turn ends open nothing; a user record with two `tool_result` blocks gives two waits with the same answer; an `AskUserQuestion` and a user-approved `Bash` inside a dispatched turn still count; question waits with accept, reject and no decision; `Bash` with `source: user_temporary` an approval, with `source: config` nothing; two tool_use blocks answered separately give two waits; a repeated tool_use id keeps its first time; a duplicate result yields nothing; an unknown `tool_use_id` gives nothing; open final wait sets `openSince`; a source with no human prompt gives an empty fold; Codex task_complete → prompt; `turn_aborted` clears; a `function_call`, `reasoning` or assistant `message` after task_complete clears; `item_completed` and `task_started` do not clear; `codex_exec` and subagent sessions empty; `make test` green |
-| 5 | deepseek | `WaitStats.format` per "Window and arithmetic" and "Output"; `--wait-stats` prints it | 4, 2 | `WaitStatsTests`: every shared fixture scenario byte for byte (run through `WaitIngest` with the fixture tree and an injected time zone); quantiles for n = 1, 2, 4, 5 against hand-computed values; floor printing; cap and over_cap at exactly 7,200,000 ms (not over) and 7,200,001 (over); union of overlapping, touching and nested intervals; `scope=within_cap` leaves an over-cap wait out; a session with no waits counts as 0; window membership by `end`, attended by prompt, both half-open edges; ordinal assigned before the window filter; bucket boundaries 1, 2, 3, 4, 7, 8; line order and omission of n=0 lines; empty output; `make test` green |
+| 5 | deepseek | `WaitStats.format` per "Window and arithmetic" and "Output"; `--wait-stats` prints it | 4, 2 | `WaitStatsTests`: every shared fixture scenario byte for byte (run through `WaitIngest` with the fixture tree and an injected time zone); quantiles for n = 1, 2, 4, 5 against hand-computed values; floor printing; cap and over_cap at exactly 7,200,000 ms (not over) and 7,200,001 (over); union of overlapping, touching and nested intervals; `scope=within_cap` leaves an over-cap wait out; a session with no waits counts as 0; window membership by `end`; a session in the window by a human event or a wait in it (a session with only a dialog answer in the window counts); both half-open edges; ordinal assigned before the window filter; bucket boundaries 1, 2, 3, 4, 7, 8; line order and omission of n=0 lines; empty output; `make test` green |
 | 6 | deepseek | Privacy canary `waitSentinelsNeverLeak`; Makefile `CANARIES` | 4, 5 | The canary passes; the planner's mutation run (the stats line includes the session id; the extractor keeps the prompt text in an output field) turns it red, recorded here |
 | 7 | planner | Agreement on a frozen snapshot, then the pilot write-up `wait-pilot.md` | 5, 2 | On the snapshot ("Agreement on a frozen snapshot"), `diff <(VIBRA_HOME=<tree> Vibra --wait-stats --from 2026-10-14 --to 2026-11-12) <(VIBRA_HOME=<tree> wait_oracle.py --from 2026-10-14 --to 2026-11-12)` is empty under the same `TZ`. Any difference is a defect, fixed in whichever disagrees with the spec, and gains a shared fixture. The live run is recorded beside it as a diagnostic |
 | 8 | planner | Docs: CHANGELOG, `docs/features.md` (`--wait-stats`, definitions, limits), `docs/privacy.md` (what is read), `plan/STATUS.md`, CHANGELOG states the History change in user terms, literature report direction C gains a "Status" line pointing at the pilot | 7 | `tools/readme-anchors.sh` exits 0; every number in new text names its command output in `wait-pilot.md` |
@@ -558,4 +573,15 @@ separate the banner's effect from these; the comparison is descriptive.
 | Non-blocking: rerun the tag census after task 3 (claude r2 2) | Added to task 3's acceptance as a planner step |
 | Non-blocking: origin of Claude-style tags in Codex unknown; `realtime_delegation` is the person (claude r2 3) | `realtime_delegation` removed from the wrapper additions and pinned as a question; the write-up states the other tags' origin was not established |
 | Non-blocking: more limits; precedence; fleet-seat sentence (claude r2 4-6) | Added to "Known limits"; one human event when a record is both; a Codex `<user_shell_command>` counts only outside an automation turn; the fleet-seat case is stated under eligibility (also sol r2 3) |
+
+## Round-3 objections → changes
+
+| Objection (who) | Change |
+|---|---|
+| A dispatch containing a `<command-name>` element is both a dispatch and a human command (sol r3 1) | Classification made exclusive: a record that yields a History record is a dispatch prompt or else a human prompt; only a record that yields no History record can be a human command. Shared fixture added for the dispatch-with-command case |
+| Non-blocking: the probe kept `realtime_delegation` as a wrapper and skipped command closure (sol r3) | Probe corrected (`realtime_delegation` stays a prompt; a Codex `<user_shell_command>` closes a wait) and rerun; the preview row's numbers replaced |
+| Non-blocking: Privacy said only the leading tag is read (sol r3) | Reworded to what is searched: a `<command-name>` element and a leading `<bash-input>`, or one whole `<user_shell_command>` block |
+| Non-blocking: a record that only quotes `<command-name>` would count as a command (claude r3 1) | The record must also start with `<command-name>` or `<command-message>` (163 of 163 measured do) |
+| Non-blocking: task 5 still said "attended by prompt" (claude r3 2) | Task 5 now names the v0.4 rule (a human event or a wait in the window) and pins the dialog-only case |
+| Non-blocking: say which tag-led Codex prompts remain (claude r3 3) | The pilot write-up lists them after the task 3 rerun |
 
