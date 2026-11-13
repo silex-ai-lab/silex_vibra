@@ -1,0 +1,25 @@
+{"payload": {"cwd": "/Users/test/app", "id": "x", "originator": "codex-tui", "session_id": "x", "source": "cli"}, "timestamp": "2026-11-10T08:00:00.000Z", "type": "session_meta"}
+{"payload": {"turn_attribution": {"turn_trigger": "user"}, "type": "task_started"}, "timestamp": "2026-11-10T08:00:01.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "<environment_context>x</environment_context>", "type": "input_text"}, {"text": "do it", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:00:02.000Z", "type": "response_item"}
+{"payload": {"summary": [], "type": "reasoning"}, "timestamp": "2026-11-10T08:00:03.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:01:00.000Z", "type": "event_msg"}
+{"payload": {"turn_attribution": {"turn_trigger": "automation_heartbeat_schedule"}, "type": "task_started"}, "timestamp": "2026-11-10T08:02:00.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "<heartbeat>tick</heartbeat>", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:02:01.000Z", "type": "response_item"}
+{"payload": {"content": [], "role": "assistant", "type": "message"}, "timestamp": "2026-11-10T08:02:30.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:03:00.000Z", "type": "event_msg"}
+{"payload": {"turn_attribution": {"turn_trigger": "user"}, "type": "task_started"}, "timestamp": "2026-11-10T08:10:00.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "next", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:10:01.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:11:00.000Z", "type": "event_msg"}
+{"payload": {"type": "item_completed"}, "timestamp": "2026-11-10T08:11:01.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "again", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:15:00.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:16:00.000Z", "type": "event_msg"}
+{"payload": {"type": "turn_aborted"}, "timestamp": "2026-11-10T08:16:30.000Z", "type": "event_msg"}
+{"payload": {"turn_attribution": {"turn_trigger": "user"}, "type": "task_started"}, "timestamp": "2026-11-10T08:17:00.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "<user_shell_command>ls</user_shell_command>", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:17:10.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:18:00.000Z", "type": "event_msg"}
+{"payload": {"name": "exec", "type": "function_call"}, "timestamp": "2026-11-10T08:18:30.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:19:00.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "Dispatch q1-codex: go", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:25:00.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:26:00.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "fin", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:30:00.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:31:00.000Z", "type": "event_msg"}
