@@ -1,0 +1,7 @@
+same-response rule removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+automation-turn rule removed: RED (exit 1) first: scenario codex-turns output: got 'sessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=codex kind=turn 
+human-command rule removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+result consumption removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+isMeta skip removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+half-open window closed: RED (exit 1) first: scenario window-edges output: got 'sessions agent=claudeCode n=4\nwaits agent=claudeCode kind=question answer=
+cap boundary inclusive: RED (exit 1) first: scenario window-edges output: got 'sessions agent=claudeCode n=4\nwaits agent=claudeCode kind=question answer=

@@ -3,7 +3,8 @@ import collections, glob, hashlib, json, os, re, time
 
 CUT = time.time() - 30 * 86400
 CLAUDE_TAGS = {"command-name", "command-message", "command-args", "local-command-stdout", "local-command-stderr",
-               "local-command-caveat", "system-reminder", "task-notification", "bash-input", "bash-stdout", "bash-stderr"}
+               "local-command-caveat", "system-reminder", "task-notification", "bash-input", "bash-stdout", "bash-stderr",
+               "artifact-content-authored-by-others"}
 CODEX_TAGS = {"environment_context", "turn_aborted", "user_instructions"}
 CODEX_TAGS_V04 = CODEX_TAGS | {"heartbeat", "task-notification", "user_shell_command", "command-name", "command-message", "command-args", "local-command-stdout"}
 DISPATCH = re.compile(r"Dispatch `?[\w.-]+`?:")
@@ -123,6 +124,7 @@ for f in files("~/.codex/sessions"):
                     out[("codex", "human command (user_shell_command)")] += 1
                     if opened is not None:
                         out[("codex", "turn wait closed")] += 1
+                        out[("codex", "turn wait closed by user_shell_command")] += 1
                     opened, dispatched = None, False
                 continue
             prompt_files[(r.get("timestamp"), hashlib.sha256(typed.encode()).hexdigest())].add(f)
