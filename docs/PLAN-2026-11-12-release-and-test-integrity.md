@@ -139,8 +139,12 @@ public enum EvidenceEvent: Sendable, Equatable {
 of `test`, `tests`, `__tests__`, `spec`, `specs`, `Tests`, `testing`, or the
 file name matches `test_*.py`, `*_test.{py,go,rs,rb}`, `*.test.{js,jsx,ts,tsx}`,
 `*.spec.{js,jsx,ts,tsx}`, `*Test.{swift,java,kt}`, `*Tests.{swift,java,kt}`,
-`conftest.py`. Fixture directories are not test paths. Paths already excluded
-from code changes (docs, temp dirs) stay excluded.
+`conftest.py`. A path with a `fixtures`, `Fixtures`, `testdata` or
+`__snapshots__` component is never a test path, even under `tests/` (editing a
+fixture is not editing a test's assertions). The probe counted fixture
+directories as test paths, so its figures may differ slightly from what the
+spec yields. Paths already excluded from code changes (docs, temp dirs) stay
+excluded.
 
 **Effects, Claude Code only.** Computed when the edit opens, from the tool
 input, and only the enum is kept:
