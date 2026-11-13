@@ -113,7 +113,10 @@ def local_date(text):
 
 def local_midnight_ms(date):
     """The first instant of that local day, or None when the day does not exist in this time zone."""
-    seconds = int(time.mktime((date.year, date.month, date.day, 0, 0, 0, 0, 0, -1)))
+    try:
+        seconds = int(time.mktime((date.year, date.month, date.day, 0, 0, 0, 0, 0, -1)))
+    except (OverflowError, ValueError):
+        return None
     back = time.localtime(seconds)
     return seconds * 1000 if (back.tm_year, back.tm_mon, back.tm_mday) == (date.year, date.month, date.day) else None
 

@@ -114,7 +114,10 @@ finally:
 for tz, argv, code in (("America/Sao_Paulo", ["--from", "2018-11-04", "--to", "2018-11-04"], 0),
                        ("Pacific/Apia", ["--from", "2011-12-30", "--to", "2011-12-30"], 2),
                        ("Pacific/Apia", ["--from", "2011-12-29", "--to", "2011-12-29"], 2),
-                       ("Pacific/Apia", ["--from", "2011-12-31", "--to", "2011-12-31"], 0)):
+                       ("Pacific/Apia", ["--from", "2011-12-31", "--to", "2011-12-31"], 0),
+                       ("Pacific/Kiritimati", ["--from", "1994-12-31", "--to", "1994-12-31"], 2),
+                       ("Pacific/Fakaofo", ["--from", "2011-12-30", "--to", "2011-12-30"], 2),
+                       ("Pacific/Kwajalein", ["--from", "1993-08-21", "--to", "1993-08-21"], 2)):
     check("skipped day %s %s" % (tz, argv), with_tz(tz, lambda: w.run(argv, {"VIBRA_HOME": "/nonexistent"})[0]), code)
 check("skipped midnight window", with_tz("America/Sao_Paulo", lambda: w.parse_window(["--from", "2018-11-04", "--to", "2018-11-04"], 0)),
       (1_541_300_400_000, 1_541_383_200_000))

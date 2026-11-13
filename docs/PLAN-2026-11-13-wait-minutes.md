@@ -696,3 +696,18 @@ live data; the committed output changed only in `open agent=claudeCode`
 (83 to 82), the line the plan expects to move. Repeated again at `b412c9a`
 after the oracle's U+200B change: identical in both orders and on live data,
 `open agent=claudeCode` back to 83.
+
+**Round 4** at `33db22d`, diff hash `ee88d621c0fcf93ba9750e79a13547df636b4b9d`
+(69 paths). reviewer-claude (`claude-fable-5-2`): **IMPL-APPROVED**, two
+non-blocking notes. reviewer-sol (`us.openai.gpt-6.1-sol`): **IMPL-APPROVED**,
+two non-blocking notes (105,050 input and 1,806 output tokens, USD 0.2510).
+
+Notes applied after the round-4 approvals, so a confirmation round (round 5)
+covers them:
+
+| Note | From | Change |
+|---|---|---|
+| CHANGELOG and the pilot said eight scenarios and nine mutations; the counts are nine and eleven | sol 1 | Corrected |
+| `time.mktime` raises `OverflowError` for some missing local days (`Pacific/Kiritimati` 1994-12-31, `Pacific/Fakaofo` 2011-12-30, `Pacific/Kwajalein` 1993-08-21), so the oracle exited 1 where Swift exits 2 | claude 1 | `local_midnight_ms` returns `None` on that error, so the oracle exits 2 with the usage line; all three cases pinned in the selftest, which fails without the fix. This touches only the error path for a nonexistent local day, so the agreement run at `b412c9a` (America/Los_Angeles, 2026 dates) still applies unchanged |
+| "14x" should be "14-15x" for the two cited runs | claude 2 | Corrected |
+| Swift 6.1.2 CI before merge | sol 2 | Unchanged requirement: recorded before merge |

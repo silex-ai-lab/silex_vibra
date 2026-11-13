@@ -10,7 +10,7 @@
   capped at 2 h, and blocked minutes per session with and without waits over
   the cap. `--days N` (default 30) or `--from YYYY-MM-DD --to YYYY-MM-DD` in
   local time. Counts and durations only: no id, path or text. An independent
-  Python oracle (`tools/wait-oracle/`) agrees with it byte for byte on eight
+  Python oracle (`tools/wait-oracle/`) agrees with it byte for byte on nine
   shared fixture scenarios and on a frozen snapshot of the owner's month; the
   first n=1 pilot is in `docs/research/2026-11-12/wait-pilot.md`. A
   `waitSentinelsNeverLeak` canary joins `make test`.

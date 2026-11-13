@@ -48,7 +48,7 @@ later code changes. None of their outputs or timings are used here.
 Swift reports reading 2,590,054,688 bytes, more than the snapshot holds. The
 line reader counts every chunk it reads, and a read that stops at 2,000 lines
 re-reads the rest of that chunk on the next call (`IncrementalLineReader`,
-inferred from its code, not measured). The 14x gap to the oracle is a measured
+inferred from its code, not measured). The 14-15x gap to the oracle is a measured
 cost of the Swift path; its cause is not measured (inferred: each line is
 parsed as JSON twice, once for History and once for the wait rules, and the
 History wrapper regexes are compiled on every call).
@@ -66,9 +66,9 @@ two code versions (the two-element shell command and the all-object list
 rules). The numbers below are from the later run, whose output is
 committed.
 
-Supporting evidence: the oracle and the Swift tests pass the same eight
+Supporting evidence: the oracle and the Swift tests pass the same nine
 hand-derived fixture scenarios byte for byte (`oracle_selftest.py`,
-`WaitStatsTests`, and the CLI); nine rule mutations each fail the oracle's
+`WaitStatsTests`, and the CLI); eleven rule mutations each fail the oracle's
 selftest (`pilot/oracle-mutations.txt`); the `waitSentinelsNeverLeak` canary
 fails when a fold keeps prompt text or a wait keeps tool input
 (`pilot/canary-mutations.txt`).
