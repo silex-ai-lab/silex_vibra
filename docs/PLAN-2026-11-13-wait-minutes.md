@@ -1,6 +1,6 @@
 # Plan: minutes your agents waited on you (research direction C)
 
-Version: v0.5. Status: draft for the plan gate, round 4. Date: 2026-11-13.
+Version: v0.5. Status: plan gate passed (round 4), code gate passed (round 5). Date: 2026-11-13.
 
 ## What the owner asked for
 
@@ -711,3 +711,129 @@ covers them:
 | `time.mktime` raises `OverflowError` for some missing local days (`Pacific/Kiritimati` 1994-12-31, `Pacific/Fakaofo` 2011-12-30, `Pacific/Kwajalein` 1993-08-21), so the oracle exited 1 where Swift exits 2 | claude 1 | `local_midnight_ms` returns `None` on that error, so the oracle exits 2 with the usage line; all three cases pinned in the selftest, which fails without the fix. This touches only the error path for a nonexistent local day, so the agreement run at `b412c9a` (America/Los_Angeles, 2026 dates) still applies unchanged |
 | "14x" should be "14-15x" for the two cited runs | claude 2 | Corrected |
 | Swift 6.1.2 CI before merge | sol 2 | Unchanged requirement: recorded before merge |
+
+**Round 5 (confirmation)** at `15f1d6f`, diff hash
+`6e8d6a227326d26bddd8ad518c6e0c23546dc3c7` (69 paths; interdiff from round 4:
+the three notes above). reviewer-claude (`claude-fable-5-2`):
+**IMPL-APPROVED**, no notes (`$SCRATCH/claude-impl-r5.md`). reviewer-sol
+(`us.openai.gpt-6.1-sol`): **IMPL-APPROVED**, one note, the Swift 6.1.2 CI
+requirement (`$SCRATCH/sol-impl-r5.md`; 18,214 input and 233 output tokens,
+USD 0.0426).
+
+PLANNER (claude): IMPL-APPROVED at `15f1d6f`, diff hash
+`6e8d6a227326d26bddd8ad518c6e0c23546dc3c7`, base `e75aa84`. Both reviewers'
+literal approvals of this revision were read in their reply files. Before
+merge: CI on the branch (Swift 6.1.2) must be green, and the merge itself
+waits for the owner.
+
+## Outcome
+
+- **Plan gate:** 4 rounds (v0.1 to v0.5). Sol caught the record-shape
+  contracts (one response written as several records, duplicate results,
+  `isMeta`), the exact integer arithmetic and the frozen-snapshot gate; Fable
+  caught Codex automation turns, the unmeasured prompt rule (its probes found
+  the missing wrapper tags and the slash-command forms) and the
+  dispatch-versus-command ordering that Sol then tightened.
+- **Code gate:** 5 rounds (the fifth a confirmation). Sol found the
+  two-element shell command, the `--days` overflow, oracle crash paths, a path
+  leak through an oracle traceback, the year-9999 overflow, the
+  skipped-midnight window end and the missing-day policy, and twice held the
+  pilot to quoted output. Fable approved every round and supplied the
+  differential-fuzz findings (ASCII digits, U+001C-U+001F and U+200B trimming,
+  `mktime` overflow), the overflow crash and the stale-count checks.
+- **Planner's own catches:** the stale `VibraApp` binary behind one recorded
+  agreement run; three spec deviations in the coder's extractor; the
+  `isMeta` mutation that first survived; and a selftest case lost to a later
+  edit.
+- **Final verdicts on `6e8d6a22`:** reviewer-claude IMPL-APPROVED,
+  reviewer-sol IMPL-APPROVED, planner IMPL-APPROVED.
+- **Spend:** Sol on Bedrock, 9 completed calls plus 1 that failed before
+  sending, USD 1.41 in total by returned usage (plan 0.36, code 1.05), inside
+  the owner's USD 50 daily cap. DeepSeek V4.1 Flash coded tasks 3-6.
+- **Seats:** reviewer-claude `left` (Orca pane, open for the owner),
+  coder-deepseek `left`, reviewer-sol `left` (no pane). `fleet-ledger.sh check`
+  exits 0.
+- **Open:** CI on Swift 6.1.2 and the owner's merge decision; task 9 (the
+  notifications on/off weeks) after merge; the Swift path is about 14x slower
+  than the oracle on 30 days of transcripts (recorded, not addressed).
+
+## Dispatch ledger
+
+```
+2026-11-13T10:34:31Z	claude-plan-r1	claude	plan v0.1 fe32277	sent
+2026-11-13T10:34:31Z	sol-plan-r1	sol	plan v0.1 fe32277	sent
+2026-11-13T10:34:40Z	claude-plan-r1	claude	plan v0.1 fe32277	delivered
+2026-11-13T10:34:40Z	sol-plan-r1	sol	plan v0.1 fe32277	delivered
+2026-11-13T10:35:55Z	sol-plan-r1	sol	plan v0.1 fe32277	verdict PLAN-REJECTED
+2026-11-13T10:53:35Z	claude-plan-r1	claude	plan v0.1 fe32277	verdict PLAN-REJECTED
+2026-11-13T10:53:52Z	claude-plan-r2	claude	plan v0.3 52ed678	sent
+2026-11-13T10:53:52Z	sol-plan-r2	sol	plan v0.3 52ed678	sent
+2026-11-13T10:53:56Z	claude-plan-r2	claude	plan v0.3 52ed678	delivered
+2026-11-13T10:53:56Z	sol-plan-r2	sol	plan v0.3 52ed678	delivered
+2026-11-13T10:56:08Z	sol-plan-r2	sol	plan v0.3 52ed678	verdict PLAN-REJECTED
+2026-11-13T10:57:06Z	claude-plan-r2	claude	plan v0.3 52ed678	verdict PLAN-REJECTED
+2026-11-13T10:57:18Z	claude-plan-r3	claude	plan v0.4 15a651b	sent
+2026-11-13T10:57:18Z	sol-plan-r3	sol	plan v0.4 15a651b	sent
+2026-11-13T10:57:23Z	claude-plan-r3	claude	plan v0.4 15a651b	delivered
+2026-11-13T10:57:23Z	sol-plan-r3	sol	plan v0.4 15a651b	delivered
+2026-11-13T10:58:29Z	sol-plan-r3	sol	plan v0.4 15a651b	verdict PLAN-REJECTED
+2026-11-13T10:58:58Z	claude-plan-r3	claude	plan v0.4 15a651b	verdict PLAN-APPROVED
+2026-11-13T10:59:11Z	claude-plan-r4	claude	plan v0.5 2dcedb3	sent
+2026-11-13T10:59:11Z	sol-plan-r4	sol	plan v0.5 2dcedb3	sent
+2026-11-13T10:59:17Z	claude-plan-r4	claude	plan v0.5 2dcedb3	delivered
+2026-11-13T10:59:17Z	sol-plan-r4	sol	plan v0.5 2dcedb3	delivered
+2026-11-13T10:59:55Z	sol-plan-r4	sol	plan v0.5 2dcedb3	verdict PLAN-APPROVED
+2026-11-13T11:00:25Z	claude-plan-r4	claude	plan v0.5 2dcedb3	verdict PLAN-APPROVED
+2026-11-13T11:03:17Z	planner-task1	planner	make test 564=564 at BASE; arg cases rc per spec (task1-args.txt)	done succeeded
+2026-11-13T11:03:24Z	deepseek-task3-a1	deepseek	plan v0.5, base e75aa84	sent
+2026-11-13T11:04:10Z	deepseek-task3-a1	deepseek	plan v0.5, base e75aa84	delivered
+2026-11-13T11:09:51Z	planner-task2	planner	oracle_selftest 8 scenarios OK; 7/7 mutations red (mutate-oracle.txt)	done succeeded
+2026-11-13T11:10:21Z	deepseek-task3-a1	deepseek	570 tests green (planner run); diff reviewed	done succeeded
+2026-11-13T11:10:56Z	deepseek-task4-a1	deepseek	plan v0.5, base e75aa84	sent
+2026-11-13T11:11:09Z	deepseek-task4-a1	deepseek	plan v0.5, base e75aa84	delivered
+2026-11-13T11:16:26Z	deepseek-task4-a1	deepseek	602 tests green (planner run); diff reviewed, 3 deviations fixed by planner	done succeeded
+2026-11-13T11:16:27Z	deepseek-task5-a1	deepseek	plan v0.5, base e75aa84	sent
+2026-11-13T11:16:39Z	deepseek-task5-a1	deepseek	plan v0.5, base e75aa84	delivered
+2026-11-13T11:22:55Z	deepseek-task5-a1	deepseek	616 tests; 8/8 scenarios via CLI (planner run); live 7-day diff vs oracle empty	done succeeded
+2026-11-13T11:22:56Z	deepseek-task6-a1	deepseek	plan v0.5, base e75aa84	sent
+2026-11-13T11:23:14Z	deepseek-task6-a1	deepseek	plan v0.5, base e75aa84	delivered
+2026-11-13T11:29:30Z	planner-task7	planner	snapshot diff empty both orders (28 lines); live identical; wait-pilot.md	done succeeded
+2026-11-13T11:30:12Z	planner-task8	planner	readme-anchors rc 0; numbers cite wait-pilot.md	done succeeded
+2026-11-13T11:34:05Z	claude-impl-r1	claude	base e75aa84 rev 06a7362e	sent
+2026-11-13T11:34:05Z	sol-impl-r1	sol	base e75aa84 rev 06a7362e	sent
+2026-11-13T11:34:10Z	claude-impl-r1	claude	base e75aa84 rev 06a7362e	delivered
+2026-11-13T11:34:10Z	sol-impl-r1	sol	base e75aa84 rev 06a7362e	delivered
+2026-11-13T11:34:24Z	deepseek-task6-a1	deepseek	617 tests, canary in CANARIES (planner run); mutation run red x2	done succeeded
+2026-11-13T11:34:24Z	sol-impl-r1	sol	base e75aa84 rev 06a7362e	done failed
+2026-11-13T14:46:33Z	sol-impl-r1	sol	base e75aa84 rev 06a7362e	superseded
+2026-11-13T14:46:33Z	sol-impl-r1-a2	sol	base e75aa84 rev 06a7362e	sent
+2026-11-13T14:46:59Z	claude-impl-r1	claude	base e75aa84 rev 06a7362e	verdict IMPL-APPROVED
+2026-11-13T14:48:43Z	sol-impl-r1-a2	sol	base e75aa84 rev 06a7362e	verdict IMPL-REJECTED
+2026-11-13T15:12:34Z	claude-impl-r2	claude	base e75aa84 rev 95ca7a5b	sent
+2026-11-13T15:12:34Z	sol-impl-r2	sol	base e75aa84 rev 95ca7a5b	sent
+2026-11-13T15:12:39Z	claude-impl-r2	claude	base e75aa84 rev 95ca7a5b	delivered
+2026-11-13T15:12:39Z	sol-impl-r2	sol	base e75aa84 rev 95ca7a5b	delivered
+2026-11-13T15:14:44Z	sol-impl-r2	sol	base e75aa84 rev 95ca7a5b	verdict IMPL-REJECTED
+2026-11-13T15:21:12Z	claude-impl-r2	claude	base e75aa84 rev 95ca7a5b	verdict IMPL-APPROVED
+2026-11-13T15:31:50Z	claude-impl-r3	claude	base e75aa84 rev afa268e6	sent
+2026-11-13T15:31:50Z	sol-impl-r3	sol	base e75aa84 rev afa268e6	sent
+2026-11-13T15:31:50Z	claude-impl-r3	claude	base e75aa84 rev afa268e6	delivered
+2026-11-13T15:31:50Z	sol-impl-r3	sol	base e75aa84 rev afa268e6	delivered
+2026-11-13T15:33:30Z	sol-impl-r3	sol	base e75aa84 rev afa268e6	verdict IMPL-REJECTED
+2026-11-13T15:41:49Z	claude-impl-r3	claude	base e75aa84 rev afa268e6	superseded
+2026-11-13T15:56:43Z	claude-impl-r4	claude	base e75aa84 rev ee88d621	sent
+2026-11-13T15:56:43Z	sol-impl-r4	sol	base e75aa84 rev ee88d621	sent
+2026-11-13T15:56:43Z	claude-impl-r4	claude	base e75aa84 rev ee88d621	delivered
+2026-11-13T15:56:43Z	sol-impl-r4	sol	base e75aa84 rev ee88d621	delivered
+2026-11-13T15:57:54Z	sol-impl-r4	sol	base e75aa84 rev ee88d621	verdict IMPL-APPROVED
+2026-11-13T16:08:51Z	claude-impl-r4	claude	base e75aa84 rev ee88d621	verdict IMPL-APPROVED
+2026-11-13T16:09:40Z	claude-impl-r5	claude	base e75aa84 rev 6e8d6a22	sent
+2026-11-13T16:09:40Z	sol-impl-r5	sol	base e75aa84 rev 6e8d6a22	sent
+2026-11-13T16:09:40Z	claude-impl-r5	claude	base e75aa84 rev 6e8d6a22	delivered
+2026-11-13T16:09:40Z	sol-impl-r5	sol	base e75aa84 rev 6e8d6a22	delivered
+2026-11-13T16:10:01Z	sol-impl-r5	sol	base e75aa84 rev 6e8d6a22	verdict IMPL-APPROVED
+2026-11-13T16:19:22Z	claude-impl-r5	claude	base e75aa84 rev 6e8d6a22	verdict IMPL-APPROVED
+2026-11-13T16:19:22Z	seat:claude	claude	-	disposition left
+2026-11-13T16:19:22Z	seat:sol	sol	-	disposition left
+2026-11-13T16:19:22Z	seat:deepseek	deepseek	-	disposition left
+```
