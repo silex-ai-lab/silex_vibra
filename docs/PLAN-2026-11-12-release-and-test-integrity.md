@@ -1,6 +1,6 @@
 # Plan: notarized release pipeline, and test-weakening evidence in Code checks
 
-Version: v0.3. Status: draft for the plan gate, round 3. Date: 2026-11-12.
+Version: v0.4. Status: draft for the plan gate, round 4. Date: 2026-11-12.
 
 ## What the owner asked for
 
@@ -176,18 +176,31 @@ can be netted; no path reaches any output.
 `completedAt` (on checks and changes) comes from the `tool_result` record's
 timestamp (Claude Code) and the `item_completed` record's timestamp (Codex).
 
-**Test path.** A changed path is a test path when a directory component is one
+**Test path.** The edit's path is made absolute against the workspace root
+with `IncidentExtractor.absolute(_:cwd:)`. The workspace root is the `cwd` in
+effect at the edit: the `cwd` field of the Claude Code record that carries the
+edit call, or for Codex the most recent `cwd` from `session_meta` or
+`turn_context` before the edit. So a mid-session `cd` moves the root with it.
+Directory components are read **only from the part of the path below that
+root**; the root's own components and its ancestors never count, so a repo at
+`/Users/test/app` or `~/code/testing/app` does not make every file a test path.
+A path outside the root, or any path when no root is known, is decided by its
+file name alone.
+
+A changed path is a test path when a directory component below the root is one
 of `test`, `tests`, `__tests__`, `spec`, `specs`, `Tests`, `testing`, or the
 file name matches `test_*.py`, `*_test.{py,go,rs,rb}`, `*.test.{js,jsx,ts,tsx}`,
 `*.spec.{js,jsx,ts,tsx}`, `*Test.{swift,java,kt}`, `*Tests.{swift,java,kt}`,
 `conftest.py`. A path with a `fixtures`, `Fixtures`, `testdata`, `test_data` or
-`__snapshots__` component is never a test path. Paths already excluded from
-code changes (docs, temp dirs) stay excluded.
+`__snapshots__` component below the root is never a test path. Paths already
+excluded from code changes (docs, temp dirs) stay excluded.
 
 **Counting, Claude Code only.** At the edit's open, from the tool input:
 `Edit` counts `old_string` (before) and `new_string` (after); `MultiEdit` the
-joined `old_string`s and the joined `new_string`s. `Write`, `NotebookEdit` and
-Codex `FileChange` to a test path carry `before: nil, after: nil`.
+joined `old_string`s and the joined `new_string`s. An `Edit` with
+`replace_all: true`, or a `MultiEdit` with any such entry, changes an unknown
+number of occurrences, so it carries `before: nil, after: nil`, as do `Write`,
+`NotebookEdit` and Codex `FileChange` to a test path.
 
 Before counting, drop every line matching `^\s*(//|/\*|\*|#(\s|$))` (a comment
 line; `#expect`, `#require`, `#[test]` and `#[ignore]` are kept because `#` is
@@ -199,13 +212,18 @@ non-overlapping leftmost search (Python `re.findall`, Swift `NSRegularExpression
 
 | Count | Regex |
 |---|---|
-| assertion | `\bassert\w*\b\|\bXCTAssert\w*\|#expect\b\|#require\b\|\bexpect\(\|\.should\b\|\bt\.(?:Error\|Fatal)f?\(\|\brequire\.\w+\(` |
-| skip | `pytest\.mark\.skip\w*\|\.skip\(\|\bxit\(\|\bxdescribe\(\|\bXCTSkip\w*\|@Disabled\b\|\.disabled\b\|\bt\.Skip\w*\(\|#\[ignore\]\|@unittest\.skip\w*` |
-| focus | `\.only\(\|\bfit\(\|\bfdescribe\(` |
-| expectedFailure | `pytest\.mark\.xfail\b\|\bwithKnownIssue\b\|\bXCTExpectFailure\b\|@unittest\.expectedFailure\b\|\.failing\(` |
-| testFunction | `\bdef test_\w*\|\bfunc test\w*\|@Test\b\|\bit\(\|\btest\(\|#\[test\]\|\bfunc Test\w+\(` |
+| assertion | `\bassert\w*\b\|\bXCTAssert\w*\|#expect\b\|#require\b\|\bexpect\(\|\.should\b\|\bt\.(?:Error\|Fatal)f?\(\|\brequire\.[A-Z]\w*\(` |
+| skip | `pytest\.mark\.skip\w*\|\b(?:it\|test\|describe\|context\|suite\|pytest\|this)\.skip\(\|\.skipTest\(\|(?<![.\w])xit\(\|(?<![.\w])xdescribe\(\|\bXCTSkip\w*\|@Disabled\b\|\.disabled\(\|\bt\.Skip\w*\(\|#\[ignore\]\|@unittest\.skip\w*` |
+| focus | `\b(?:it\|test\|describe\|context\|suite)\.only\(\|(?<![.\w])fit\(\|(?<![.\w])fdescribe\(` |
+| expectedFailure | `pytest\.mark\.xfail\b\|\bwithKnownIssue\b\|\bXCTExpectFailure\b\|@unittest\.expectedFailure\b\|\b(?:it\|test)\.failing\(` |
+| testFunction | `\bdef test_\w*\|\bfunc test\w*\|@Test\b\|(?<![.\w])it\(\|(?<![.\w])test\(\|#\[test\]\|\bfunc Test\w+\(` |
 
 (`\|` above is a table escape for `|`.) The oracle implements the same table.
+`(?<![.\w])` is a fixed-width lookbehind, supported by Python `re` and ICU.
+Receiver-free calls are anchored this way and receiver calls name their
+receivers, so ordinary code does not match: `re.test(x)`, `iter().skip(1)`,
+`stream.skip(n)`, `button.disabled`, `require.resolve(`, Django's
+`qs.only("id")` and `model.fit(x)` are pinned non-matches.
 `.todo(` is deliberately in no family: turning `it(` into `it.todo(` already
 lowers the test-function count, and adding a new todo weakens nothing.
 
@@ -216,20 +234,27 @@ lowers the test-function count, and adding a new todo weakens nothing.
 2. The test check immediately before P (no other test check between them) is F,
    and F **failed**. Build and lint checks between them do not break adjacency.
 3. F has a `completedAt`.
-4. Consider test-path changes with `F.completedAt < change.at` and
-   `change.completedAt < P.at` (both strict): the edit started after F's
-   result was recorded and finished before P was issued. Group them by
-   `PathKey`. A file with any change whose counts are nil, or any change in the
-   window whose `completedAt` is nil, is dropped (no claim about it). For each
-   remaining file, net = sum(after) − sum(before) per count.
-5. An effect is present when, for at least one file: assertion net < 0
-   (`fewerAssertionMatches`), skip net > 0 (`moreSkipMatches`), focus net > 0
-   (`moreFocusMatches`), expectedFailure net > 0
-   (`moreExpectedFailureMatches`), testFunction net < 0
+4. Let `Fc = F.completedAt` and treat a nil `change.completedAt` as "never
+   finished" (+∞). A test-path change **touches the window** when
+   `change.at < P.at` and `change.completedAt > Fc`. It is **inside** when
+   `Fc < change.at` and `change.completedAt < P.at` (both strict): it started
+   after F's result was recorded and finished before P was issued. Group the
+   changes that touch the window by `PathKey`. A file is **dropped** (no claim
+   about it) when any of its window-touching changes is not inside (it
+   straddles `Fc` or `P.at`, or has no result), or has nil counts. This holds
+   even when another change to that file is inside: an edit still running when
+   P starts may have undone the earlier one. For each remaining file, net =
+   sum(after) − sum(before) per count over its inside changes.
+5. An effect is present when at least one remaining file has the effect's sign
+   **and** the sum of nets across all remaining files has the same sign:
+   assertion net < 0 (`fewerAssertionMatches`), skip net > 0
+   (`moreSkipMatches`), focus net > 0 (`moreFocusMatches`), expectedFailure
+   net > 0 (`moreExpectedFailureMatches`), testFunction net < 0
    (`fewerTestFunctionMatches`). No effect: no clause.
 
 Netting per file makes "skip added, then removed before the pass" and "assertion
-moved within the file" produce no clause. Only the first passing run after the
+moved within the file" produce no clause; the cross-file sum makes "assertion
+moved from one test file to another" produce none either. Only the first passing run after the
 failure can carry the clause; a second run with no edit between hides it
 (stated in `docs/features.md`).
 
@@ -257,7 +282,11 @@ aggregated and sorted like the other groups.
 whole-file `Write`, a notebook edit, a shell edit and every Codex edit produce
 no clause. Strings and identifiers containing the pattern words count like
 code; the wording says "matches" for that reason. A re-run after the first pass
-hides the clause.
+hides the clause. The window starts at the last failed run only, so a test edit
+followed by another failure and then a pass shows nothing. F and P may be
+different commands (a full run fails, a filtered run passes). A line
+commented out as `#assert x` (no space after `#`) is not stripped, so that
+removal is missed. A `replace_all` edit drops its file.
 
 **Privacy.** Edit text is read only to count pattern matches, in the extractor,
 and dropped; the path is reduced to an opaque key. `evidenceSentinelsNeverLeak`
@@ -278,7 +307,8 @@ mapping, to be re-checked against the OWASP PDF in task 5 before any code:
 | `authFailure`, `unexplainedVendorUsage` | none | Not an agent behaviour |
 
 Shown as an `owasp` array in `--incidents` JSON and one line in the vendor
-report draft ("OWASP Top 10 for Agentic Applications 2026: ASI03"). The window
+report draft worded as a related category, not a finding against the vendor
+("Related OWASP category (Top 10 for Agentic Applications 2026): ASI03"). The window
 is unchanged.
 
 ### Distribution
@@ -322,8 +352,15 @@ workflows run:
 5. Dry run: launch the mounted app for 20 s as the existing launch check does.
 6. Write `Vibra-<ver>.dmg.sha256` from the final (stapled, in release) DMG.
 
-**CI dry run** (`build.yml`, new job, every push): `tools/release/package.sh
---dry-run` on `macos-15`; upload the DMG as an artifact (7-day retention).
+**CI dry run** (`build.yml`, new job, same triggers as the existing jobs):
+`tools/release/package.sh --dry-run` on both `macos-15` and `macos-15-intel`,
+so the 20 s launch runs each slice natively; upload the arm64 runner's DMG as
+an artifact (7-day retention). The macos-15 leg also exercises
+`tools/release/keychain.sh setup` with a throwaway self-signed code-signing
+identity generated in the job (openssl, then `.p12`), requires `security
+find-identity -p codesigning` to list it, and runs `keychain.sh teardown`. The
+build itself stays ad-hoc signed. This moves the likeliest first-tag failure
+(keychain and search list) onto a branch run.
 
 **Release** (`release.yml`):
 
@@ -335,9 +372,16 @@ workflows run:
 - No third-party actions except `actions/checkout`, pinned by full commit SHA,
   with `persist-credentials: false`. The `gh release create` step sets
   `GH_TOKEN: ${{ github.token }}` explicitly.
-- Fails unless the tag equals `v$(VERSION)` from the Makefile and
-  `docs/releases/v$(VERSION).md` exists.
-- Keychain: create `$RUNNER_TEMP/release.keychain-db` with
+- Bounded: `timeout-minutes: 60` on the job; `notarytool submit --wait
+  --timeout 30m`.
+- Fails unless the tag equals `v$(VERSION)` from the Makefile,
+  `docs/releases/v$(VERSION).md` exists, and the tagged commit is an ancestor
+  of `origin/main` (fetched explicitly). The required reviewer stays the real
+  gate.
+- Secrets enter through `env:` on the steps that use them, never on the job;
+  no `set -x` in those steps. The DMG is signed with `--timestamp` too.
+- Keychain steps live in `tools/release/keychain.sh setup|teardown`, shared
+  with the dry run. Keychain: create `$RUNNER_TEMP/release.keychain-db` with
   `MACOS_KEYCHAIN_PASSWORD`, `security set-keychain-settings -lut 21600`,
   `security unlock-keychain`, import the `.p12` decoded into `$RUNNER_TEMP`,
   `security set-key-partition-list -S apple-tool:,apple:,codesign:`, and
@@ -373,20 +417,21 @@ to date (it still says 1 star). No README edit in this run.
 
 | # | Owner | Task | Depends on | Acceptance |
 |---|---|---|---|---|
-| 1 | planner | Foundation: the types above, every caller migrated, behaviour unchanged (`.source` for every change, `completedAt` filled where available, empty `testEdits`) | — | `make test` count equals the count measured just before the change; `--evidence-stats --days 30` on the planner's data identical apart from the renamed change line |
-| 2 | deepseek | Claude and Codex extractors: test path, `PathKey`, comment stripping, counts, `completedAt` for checks and changes; synthetic fixtures | 1 | `EvidenceExtractorTests`: each regex family, including `XCTExpectFailure` and `.failing(`; boundary non-matches `wait(`, `exit(`, `split(`, `.shoulder`, `latest(`, `asser`; a commented-out assertion counted as removed; `#expect` kept; `conftest.py` and `tests/test_x.py` test paths; `tests/fixtures/a.py` and `test_data/x` not; `Write`, `NotebookEdit`, Codex as nil counts; `completedAt` from the result record for both agents, for checks and for edits; `make test` green |
-| 3 | deepseek | `DeliveryEvidence.build` per "When the clause shows"; wording; `--evidence-stats` lines | 2 | `DeliveryEvidenceTests`: clause on fail → assertion-removing edit → pass; no clause when a passed or unknown test check sits between F and P; no clause when the edit is before `F.completedAt` (made while F ran); no clause when F has no `completedAt`; no clause when the edit opens before P and its result lands after P is issued; a string-only change (`"assert(x)"` text removed inside a string literal) produces the clause with the pinned "matches" wording; skip added then removed → none; assertion removed then restored → none; assertion moved within one file → none; nil-count edit on the only file → none; passed build → none; two effects in order; a build check between F and P keeps adjacency; change at exactly P.at → case `changedAfterLastCheck`. `EvidenceStatsTests` updated |
-| 4 | planner | Oracle mirrors tasks 2-3 in `tools/evidence-oracle`; selftest with the task 3 cases; real-data run | 3 | `oracle_selftest.py` passes; on the planner's 30-day data `diff <(Vibra --evidence-stats --days 30) <(evidence_oracle.py --days 30)` is empty; the `qualified … n=` lines are recorded here (the probe's 3 is an upper-bound guide only, the rule differs), and, if at least one row qualifies, one rendered clause from a real row is quoted here (content-free by construction); if the count is 0, that is recorded and the launch kit drops the test-edit line |
+| 1 | planner | Foundation: the types above, every caller migrated, behaviour unchanged (`.source` for every change, `completedAt` filled where available, empty `testEdits`) | — | `make test` count equals the count measured just before the change; `--evidence-stats --days 30` on the planner's data identical apart from the renamed change line, with both binaries built first and the two runs taken back to back (recorded) |
+| 4a | planner | Oracle half first: `tools/evidence-oracle` implements the spec (test path with root, regex table, rules 1-5) and its selftest with the task 3 cases; real-data `qualified` count | — | `oracle_selftest.py` passes; the 30-day `qualified … n=` lines are recorded here before task 2 starts. A 0 is recorded and drops the launch-kit test-edit line; tasks 2-3 still run, since the clause corrects a sentence whenever it fires |
+| 2 | deepseek | Claude and Codex extractors: test path, `PathKey`, comment stripping, counts, `completedAt` for checks and changes; synthetic fixtures | 1 | `EvidenceExtractorTests`: each regex family, including `XCTExpectFailure` and `.failing(`; boundary non-matches `wait(`, `exit(`, `split(`, `.shoulder`, `latest(`, `asser`, `button.disabled`, `iter().skip(1)`, `stream.skip(n)`, `re.test(x)`, `require.resolve(`, `qs.only("id")`, `model.fit(x)`; matches `require.NoError(`, `@Test(.disabled("x"))`, `it.skip(`, `self.skipTest(`, `test.only(`, `fit(`, `test.failing(`; a commented-out assertion counted as removed; `#expect` kept; with root `/Users/test/app`: `/Users/test/app/src/main.py` source, `/Users/test/app/tests/test_x.py` test, `/Users/test/app/conftest.py` test, `/Users/test/app/tests/fixtures/a.py` and `/Users/test/app/test_data/x.py` not; a path outside the root with a `tests` ancestor and a non-test file name source; no root known → file name only; Claude root from the record's `cwd`, Codex from the latest `session_meta`/`turn_context` `cwd`, including a mid-session change; `Write`, `NotebookEdit`, `replace_all` `Edit`, Codex as nil counts; `completedAt` from the result record for both agents, for checks and for edits; `make test` green |
+| 3 | deepseek | `DeliveryEvidence.build` per "When the clause shows"; wording; `--evidence-stats` lines | 2 | `DeliveryEvidenceTests`: clause on fail → assertion-removing edit → pass; no clause when a passed or unknown test check sits between F and P; no clause when the edit is before `F.completedAt` (made while F ran); no clause when F has no `completedAt`; no clause when the edit opens before P and its result lands after P is issued; no clause for an assertion-removing edit inside the window plus a restoring edit to the same file that opens before P and completes after P is issued (the file is dropped); same with the second edit opening before `F.completedAt` and completing after it; assertion moved from one test file to another → none; fail → source-only edit → pass → none; fail → source edit plus assertion-removing test edit → pass → clause; a `replace_all` edit on the only file → none; a string-only change (`"assert(x)"` text removed inside a string literal) produces the clause with the pinned "matches" wording; skip added then removed → none; assertion removed then restored → none; assertion moved within one file → none; nil-count edit on the only file → none; passed build → none; two effects in order; a build check between F and P keeps adjacency; change at exactly P.at → case `changedAfterLastCheck`. `EvidenceStatsTests` updated |
+| 4 | planner | Oracle agreement with the Swift build; real-data run | 3, 4a | `oracle_selftest.py` passes; on the planner's 30-day data `diff <(Vibra --evidence-stats --days 30) <(evidence_oracle.py --days 30)` is empty; the `qualified … n=` lines are recorded here (the probe's 3 is an upper-bound guide only, the rule differs), and, if at least one row qualifies, one rendered clause from a real row is quoted here (content-free by construction); if the count is 0, that is recorded and the launch kit drops the test-edit line |
 | 5 | planner | Check the OWASP ids against the OWASP PDF; amend the mapping table (a change here needs a confirmation round before task 6) | — | The table cites the PDF page for each id |
 | 6 | deepseek | `IncidentKind.owaspAgentic`, the JSON field, the vendor-report line | 5 | Tests pin the mapping for every kind and the JSON field; `incidentSentinelsNeverLeak` still passes |
 | 7 | deepseek | Privacy canary extension for edit text and test paths | 2 | The extended `evidenceSentinelsNeverLeak` passes, and fails when the planner mutates the extractor to put `new_string` in the row text (mutation run recorded) |
-| 8 | deepseek | Makefile `ARCHS`, `HARDENED`, packaging-only `dmg`; `packaging/Vibra.entitlements`; `tools/release/package.sh` | — | On this Mac: plain `make app` unchanged (`codesign -d` shows ad-hoc, no runtime flag); `make dmg` without a bundle fails and builds nothing; `package.sh --dry-run` passes all its mounted-app checks if Command Line Tools here can build x86_64, otherwise the task 9 CI log is the proof and the local failure is recorded; `shellcheck tools/release/package.sh` clean |
-| 9 | deepseek | `build.yml` dry-run job | 8 | Green on the branch's CI run; the log shows the mounted-app checks and the 20 s launch |
+| 8 | deepseek | Makefile `ARCHS`, `HARDENED`, packaging-only `dmg`; `packaging/Vibra.entitlements`; `tools/release/package.sh`; `tools/release/keychain.sh` | — | On this Mac: plain `make app` unchanged (`codesign -d` shows ad-hoc, no runtime flag); `make dmg` without a bundle fails and builds nothing; `package.sh --dry-run` passes all its mounted-app checks if Command Line Tools here can build x86_64, otherwise the task 9 CI log is the proof and the local failure is recorded; `shellcheck tools/release/package.sh tools/release/keychain.sh` clean |
+| 9 | deepseek | `build.yml` dry-run job | 8 | Green on the branch's CI run on both runners; the logs show the mounted-app checks and the 20 s launch on each, and on macos-15 the throwaway identity listed by `find-identity` and the teardown |
 | 10 | deepseek | `release.yml` per spec | 8 | `actionlint` clean; the release path of `package.sh` reviewed line by line against the spec in the code gate. Its real proof is task 14 |
 | 11 | planner | Live check of the hardened build on this Mac, with and without the entitlement: menu fills, Return to Session in iTerm and Orca, `--query` exits 0 | 8 | Recorded here with date, what was seen, the signing identity of each variant, and the Automation (TCC) grant state before each test (reset with `tccutil reset AppleEvents ai.silexlab.vibra` between variants); entitlement kept only if Return to Session fails without it |
-| 12 | planner | Docs: CHANGELOG, `docs/features.md`, `docs/privacy.md`, ROADMAP (P3.1 "pipeline built, awaiting certificate"; P1.4 untouched), `docs/RUNBOOK-developer-id.md`, `docs/releases/v0.5.0.md` (draft notes), `plan/LAUNCH-KIT.md`, `plan/STATUS.md` | 3, 4, 6, 10 | `tools/readme-anchors.sh` exits 0; every claim in the new text names a probe, test or task here |
+| 12 | planner | Docs: CHANGELOG, `docs/features.md`, `docs/privacy.md`, ROADMAP (P3.1 "pipeline built, awaiting certificate"; P1.4 untouched), `docs/RUNBOOK-developer-id.md` (closing paragraph aligned: entitlement per task 11, cask outside this run; step 4 notes "Prevent self-review" stays off when the owner is the only reviewer), `docs/releases/v0.5.0.md` (draft notes), `plan/LAUNCH-KIT.md`, `plan/STATUS.md` | 3, 4, 6, 10 | `tools/readme-anchors.sh` exits 0; every claim in the new text names a probe, test or task here |
 | 13 | owner (optional) | Label the 3 probe recoveries legitimate or not; the planner prints session ids and timestamps only | — | Result recorded here; informs wording later, gates nothing |
-| 14 | planner, with the owner | Real release, after the code gate, the merge, the owner's go-ahead and the secrets: bump to 0.5.0, tag `v0.5.0`, `release.yml` runs | 12, secrets | The run log shows notarization Accepted, `stapler validate` ok, both `spctl` checks accepted as Notarized Developer ID, `lipo` both arches, `TeamIdentifier` match; the draft release carries the DMG, its `.sha256` (checked against a fresh download) and `docs/releases/v0.5.0.md` as body; a downloaded copy with `com.apple.quarantine` opens without the unidentified-developer block, Vibra's Setup reports notification authorization granted. Only then ROADMAP P3.1 becomes Done and the launch kit applies |
+| 14 | planner, with the owner | Real release, after the code gate, the merge, the owner's go-ahead and the secrets: bump to 0.5.0 in a release PR (as with 0.4.2), merge it, tag `v0.5.0` on the merged `main` commit, `release.yml` runs | 12, secrets | The run log shows notarization Accepted, `stapler validate` ok, both `spctl` checks accepted as Notarized Developer ID, `lipo` both arches, and the `TeamIdentifier` check passed (the log masks the secret value as `***`; the step's pass is the evidence); the draft release carries the DMG, its `.sha256` (checked against a fresh download) and `docs/releases/v0.5.0.md` as body; a downloaded copy with `com.apple.quarantine` opens without the unidentified-developer block, Vibra's Setup reports notification authorization granted. Only then ROADMAP P3.1 becomes Done and the launch kit applies |
 
 The cask in `silex-ai-lab/homebrew-tap` pointing at the notarized DMG is a
 separate change to that repo after task 14; the source formula stays.
@@ -414,9 +459,11 @@ separate change to that repo after task 14; the source formula stays.
   `Tests/VibraCoreTests/VendorReportTests.swift`,
   `Tests/VibraCoreTests/IncidentExtractorTests.swift`;
   `Makefile`, `packaging/Vibra.entitlements`, `tools/release/package.sh`,
-  `.github/workflows/build.yml`, `.github/workflows/release.yml`.
+  `tools/release/keychain.sh`, `.github/workflows/build.yml`,
+`.github/workflows/release.yml`.
 - One shared working tree. DeepSeek tasks run one at a time in the order
-  8, 9, 10, 2, 3, 7, 6; task 2 starts only after task 1 is committed.
+  8, 9, 10, 2, 3, 7, 6; task 2 starts only after task 1 is committed and
+  task 4a's count is recorded.
   Nothing in `tools/evidence-oracle/` changes while a review round is open.
 
 ## Round-1 objections → changes
@@ -447,3 +494,16 @@ Round 2 on v0.2 (`b68f071`): codex PLAN-REJECTED (2), deepseek PLAN-APPROVED (ad
 | An edit opened before P can finish after P starts; changes carry no completion time (codex 1) | `CodeChange` carries `completedAt`; rule 4 requires `change.completedAt < P.at`; nil drops the file; task 3 fixture for the straddling edit |
 | "Fewer assertion calls / a skip marker" overclaims when only string text matched (codex 2) | Effects renamed to pattern matches (`fewerAssertionMatches` …); wording says "text-pattern counts", "matches", "does not parse code"; task 3 pins a string-only fixture with that wording |
 | Folded non-blocking | Counted `qualified … n=` lines (deepseek 1); re-run hides the clause, documented (deepseek 2); `XCTExpectFailure` added, `.failing(` kept (Jest `test.failing`) (deepseek 3); `.todo(` omission made deliberate (deepseek 4); `lipo` contains-both (deepseek 5); task 12 depends on 4 (deepseek 6); `PathKey: Hashable`, `PatternCounts.init` (deepseek 7); `persist-credentials: false`, explicit `GH_TOKEN` (deepseek 8); "edits to test files" (deepseek 9); task 4 quote conditional (codex); task 11 records identity and TCC state (codex) |
+
+## Round-3 objections → changes
+
+Round 3 reviewed v0.3 at `604a42f`: reviewer-codex PLAN-REJECTED (1),
+reviewer-claude PLAN-REJECTED (2).
+
+| Objection (who) | Change |
+|---|---|
+| An edit straddling P.at is excluded, but an earlier qualifying edit to the same file still counts (codex 1) | Rule 4 rewritten: every change that touches the window must be inside it, or its file is dropped; task 3 fixture with an inside removal plus a restoration straddling P.at, and one straddling `F.completedAt` |
+| Directory components are read from the absolute path, so a workspace under `/Users/test/...` makes every file a test path (claude 1) | Components are read only below the workspace root (`cwd` at the edit; Codex from the latest `session_meta`/`turn_context`); outside the root or with no root, file name only; task 2 path cases with root `/Users/test/app` |
+| Four patterns match ordinary code: `.disabled`, `.skip(`, `test(`/`it(`, `require.X(` (claude 2) | Receivers named for `.skip(`, `.only(`, `.failing(`; `(?<![.\w])` for receiver-free calls (also `xit(`, `xdescribe(`, `fit(`, `fdescribe(`); `.disabled(`; `require.[A-Z]`; `.skipTest(` added. Pinned non-matches add `qs.only(...)` and `model.fit(...)`. Checked with Python `re` and Swift `NSRegularExpression` on the table text: 16 non-matches, 28 matches, no disagreement (`$SCRATCH/regex-check.py`, `regex-check.swift`) |
+| Folded non-blocking (claude) | Oracle half first as task 4a, its real `qualified` count recorded before task 2; `replace_all` → nil counts; cross-file net sign required (assertion moved between files → none); streak start, F/P different commands and `#assert` listed as known limits; task 3 source-only and source-plus-test fixtures; task 1 back-to-back runs; release.yml `timeout-minutes` and notary `--timeout`, tag commit must be on `origin/main`, secrets only in step `env:`, no `set -x`, DMG `--timestamp`; dry run on both runners and a throwaway keychain identity via shared `keychain.sh`; masked `TeamIdentifier` wording; runbook closing paragraph and "Prevent self-review" note; OWASP line worded as a related category; 0.5.0 bump in a release PR |
+| Not taken | Gating the dry-run job to `push` only: it follows the existing jobs' triggers; the duplicate PR run costs minutes, not correctness |
