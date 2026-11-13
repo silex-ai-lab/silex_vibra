@@ -1,0 +1,11 @@
+same-response rule removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+automation-turn rule removed: RED (exit 1) first: scenario codex-turns output: got 'sessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=codex kind=turn 
+human-command rule removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+result consumption removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+isMeta skip removed: RED (exit 1) first: scenario claude-basic output: got 'sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claud
+half-open window closed: RED (exit 1) first: scenario window-edges output: got 'sessions agent=claudeCode n=4\nwaits agent=claudeCode kind=question answer=
+cap boundary inclusive: RED (exit 1) first: scenario window-edges output: got 'sessions agent=claudeCode n=4\nwaits agent=claudeCode kind=question answer=
+single-element rule removed: RED (exit 1) first: scenario codex-turns output: got 'sessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=codex kind=turn 
+upper end = resolved start of to plus one calendar day (the round-3 Swift bug): RED (exit 1) first: scenario midnight-dst output: got 'sessions agent=claudeCode n=2\nwaits agent=claudeCode kind=turn n=2\nsecond
+skipped-day check removed: RED (exit 1) first: skipped day Pacific/Apia ['--from', '2011-12-30', '--to', '2011-12-30']: got 0, want 2
+all-object list rule removed: RED (exit 1) first: scenario claude-dispatch output: got 'sessions agent=claudeCode n=1\nwaits agent=claudeCode kind=approval answ

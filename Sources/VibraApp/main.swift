@@ -523,6 +523,50 @@ if CommandLine.arguments.contains("--evidence-stats") {
     exit(finished ? 0 : 1)
 }
 
+// `Vibra --wait-stats [--days N | --from YYYY-MM-DD --to YYYY-MM-DD]` counts
+// how long Claude Code and Codex sessions waited on the human. Counts and
+// durations only - never an id, a path or text. `VIBRA_NOW` pins `--days`.
+if CommandLine.arguments.contains("--wait-stats") {
+    func flag(_ name: String) -> String?? {
+        CommandLine.arguments.contains(name) ? .some(argument(after: name)) : nil
+    }
+    var nowMs = EpochMs((Date().timeIntervalSince1970 * 1000).rounded())
+    if let pinned = ProcessInfo.processInfo.environment["VIBRA_NOW"], !pinned.isEmpty {
+        guard let ms = epochMs(fromTimestamp: pinned) else {
+            FileHandle.standardError.write(Data("VIBRA_NOW must be an ISO 8601 date-time, got \(pinned)\n".utf8))
+            exit(2)
+        }
+        nowMs = ms
+    }
+    let window: WaitWindow
+    switch WaitWindow.parse(
+        days: flag("--days"), from: flag("--from"), to: flag("--to"), now: nowMs, timeZone: .current
+    ) {
+    case .success(let parsed): window = parsed
+    case .failure(.usage(let message)):
+        FileHandle.standardError.write(Data(
+            "usage: Vibra --wait-stats [--days N | --from YYYY-MM-DD --to YYYY-MM-DD]: \(message)\n".utf8))
+        exit(2)
+    }
+    let ingest = WaitIngest(adapters: AdapterRegistry.all())
+    nonisolated(unsafe) var finished = false
+    Task.detached {
+        let started = Date()
+        let rows = await ingest.collect(since: window.lo)
+        print(WaitStats.format(rows, window: window), terminator: "")
+        let bytes = await ingest.lastBytesRead
+        let seconds = String(format: "%.2f", Date().timeIntervalSince(started))
+        FileHandle.standardError.write(Data("read \(bytes) bytes in \(seconds) s\n".utf8))
+        finished = true
+    }
+    let deadline = Date().addingTimeInterval(600)
+    while !finished && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    if !finished { FileHandle.standardError.write(Data("wait-stats: gave up after 600 s\n".utf8)) }
+    exit(finished ? 0 : 1)
+}
+
 // `Vibra --incidents [--days N] [--json]` prints what the incident monitor
 // finds: enums, dates, counts and hashed ids, never a command, a path or a key.
 // It reads the user's answers and never writes, so it cannot silence an alert.

@@ -44,6 +44,7 @@ Gap: I found no 2024-2026 CHI/UIST paper that measured notification timing or id
 *First experiment.* Over 2 weeks of local use, log resolutions and report per-flag precision with N. For recall, seed known positives by replaying SABER or SHADE-Arena-style scenarios in a throwaway workspace and confirm that Vibra flags each one.
 
 **C. Attention cost: idle-agent time and approval habituation.** Research has measured approval fatigue (Anthropic) and the awareness-steering gap (Long et al., unverified), but not the time agents sit waiting for a human. Vibra sees every timestamp needed for this.
+*Status (2026-11-13):* measured as `Vibra --wait-stats`; the first n=1 pilot, with its method and limits, is `wait-pilot.md`. The notifications on/off weeks are plan task 9 in `docs/PLAN-2026-11-13-wait-minutes.md`.
 *First experiment.* From local transcripts, compute per-session "blocked-on-human" minutes: time from a finished turn or permission prompt to the next user event. Also compute time-to-approve as a function of how many prompts came earlier in the session, a habituation curve. Compare a week with Vibra's notifications off against a week with them on. Report the median and IQR with session counts, and treat it as an n=1 pilot, not a result.
 
 ## Errata (planner, 2026-11-12)

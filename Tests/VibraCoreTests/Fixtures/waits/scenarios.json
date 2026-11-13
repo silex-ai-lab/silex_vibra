@@ -1,0 +1,60 @@
+{
+ "_comment": "Expected --wait-stats output per scenario, derived by hand from docs/PLAN-2026-11-13-wait-minutes.md; the tree is <name>/home, used as VIBRA_HOME with TZ.",
+ "scenarios": [
+  {
+   "name": "claude-basic",
+   "tz": "UTC",
+   "args": "--from 2026-11-10 --to 2026-11-10",
+   "expected": "sessions agent=claudeCode n=1\nopen agent=claudeCode n=1\nwaits agent=claudeCode kind=approval answer=reject n=2\nwaits agent=claudeCode kind=question answer=accept n=1\nwaits agent=claudeCode kind=turn n=3\nseconds agent=claudeCode kind=approval p25=30 p50=30 p75=30 n=2\nseconds agent=claudeCode kind=question p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=turn p25=180 p50=300 p75=390 n=3\nseconds agent=claudeCode kind=approval ordinal=2-3 p25=30 p50=30 p75=30 n=2\nseconds agent=claudeCode kind=question ordinal=1 p25=60 p50=60 p75=60 n=1\nblocked agent=claudeCode scope=all unit=min p25=15 p50=15 p75=15 total=15 n=1\nblocked agent=claudeCode scope=within_cap unit=min p25=15 p50=15 p75=15 total=15 n=1\n"
+  },
+  {
+   "name": "claude-dispatch",
+   "tz": "UTC",
+   "args": "--from 2026-11-10 --to 2026-11-10",
+   "expected": "sessions agent=claudeCode n=1\nwaits agent=claudeCode kind=approval answer=accept n=1\nwaits agent=claudeCode kind=turn n=1\nseconds agent=claudeCode kind=approval p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=turn p25=240 p50=240 p75=240 n=1\nseconds agent=claudeCode kind=approval ordinal=1 p25=60 p50=60 p75=60 n=1\nblocked agent=claudeCode scope=all unit=min p25=5 p50=5 p75=5 total=5 n=1\nblocked agent=claudeCode scope=within_cap unit=min p25=5 p50=5 p75=5 total=5 n=1\n"
+  },
+  {
+   "name": "codex-turns",
+   "tz": "UTC",
+   "args": "--from 2026-11-10 --to 2026-11-10",
+   "expected": "sessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=codex kind=turn n=3\nseconds agent=codex kind=turn p25=240 p50=240 p75=390 n=3\nblocked agent=codex scope=all unit=min p25=17 p50=17 p75=17 total=17 n=1\nblocked agent=codex scope=within_cap unit=min p25=17 p50=17 p75=17 total=17 n=1\n"
+  },
+  {
+   "name": "both",
+   "tz": "UTC",
+   "args": "--from 2026-11-10 --to 2026-11-10",
+   "expected": "sessions agent=claudeCode n=1\nsessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=claudeCode kind=approval answer=accept n=1\nwaits agent=claudeCode kind=turn n=1\nwaits agent=codex kind=turn n=3\nseconds agent=claudeCode kind=approval p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=turn p25=240 p50=240 p75=240 n=1\nseconds agent=codex kind=turn p25=240 p50=240 p75=390 n=3\nseconds agent=claudeCode kind=approval ordinal=1 p25=60 p50=60 p75=60 n=1\nblocked agent=claudeCode scope=all unit=min p25=5 p50=5 p75=5 total=5 n=1\nblocked agent=claudeCode scope=within_cap unit=min p25=5 p50=5 p75=5 total=5 n=1\nblocked agent=codex scope=all unit=min p25=17 p50=17 p75=17 total=17 n=1\nblocked agent=codex scope=within_cap unit=min p25=17 p50=17 p75=17 total=17 n=1\n"
+  },
+  {
+   "name": "window-edges",
+   "tz": "UTC",
+   "args": "--from 2026-11-10 --to 2026-11-10",
+   "expected": "sessions agent=claudeCode n=4\nwaits agent=claudeCode kind=question answer=unknown n=1\nwaits agent=claudeCode kind=turn n=3\nover_cap agent=claudeCode kind=question n=1\nover_cap agent=claudeCode kind=turn n=1\nseconds agent=claudeCode kind=question p25=7200 p50=7200 p75=7200 n=1\nseconds agent=claudeCode kind=turn p25=4500 p50=7200 p75=7200 n=3\nseconds agent=claudeCode kind=question ordinal=1 p25=7200 p50=7200 p75=7200 n=1\nblocked agent=claudeCode scope=all unit=min p25=22 p50=75 p75=150 total=390 n=4\nblocked agent=claudeCode scope=within_cap unit=min p25=0 p50=15 p75=52 total=150 n=4\n"
+  },
+  {
+   "name": "dst",
+   "tz": "America/Los_Angeles",
+   "args": "--from 2026-11-01 --to 2026-11-01",
+   "expected": "sessions agent=claudeCode n=3\nwaits agent=claudeCode kind=turn n=2\nseconds agent=claudeCode kind=turn p25=495 p50=930 p75=1365 n=2\nblocked agent=claudeCode scope=all unit=min p25=0 p50=1 p75=15 total=31 n=3\nblocked agent=claudeCode scope=within_cap unit=min p25=0 p50=1 p75=15 total=31 n=3\n"
+  },
+  {
+   "name": "midnight-dst",
+   "tz": "America/Sao_Paulo",
+   "args": "--from 2018-11-04 --to 2018-11-04",
+   "expected": "sessions agent=claudeCode n=2\nwaits agent=claudeCode kind=turn n=1\nseconds agent=claudeCode kind=turn p25=600 p50=600 p75=600 n=1\nblocked agent=claudeCode scope=all unit=min p25=2 p50=5 p75=7 total=10 n=2\nblocked agent=claudeCode scope=within_cap unit=min p25=2 p50=5 p75=7 total=10 n=2\n"
+  },
+  {
+   "name": "sentinel",
+   "tz": "UTC",
+   "args": "--from 2026-11-10 --to 2026-11-10",
+   "sentinel": "SENTINEL",
+   "expected": "sessions agent=claudeCode n=1\nsessions agent=codex n=1\nwaits agent=claudeCode kind=approval answer=accept n=1\nwaits agent=claudeCode kind=question answer=accept n=1\nwaits agent=claudeCode kind=turn n=1\nwaits agent=codex kind=turn n=1\nseconds agent=claudeCode kind=approval p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=question p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=turn p25=300 p50=300 p75=300 n=1\nseconds agent=codex kind=turn p25=120 p50=120 p75=120 n=1\nseconds agent=claudeCode kind=approval ordinal=2-3 p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=question ordinal=1 p25=60 p50=60 p75=60 n=1\nblocked agent=claudeCode scope=all unit=min p25=7 p50=7 p75=7 total=7 n=1\nblocked agent=claudeCode scope=within_cap unit=min p25=7 p50=7 p75=7 total=7 n=1\nblocked agent=codex scope=all unit=min p25=2 p50=2 p75=2 total=2 n=1\nblocked agent=codex scope=within_cap unit=min p25=2 p50=2 p75=2 total=2 n=1\n"
+  },
+  {
+   "name": "empty",
+   "tz": "UTC",
+   "args": "--from 2026-11-10 --to 2026-11-10",
+   "expected": ""
+  }
+ ]
+}

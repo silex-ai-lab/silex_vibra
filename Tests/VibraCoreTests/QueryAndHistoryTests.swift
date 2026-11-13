@@ -94,6 +94,14 @@ struct HistoryExtractionTests {
         codexLine("session_meta", ["session_id": "x-1", "cwd": "/Users/demo/beta", "originator": originator])
     }
 
+    /// `session_meta` with chosen fields (`source`, `originator`, …) on top of
+    /// the usual id and cwd.
+    private func codexMeta(_ fields: [String: Any]) -> String {
+        var payload: [String: Any] = ["session_id": "x-1", "cwd": "/Users/demo/beta"]
+        payload.merge(fields) { $1 }
+        return codexLine("session_meta", payload)
+    }
+
     private func codexUser(_ blocks: [String]) -> String {
         codexLine("response_item", [
             "type": "message", "role": "user",
@@ -157,6 +165,131 @@ struct HistoryExtractionTests {
         #expect(isInjectedWrapper("<environment_context>x</environment_context>", tags: tags))
         #expect(!isInjectedWrapper("<environment_context>x</environment_context> and my question", tags: tags))
         #expect(!isInjectedWrapper("<div>hello</div>", tags: tags))
+    }
+
+    // MARK: - Codex subagent sessions
+
+    /// A rollout Codex wrote for a thread it spawned carries
+    /// `session_meta.source.subagent`; its prompts come from the parent agent,
+    /// so they are not the person's. The other two forms of `source` seen on
+    /// disk are plain strings, and those sessions stay attended.
+    @Test func codexSubagentSessionYieldsNoQuestions() {
+        let sources: [Any] = [
+            ["subagent": ["other": "guardian"]],
+            ["subagent": ["thread_spawn": ["depth": 1]]],
+        ]
+        for source in sources {
+            var extractor = CodexHistoryExtractor()
+            let out = extractor.fold([
+                codexMeta(["originator": "codex-tui", "source": source]),
+                codexUser(["prompt from the parent agent"]),
+                codexUser(["another one"]),
+            ])
+            #expect(out.isEmpty, "source \(source)")
+        }
+
+        for source in ["cli", "vscode"] {
+            var extractor = CodexHistoryExtractor()
+            let out = extractor.fold([
+                codexMeta(["originator": "codex-tui", "source": source]),
+                codexUser(["typed by the person"]),
+            ])
+            #expect(out.map(\.text) == ["typed by the person"], "source \(source)")
+        }
+    }
+
+    /// The decision is taken once, from the first `session_meta`: a later
+    /// `session_meta` cannot change it in either direction.
+    @Test func codexFirstSessionMetaDecidesSubagent() {
+        let subagent: [String: Any] = ["subagent": ["other": "guardian"]]
+        var firstSubagent = CodexHistoryExtractor()
+        #expect(firstSubagent.fold([
+            codexMeta(["source": subagent]),
+            codexMeta(["source": "cli"]),
+            codexUser(["after a later meta"]),
+        ]).isEmpty)
+
+        var firstAttended = CodexHistoryExtractor()
+        let kept = firstAttended.fold([
+            codexMeta(["source": "cli"]),
+            codexMeta(["source": subagent]),
+            codexUser(["typed before a later meta"]),
+        ])
+        #expect(kept.map(\.text) == ["typed before a later meta"])
+    }
+
+    /// A rollout longer than one read batch can put the `session_meta` and the
+    /// prompts in different `fold` calls; the decision must carry over.
+    @Test func codexSubagentSurvivesABatchSplit() {
+        for source in [["subagent": ["other": "guardian"]], ["subagent": ["thread_spawn": ["depth": 1]]]] as [[String: [String: Any]]] {
+            var extractor = CodexHistoryExtractor()
+            #expect(extractor.fold([codexMeta(["source": source])]).isEmpty)
+            #expect(extractor.fold([codexUser(["second batch prompt"])]).isEmpty)
+        }
+
+        // Negative control: the same split on an attended session keeps it.
+        var attended = CodexHistoryExtractor()
+        #expect(attended.fold([codexMeta(["source": "cli"])]).isEmpty)
+        let out = attended.fold([codexUser(["second batch prompt"])])
+        #expect(out.map(\.text) == ["second batch prompt"])
+        #expect(out.first?.sessionID == "x-1")
+    }
+
+    // MARK: - Wrapper tags added on 2026-11-13
+
+    /// Each tag that the 30-day census found injected is a whole wrapper block
+    /// and yields no question.
+    @Test func addedWrapperTagsAreDroppedAsWholeBlocks() {
+        let claudeTags = ["artifact-content-authored-by-others"]
+        let codexTags = [
+            "heartbeat", "task-notification", "user_shell_command",
+            "command-name", "command-message", "command-args", "local-command-stdout",
+        ]
+        #expect(Set(claudeTags).isSubset(of: ClaudeHistoryExtractor.wrapperTags))
+        #expect(Set(codexTags).isSubset(of: CodexHistoryExtractor.wrapperTags))
+
+        for tag in claudeTags {
+            var extractor = ClaudeHistoryExtractor()
+            let out = extractor.fold([claudeLine("<\(tag)>\ninjected text\n</\(tag)>")])
+            #expect(out.isEmpty, "Claude tag \(tag)")
+        }
+        for tag in codexTags {
+            var extractor = CodexHistoryExtractor()
+            let out = extractor.fold([
+                codexMeta(originator: "codex-tui"),
+                codexUser(["<\(tag)>\ninjected text\n</\(tag)>"]),
+            ])
+            #expect(out.isEmpty, "Codex tag \(tag)")
+        }
+    }
+
+    /// The same tag inside a longer message is not the whole message, so what
+    /// the person typed is kept.
+    @Test func addedWrapperTagMidTextKeepsTypedText() {
+        var claude = ClaudeHistoryExtractor()
+        let claudeOut = claude.fold([
+            claudeLine("what is this<artifact-content-authored-by-others>x</artifact-content-authored-by-others> for?"),
+        ])
+        #expect(claudeOut.map(\.text) == ["what is this for?"])
+
+        var codex = CodexHistoryExtractor()
+        let codexOut = codex.fold([
+            codexMeta(originator: "codex-tui"),
+            codexUser(["my question about <heartbeat>b</heartbeat> today"]),
+        ])
+        #expect(codexOut.count == 1)
+        #expect(codexOut.first?.text.hasPrefix("my question about ") == true)
+    }
+
+    /// `realtime_delegation` carries what the person said, so it stays a
+    /// question; the plan pins it against re-wrapping.
+    @Test func realtimeDelegationIsStillAQuestion() {
+        var extractor = CodexHistoryExtractor()
+        let out = extractor.fold([
+            codexMeta(originator: "codex-tui"),
+            codexUser(["<realtime_delegation>\nwhat the person said\n</realtime_delegation>"]),
+        ])
+        #expect(out.count == 1)
     }
 
     // MARK: - Ingest

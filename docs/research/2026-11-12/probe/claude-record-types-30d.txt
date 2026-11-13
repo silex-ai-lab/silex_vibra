@@ -1,0 +1,67 @@
+2026-11-13T10:51:26Z
+files 745 recent30d 741 oldest_days 39.5
+type attachment 207841
+type assistant 75040
+type user 44342
+type api-request 34789
+type api-request-blob 28562
+type atis-latch 16896
+type last-prompt 16807
+type mode 16392
+type ai-title 14489
+type permission-mode 8446
+type session-owner 5603
+type queue-operation 5144
+type system 4898
+type pr-link 1888
+type file-history-snapshot 1130
+type api-request-shape 957
+type file-history-delta 924
+type tools-used 533
+type frame-link 303
+type cost-state 299
+type agent-name 296
+type artifact-autoreact-ledger 110
+type artifact-comment-monitor 16
+type fork-context-ref 2
+type continued-in 1
+sub ('attachment', 'hook_success') 161040
+sub ('attachment', 'total_tokens_reminder') 16822
+sub ('permission-mode', None) 8446
+sub ('attachment', 'deferred_tools_record') 7621
+sub ('attachment', 'batching_reminder_sent') 3190
+sub ('attachment', 'bash_output_audience_note') 2700
+sub ('system', 'turn_duration') 2020
+sub ('system', 'stop_hook_summary') 1866
+sub ('attachment', 'prompt_snapshot') 1694
+sub ('attachment', 'environment') 1540
+sub ('attachment', 'silent_turn_reminder') 1342
+sub ('attachment', 'queued_command') 1156
+sub ('attachment', 'date') 944
+sub ('attachment', 'skill_listing') 897
+sub ('attachment', 'model') 869
+sub ('attachment', 'session_context') 848
+sub ('attachment', 'credential_org') 847
+sub ('attachment', 'deferred_tools_delta') 774
+sub ('attachment', 'mcp_instructions_delta') 773
+sub ('attachment', 'remote_session_change') 750
+sub ('attachment', 'agent_listing_delta') 748
+sub ('attachment', 'instructions') 732
+sub ('attachment', 'edited_text_file') 700
+sub ('system', 'away_summary') 652
+sub ('attachment', 'auto_mode') 576
+sub ('attachment', 'file') 420
+sub ('attachment', 'command_permissions') 273
+sub ('attachment', 'compact_file_reference') 187
+sub ('system', 'informational') 141
+sub ('system', 'compact_boundary') 131
+sub ('attachment', 'invoked_skills') 126
+sub ('attachment', 'task_reminder') 107
+sub ('system', 'local_command') 82
+sub ('attachment', 'thinking_drop') 49
+sub ('attachment', 'hook_additional_context') 29
+sub ('attachment', 'read_truncation_notice') 26
+sub ('attachment', 'task_status') 19
+sub ('attachment', 'skill_mention') 18
+sub ('attachment', 'nested_memory') 13
+sub ('attachment', 'hook_system_message') 8

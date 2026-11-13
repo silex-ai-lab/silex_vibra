@@ -1,0 +1,4 @@
+baseline: exit 0; Test run with 617 tests in 64 suites passed after 3.394 seconds.; canary line: passed; sentinels named: -
+M1 fold keeps prompt text: exit 2; Test run with 617 tests in 64 suites failed after 3.287 seconds with 25 issues.; canary line: NOT passed; sentinels named: ['SENTINEL_PROMPT_2b7']
+M2 wait keeps tool input: exit 2; Test run with 617 tests in 64 suites failed after 3.382 seconds with 4 issues.; canary line: NOT passed; sentinels named: ['SENTINEL_INPUT_6e4']
+restored: exit 0; Test run with 617 tests in 64 suites passed after 3.388 seconds.; canary line: passed; sentinels named: -

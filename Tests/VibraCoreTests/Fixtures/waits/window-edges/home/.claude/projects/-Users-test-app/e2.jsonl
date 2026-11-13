@@ -1,0 +1,3 @@
+{"cwd": "/Users/test/app", "message": {"content": "late", "role": "user"}, "sessionId": "s", "timestamp": "2026-11-10T23:00:00.000Z", "type": "user"}
+{"cwd": "/Users/test/app", "message": {"content": [{"text": "ok", "type": "text"}], "id": "a2", "role": "assistant", "stop_reason": "end_turn"}, "sessionId": "s", "timestamp": "2026-11-10T23:59:00.000Z", "type": "assistant"}
+{"cwd": "/Users/test/app", "message": {"content": "at hi", "role": "user"}, "sessionId": "s", "timestamp": "2026-11-11T00:00:00.000Z", "type": "user"}

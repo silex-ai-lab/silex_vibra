@@ -2,6 +2,23 @@
 
 ## 0.5.0 (unreleased)
 
+- **`Vibra --wait-stats` measures how long sessions waited on you.** For
+  Claude Code and Codex, from local transcripts, it prints per agent: sessions,
+  waits by kind (a finished turn until your next prompt or slash command; an
+  `AskUserQuestion` until your answer; a tool call you approved or rejected
+  until its result), quartiles of their length in seconds with each wait
+  capped at 2 h, and blocked minutes per session with and without waits over
+  the cap. `--days N` (default 30) or `--from YYYY-MM-DD --to YYYY-MM-DD` in
+  local time. Counts and durations only: no id, path or text. An independent
+  Python oracle (`tools/wait-oracle/`) agrees with it byte for byte on nine
+  shared fixture scenarios and on a frozen snapshot of the owner's month; the
+  first n=1 pilot is in `docs/research/2026-11-12/wait-pilot.md`. A
+  `waitSentinelsNeverLeak` canary joins `make test`.
+- **Codex History no longer lists prompts its subagents received,** or
+  injected heartbeat, notification and shell-command text, as questions you
+  typed. A Codex session spawned for a subagent (the approval guardian, a
+  spawned thread) now counts as unattended, as `codex exec` already did.
+  Pinned by `QueryAndHistoryTests`.
 - **Code checks says when test-file edits changed its test-pattern counts.** When the reported
   check is a passing test run and the test run just before it failed, the row
   now adds one sentence if edits to test files in between lowered Vibra's

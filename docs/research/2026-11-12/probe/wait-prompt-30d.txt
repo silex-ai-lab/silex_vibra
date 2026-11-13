@@ -1,0 +1,21 @@
+2026-11-13T10:31:01Z
+n 66 sessions 33 sidechain {False: 66}
+[('AskUserQuestion', 54), ('Bash', 12)]
+47 ('annotations', 'answers', 'questions')
+10 ('interrupted', 'isImage', 'noOutputExpected', 'stderr', 'stdout')
+7 str
+2 ('backgroundTaskId', 'interrupted', 'isImage', 'noOutputExpected', 'stderr', 'stdout')
+35 ('attachment',)
+4 ('attachment', 'queue-operation')
+4 ('api-request', 'api-request-blob', 'attachment')
+4 ('ai-title', 'atis-latch', 'attachment', 'last-prompt', 'mode', 'pr-link')
+3 ('assistant', 'attachment')
+3 ('ai-title', 'atis-latch', 'attachment', 'last-prompt', 'mode', 'permission-mode', 'session-owner')
+2 ('ai-title', 'atis-latch', 'attachment', 'last-prompt', 'mode', 'permission-mode')
+2 ('ai-title', 'atis-latch', 'attachment', 'last-prompt', 'mode')
+gap s p25/50/75 [50.9, 429.0, 3533.8] min 6.3 max 130594.9
+47 ('AskUserQuestion', 'user_temporary', 'accept', False)
+7 ('AskUserQuestion', 'user_reject', 'reject', False)
+6 ('AskUserQuestion', None, None, False)
+[('exec', 5481), ('wait_agent', 701), ('send_message', 521), ('spawn_agent', 509), ('followup_task', 90), ('list_agents', 41), ('wait', 26), ('request_user_input_async', 15), ('js', 14), ('sleep', 14), ('interrupt_agent', 1)]
+Counter({'subagent': 333, 'attended': 322, ('subagent', 'sessions'): 150, ('attended', 'sessions'): 45, 'exec': 13, ('exec', 'sessions'): 13})

@@ -1,0 +1,34 @@
+2026-11-13T10:58:14Z
+32 claude dropped wrapper-only bash-input
+32 claude dropped wrapper-only bash-stdout
+63 claude dropped wrapper-only command-message
+100 claude dropped wrapper-only command-name
+52 claude dropped wrapper-only local-command-stdout
+846 claude dropped wrapper-only task-notification
+0 claude end_turn uuids in more than one file
+6 claude human-answered dialogs in those transcripts
+77 claude prompt dispatch leading tag -
+979 claude prompt human leading tag -
+1 claude prompt human leading tag artifact-content-authored-by-others
+9 claude stop_reason None
+2936 claude stop_reason end_turn
+1 claude stop_reason refusal
+33 claude stop_reason stop_sequence
+43539 claude stop_reason tool_use
+4 claude transcripts with no human prompt but human-answered dialogs
+3 codex human command (user_shell_command)
+19 codex open at end
+174 codex prompt dispatch leading tag -
+152 codex prompt human leading tag -
+2 codex prompt human leading tag command-message
+2 codex prompt human leading tag command-name
+2 codex prompt human leading tag realtime_delegation
+1 codex prompts (time, text hash) in more than one file
+18 codex task_started trigger automation_heartbeat_sch
+1 codex task_started trigger realtime
+355 codex task_started trigger user
+132 codex turn wait closed
+1 codex wait cleared by automation task_started
+15 codex wait cleared by message
+1 codex wait cleared by reasoning
+2 codex wait cleared by turn_aborted

@@ -53,10 +53,10 @@ public struct QuestionRecord: Sendable, Equatable {
 /// order.
 ///
 /// Stateful per source on purpose: whether a session is unattended is decided
-/// by its first records (Codex's `session_meta.originator`, Claude's first
-/// prompt), and a transcript longer than one read batch must still apply that
-/// to every later batch. It carries only such session-level facts, never
-/// earlier message text.
+/// by its first records (Codex's `session_meta.originator` and `source`,
+/// Claude's first prompt), and a transcript longer than one read batch must
+/// still apply that to every later batch. It carries only such session-level
+/// facts, never earlier message text.
 public protocol HistoryExtractor {
     mutating func fold(_ lines: [String]) -> [QuestionRecord]
 }
@@ -106,12 +106,15 @@ func unwrappingPastes(_ text: String) -> String {
 /// 2026-09-26 (tag names counted, text not read): background-task
 /// notifications and `!` shell runs arrive as user records without `isMeta`.
 /// `pasted_content` is text the user pasted, so it is kept, unwrapped.
+/// `artifact-content-authored-by-others` joined the list on 2026-11-13: it
+/// was the one tag-led record in 30 days that still passed as typed.
 struct ClaudeHistoryExtractor: HistoryExtractor {
     static let wrapperTags: Set<String> = [
         "command-name", "command-message", "command-args",
         "local-command-stdout", "local-command-stderr", "local-command-caveat",
         "system-reminder", "task-notification",
         "bash-input", "bash-stdout", "bash-stderr",
+        "artifact-content-authored-by-others",
     ]
 
     private var sawFirstPrompt = false
@@ -175,15 +178,31 @@ struct ClaudeHistoryExtractor: HistoryExtractor {
 /// Codex: `response_item` user messages' `input_text` blocks, minus the
 /// context blocks Codex injects. `event_msg` `user_message` is ignored, so a
 /// prompt is never counted twice by a version that writes both. A `codex exec`
-/// session (originator "codex_exec") is unattended and yields nothing.
+/// session (originator "codex_exec") and a session Codex spawned for a
+/// subagent (its first `session_meta` source carries a `subagent` key, see
+/// `codexSourceIsSubagent`) are unattended and yield nothing.
 struct CodexHistoryExtractor: HistoryExtractor {
     /// `environment_context` and `turn_aborted` were observed; the other two
-    /// are defensive.
-    static let wrapperTags: Set<String> = ["environment_context", "turn_aborted", "user_instructions"]
+    /// were defensive. The rest joined the list on 2026-11-13: they were the
+    /// tag-led prompts that still passed as typed in a 30-day census
+    /// (heartbeat, task-notification, user_shell_command, command-name,
+    /// command-message, command-args, local-command-stdout).
+    /// `realtime_delegation` is deliberately absent: it carries what the
+    /// person said in a realtime session, so it is a question.
+    static let wrapperTags: Set<String> = [
+        "environment_context", "turn_aborted", "user_instructions",
+        "heartbeat", "task-notification", "user_shell_command",
+        "command-name", "command-message", "command-args", "local-command-stdout",
+    ]
 
     private var originator: String?
     private var sessionID: String?
     private var cwd: String?
+    /// Whether the session is a subagent's, decided once from the FIRST
+    /// `session_meta` so a later `session_meta` or a batch boundary cannot
+    /// turn an unattended session back into the person's.
+    private var sawFirstSessionMeta = false
+    private var sourceIsSubagent = false
 
     mutating func fold(_ lines: [String]) -> [QuestionRecord] {
         var out: [QuestionRecord] = []
@@ -193,6 +212,10 @@ struct CodexHistoryExtractor: HistoryExtractor {
             else { continue }
             let type = record["type"] as? String
             if type == "session_meta" {
+                if !sawFirstSessionMeta {
+                    sawFirstSessionMeta = true
+                    sourceIsSubagent = codexSourceIsSubagent(payload)
+                }
                 if originator == nil { originator = payload["originator"] as? String }
                 if sessionID == nil { sessionID = payload["session_id"] as? String ?? payload["id"] as? String }
                 if cwd == nil { cwd = payload["cwd"] as? String }
@@ -203,6 +226,7 @@ struct CodexHistoryExtractor: HistoryExtractor {
                   payload["type"] as? String == "message",
                   payload["role"] as? String == "user",
                   originator != "codex_exec",
+                  !sourceIsSubagent,
                   let blocks = payload["content"] as? [[String: Any]]
             else { continue }
 

@@ -23,6 +23,7 @@ star, is from 2026-10-01 and is stale.
 | 9 | Topics / homepage | **Pending owner go-ahead** | Topics proposed in the Day-1 plan. Homepage after #1. |
 | 10 | `--query` + skill ecosystem | **Example done** 2026-09-28 | In `docs/features.md`; listing after #1. |
 | 11 | CONTRIBUTING + issue templates | Not started | After #1. |
+| 12 | Evidence: minutes agents waited on you | **Measured** 2026-11-13 (branch `feat/wait-stats`, not merged) | `Vibra --wait-stats`; n=1 pilot in `docs/research/2026-11-12/wait-pilot.md`. No UI yet: decided after the notifications on/off weeks (plan task 9). |
 
 ## Open decisions
 

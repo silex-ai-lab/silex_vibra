@@ -56,6 +56,21 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   reaches any output. With a key that kept the raw path, or one built from the
   edit text, the canary failed on the matching sentinel (plan task 7 mutation
   run).
+- **`--wait-stats` reads prompts only to classify them, and prints
+  durations.** It reads Claude Code and Codex transcripts from disk. A prompt
+  goes through the same History rule, in memory, only to decide whether you
+  typed it or a fleet planner dispatched it; a record History drops is
+  searched only for a leading `<command-name>`, `<command-message>` or
+  `<bash-input>` tag and a `<command-name>` element (Claude Code), or for one
+  whole `<user_shell_command>` element (Codex); tool input is
+  never read, only a tool's name, its id and the decision Claude Code
+  records. What it keeps per transcript is times, and what it prints is
+  counts and durations. The `waitSentinelsNeverLeak` canary plants sentinels
+  in prompts, tool input and results, replies, cwd, session ids and file
+  paths for both agents, requires waits of every kind to be produced first,
+  and asserts no sentinel reaches the output or the folded values. A fold
+  that kept prompt text, or a wait that kept tool input, failed it (plan
+  task 6 mutation run). `make test` fails if it did not run.
 - **Returning to a session in Orca reads one environment variable.** When you
   click a session running in an Orca terminal, Vibra asks the kernel for that
   agent process's start-up environment and keeps only `ORCA_TERMINAL_HANDLE`,

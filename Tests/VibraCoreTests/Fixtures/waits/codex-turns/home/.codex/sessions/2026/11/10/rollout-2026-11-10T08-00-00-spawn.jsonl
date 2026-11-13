@@ -1,0 +1,4 @@
+{"payload": {"cwd": "/Users/test/app", "id": "x", "originator": "codex-tui", "session_id": "x", "source": {"subagent": {"thread_spawn": {"depth": 1}}}}, "timestamp": "2026-11-10T08:00:00.000Z", "type": "session_meta"}
+{"payload": {"content": [{"text": "spawned", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:00:01.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:01:00.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "again", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:05:00.000Z", "type": "response_item"}
