@@ -753,7 +753,11 @@ waits for the owner.
 - **Seats:** reviewer-claude `left` (Orca pane, open for the owner),
   coder-deepseek `left`, reviewer-sol `left` (no pane). `fleet-ledger.sh check`
   exits 0.
-- **Open:** CI on Swift 6.1.2 and the owner's merge decision; task 9 (the
+- **CI (Swift 6.1.2 floor):** run 43461662851 on `14ed572` (PR #16), all
+  four jobs green; on both `macos-15` and `macos-15-intel`, `Apple Swift
+  version 6.1.2`, "Test run with 622 tests passed", and every canary including
+  `waitSentinelsNeverLeak`.
+- **Open:** the owner's merge decision; task 9 (the
   notifications on/off weeks) after merge; the Swift path is about 14x slower
   than the oracle on 30 days of transcripts (recorded, not addressed).
 
