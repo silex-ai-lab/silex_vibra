@@ -33,7 +33,7 @@ advanced since 2026-10-01 while distribution has not: P3.1 Developer ID has been
 | Not stacked on | PR #13 (`docs/swift-6.1-floor`, README only, open). This run edits no README, so the two do not conflict |
 | `$SCRATCH` | `/var/folders/x3/8mdzc51d11j_z0l1mt77lpmr0000gn/T//fleet-MVz3zM` |
 | Baseline | `make test`: 513 tests (last local `build/test.log` at 0.4.2; task 1 re-measures before its change) |
-| Review base | Written here at Step 5 |
+| Review base | `BASE=5005054` (plan gate passed; Step 5 started 2026-11-12). Layout: one shared working tree, coder-deepseek (OpenCode, DeepSeek V4.1 Flash) in its own pane |
 | Data rule | Repo is public. Seats read the repo and `$SCRATCH` only, never `~/.claude`, `~/.codex`, `~/Library`, or any transcript. Probes over real transcripts are run by the planner only and print counts only |
 
 ## Research behind the pick
