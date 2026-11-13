@@ -33,7 +33,8 @@ CODEX_WRAPPERS = {
     "command-name", "command-message", "command-args", "local-command-stdout",
 }
 
-TIMESTAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})")
+TIMESTAMP = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})")
+MAX_DAYS = 36_500
 DISPATCH = re.compile(r"Dispatch `?[\w.-]+`?:")
 SCHEDULED = re.compile(r'^\s*<scheduled-task name="([A-Za-z0-9._-]{1,64})"')
 PASTES = re.compile(r"</?pasted_content[^>]*>")
@@ -91,14 +92,14 @@ def parse_window(argv, now_ms):
     n = 30
     if days is not None:
         text = days[0]
-        if text is None or not re.fullmatch(r"\d+", text) or int(text) < 1:
-            raise ValueError("--days takes a whole number of at least 1")
+        if text is None or not re.fullmatch(r"[0-9]+", text) or not 1 <= int(text) <= MAX_DAYS:
+            raise ValueError("--days takes a whole number from 1 to %d" % MAX_DAYS)
         n = int(text)
     return now_ms - n * 86_400_000, now_ms + 1
 
 
 def local_date(text):
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
         return None
     try:
         return datetime.date(int(text[:4]), int(text[5:7]), int(text[8:]))
@@ -259,13 +260,24 @@ class Fold:
         self.open_since = None
 
 
+def dict_list(value):
+    """A JSON array whose every element is an object, else None."""
+    return value if isinstance(value, list) and all(isinstance(b, dict) for b in value) else None
+
+
 def text_of(content):
     if isinstance(content, str):
         return content
-    if isinstance(content, list):
-        return "\n".join(b["text"] for b in content
-                         if isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str))
+    blocks = dict_list(content)
+    if blocks is not None:
+        return "\n".join(b["text"] for b in blocks if b.get("type") == "text" and isinstance(b.get("text"), str))
     return None
+
+
+def is_single_element(text, tag):
+    t = text.strip()
+    return (is_injected_wrapper(t, {tag}) and t.count("</%s>" % tag) == 1
+            and t.count("<%s>" % tag) + t.count("<%s " % tag) == 1)
 
 
 def claude_fold(lines):
@@ -292,8 +304,8 @@ def claude_fold(lines):
                 open_ms, open_resp = t, rid
             else:
                 open_ms, open_resp = None, None
-            for b in msg.get("content") if isinstance(msg.get("content"), list) else []:
-                if isinstance(b, dict) and b.get("type") == "tool_use" and isinstance(b.get("id"), str):
+            for b in dict_list(msg.get("content")) or []:
+                if b.get("type") == "tool_use" and isinstance(b.get("id"), str):
                     if b["id"] not in seen:
                         seen.add(b["id"])
                         uses[b["id"]] = (t, b.get("name"))
@@ -301,12 +313,15 @@ def claude_fold(lines):
         if kind != "user":
             continue
         content = msg.get("content")
-        if isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+        blocks = dict_list(content)
+        if blocks is not None and any(b.get("type") == "tool_result" for b in blocks):
             decision = r.get("permissionDecision") if isinstance(r.get("permissionDecision"), dict) else {}
-            answer = {"accept": "accept", "reject": "reject"}.get(decision.get("decision"), "unknown")
+            verdict = decision.get("decision")
+            answer = verdict if verdict in ("accept", "reject") and isinstance(verdict, str) else "unknown"
             source = decision.get("source")
-            for b in content:
-                if not (isinstance(b, dict) and b.get("type") == "tool_result") or b.get("tool_use_id") not in uses:
+            for b in blocks:
+                tid = b.get("tool_use_id")
+                if b.get("type") != "tool_result" or not isinstance(tid, str) or tid not in uses:
                     continue
                 start, name = uses.pop(b["tool_use_id"])
                 if name == "AskUserQuestion":
@@ -378,9 +393,9 @@ def codex_fold(lines):
                 continue
             f.has_prompt = True
         elif (kind == "response_item" and ptype == "message" and payload.get("role") == "user" and not automation
-              and isinstance(payload.get("content"), list)
-              and any(isinstance(b, dict) and b.get("type") == "input_text" and isinstance(b.get("text"), str)
-                      and is_injected_wrapper(b["text"], {"user_shell_command"}) for b in payload["content"])):
+              and dict_list(payload.get("content")) is not None
+              and any(b.get("type") == "input_text" and isinstance(b.get("text"), str)
+                      and is_single_element(b["text"], "user_shell_command") for b in payload["content"])):
             pass
         else:
             continue

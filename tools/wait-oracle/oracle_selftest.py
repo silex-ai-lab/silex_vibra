@@ -74,6 +74,23 @@ check("union touching", w.union_ms([(0, 10), (10, 20)]), 20)
 check("union nested", w.union_ms([(0, 100), (10, 20)]), 100)
 check("union disjoint", w.union_ms([(0, 10), (20, 25)]), 15)
 check("union empty", w.union_ms([]), 0)
+check("days at the bound", w.parse_window(["--days", "36500"], 10**13)[0], 10**13 - 36500 * 86_400_000)
+for argv in (["--days", "36501"], ["--days", "999999999999999999"], ["--days", "\u0663"], ["--from", "2026-11-\u0660\u0661", "--to", "2026-11-02"]):
+    check("usage %r" % argv, w.run(argv, {"VIBRA_HOME": "/nonexistent"})[0], 2)
+check("ms rejects year 0", w.epoch_ms("0000-01-01T00:00:00Z"), None)
+check("ms rejects non-ASCII digits", w.epoch_ms("2026-11-1\u0660T00:00:00Z"), None)
+check("single element", [w.is_single_element(t, "user_shell_command") for t in (
+    "<user_shell_command>ls</user_shell_command>", " <user_shell_command>ls</user_shell_command>\n",
+    "<user_shell_command>a</user_shell_command><user_shell_command>b</user_shell_command>",
+    "<user_shell_command>a<user_shell_command>b</user_shell_command>", "<user_shell_command>ls", "ls")],
+    [True, True, False, False, False, False])
+odd = [json.dumps(r) for r in (
+    {"type": "user", "timestamp": "2026-11-10T00:00:00.000Z", "message": {"content": "hi"}},
+    {"type": "assistant", "timestamp": "2026-11-10T00:01:00.000Z", "message": {"id": "a", "stop_reason": "tool_use",
+     "content": [{"type": "tool_use", "id": "q", "name": "AskUserQuestion"}]}},
+    {"type": "user", "timestamp": "2026-11-10T00:02:00.000Z", "permissionDecision": {"decision": [], "source": "user"},
+     "message": {"content": [{"type": "tool_result", "tool_use_id": ["q"]}, {"type": "tool_result", "tool_use_id": "q"}]}})]
+check("odd decision and id types do not crash", w.claude_fold(odd).waits, [("question", 1794268860000, 1794268920000, "unknown")])
 check("buckets", [w.bucket(n) for n in (1, 2, 3, 4, 7, 8, 30)], ["1", "2-3", "2-3", "4-7", "4-7", "8+", "8+"])
 
 if failures:

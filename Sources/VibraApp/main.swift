@@ -563,6 +563,7 @@ if CommandLine.arguments.contains("--wait-stats") {
     while !finished && Date() < deadline {
         RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
     }
+    if !finished { FileHandle.standardError.write(Data("wait-stats: gave up after 600 s\n".utf8)) }
     exit(finished ? 0 : 1)
 }
 

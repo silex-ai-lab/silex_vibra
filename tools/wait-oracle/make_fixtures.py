@@ -119,6 +119,9 @@ claude_mixed = [
     ca(T(D, "09:16:00.000"), "x4", "end_turn"),
     cu(T(D, "09:17:00.000"), "<task-notification>job <command-name>/x</command-name> done</task-notification>"),
     cu(T(D, "09:20:00.000"), "thanks"),
+    ca(T(D, "09:21:00.000"), "x5", "tool_use", [use("tuZ", "AskUserQuestion")]),
+    cu(T(D, "09:22:00.000"), [{"type": "tool_result", "tool_use_id": "tuZ", "content": "x"}, "stray string block"],
+       permissionDecision=USER_OK),
 ]
 seat_only = [
     cu(T(D, "09:00:00.000"), "Dispatch claude-plan-r1: read the prompt"),
@@ -170,6 +173,9 @@ codex_main = [
     xm(T(D, "08:31:00.000"), "task_complete"),
     xuser(T(D, "08:35:00.000"), "<environment_context>x</environment_context>", "<user_shell_command>git status</user_shell_command>"),
     xm(T(D, "08:36:00.000"), "task_complete"),
+    xuser(T(D, "08:40:00.000"), "<user_shell_command>ls</user_shell_command><user_shell_command>pwd</user_shell_command>"),
+    xuser(T(D, "08:45:00.000"), "done"),
+    xm(T(D, "08:46:00.000"), "task_complete"),
 ]
 codex_sub = [xmeta(T(D, "08:00:00.000"), source={"subagent": {"other": "guardian"}}),
              xuser(T(D, "08:00:01.000"), "check this"), xm(T(D, "08:01:00.000"), "task_complete"),

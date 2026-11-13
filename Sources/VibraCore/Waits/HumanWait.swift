@@ -67,11 +67,11 @@ public protocol WaitExtractor {
 /// and the Python oracle computes the same value. nil for anything that is
 /// not `YYYY-MM-DDTHH:MM:SS[.fraction](Z|±HH:MM)` with a valid date and time.
 public func epochMs(fromTimestamp string: String) -> EpochMs? {
-    let pattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/
+    let pattern = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})$/
     guard let m = string.wholeMatch(of: pattern),
           let year = Int64(m.1), let month = Int64(m.2), let day = Int64(m.3),
           let hour = Int64(m.4), let minute = Int64(m.5), let second = Int64(m.6),
-          (1...12).contains(month), day >= 1, day <= daysInMonth(year: year, month: month),
+          year >= 1, (1...12).contains(month), day >= 1, day <= daysInMonth(year: year, month: month),
           hour < 24, minute < 60, second < 60
     else { return nil }
 
@@ -123,6 +123,9 @@ public struct WaitWindow: Sendable, Equatable {
     }
 
     public static let defaultDays = 30
+    /// A hundred years: far past any transcript, and small enough that the
+    /// window arithmetic cannot overflow.
+    public static let maxDays = 36_500
 
     /// `--days N`, or `--from D --to D` as local dates in `timeZone`. Each flag
     /// is passed as present-with-value, present-without-value (`.some(nil)`),
@@ -148,16 +151,16 @@ public struct WaitWindow: Sendable, Equatable {
         }
         var n = defaultDays
         if let days {
-            guard let text = days, text.wholeMatch(of: /\d+/) != nil, let parsed = Int(text), parsed >= 1 else {
-                return .failure(.usage("--days takes a whole number of at least 1"))
-            }
+            guard let text = days, text.wholeMatch(of: /[0-9]+/) != nil, let parsed = Int(text),
+                  (1...maxDays).contains(parsed)
+            else { return .failure(.usage("--days takes a whole number from 1 to \(maxDays)")) }
             n = parsed
         }
         return .success(WaitWindow(lo: now - Int64(n) * 86_400_000, hi: now + 1))
     }
 
     private static func localMidnight(_ text: String, calendar: Calendar) -> Date? {
-        guard let m = text.wholeMatch(of: /(\d{4})-(\d{2})-(\d{2})/),
+        guard let m = text.wholeMatch(of: /([0-9]{4})-([0-9]{2})-([0-9]{2})/),
               let year = Int(m.1), let month = Int(m.2), let day = Int(m.3),
               let date = calendar.date(from: DateComponents(year: year, month: month, day: day))
         else { return nil }

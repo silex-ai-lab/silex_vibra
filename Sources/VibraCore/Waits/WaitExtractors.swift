@@ -125,8 +125,17 @@ private func isCodexHumanCommand(_ payload: [String: Any]) -> Bool {
     guard let blocks = payload["content"] as? [[String: Any]] else { return false }
     return blocks.contains { block in
         block["type"] as? String == "input_text"
-            && (block["text"] as? String).map { isInjectedWrapper($0, tags: ["user_shell_command"]) } == true
+            && (block["text"] as? String).map { isSingleElement($0, tag: "user_shell_command") } == true
     }
+}
+
+/// The trimmed text is one `<tag …>…</tag>` element and nothing else: one
+/// opening tag at the start, one closing tag at the end, no other of either.
+private func isSingleElement(_ text: String, tag: String) -> Bool {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return isInjectedWrapper(trimmed, tags: [tag])
+        && trimmed.components(separatedBy: "</\(tag)>").count == 2
+        && trimmed.components(separatedBy: "<\(tag)>").count + trimmed.components(separatedBy: "<\(tag) ").count == 3
 }
 
 // MARK: - Claude Code

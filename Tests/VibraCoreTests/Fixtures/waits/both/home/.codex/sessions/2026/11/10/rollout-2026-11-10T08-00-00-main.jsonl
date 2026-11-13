@@ -25,3 +25,6 @@
 {"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:31:00.000Z", "type": "event_msg"}
 {"payload": {"content": [{"text": "<environment_context>x</environment_context>", "type": "input_text"}, {"text": "<user_shell_command>git status</user_shell_command>", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:35:00.000Z", "type": "response_item"}
 {"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:36:00.000Z", "type": "event_msg"}
+{"payload": {"content": [{"text": "<user_shell_command>ls</user_shell_command><user_shell_command>pwd</user_shell_command>", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:40:00.000Z", "type": "response_item"}
+{"payload": {"content": [{"text": "done", "type": "input_text"}], "role": "user", "type": "message"}, "timestamp": "2026-11-10T08:45:00.000Z", "type": "response_item"}
+{"payload": {"type": "task_complete"}, "timestamp": "2026-11-10T08:46:00.000Z", "type": "event_msg"}

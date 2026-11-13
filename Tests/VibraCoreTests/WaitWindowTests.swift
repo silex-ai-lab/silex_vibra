@@ -1,0 +1,33 @@
+import Foundation
+import Testing
+@testable import VibraCore
+
+/// `--wait-stats` argument and timestamp parsing at their edges, matching the
+/// Python oracle (`tools/wait-oracle/oracle_selftest.py`).
+struct WaitWindowTests {
+    private func days(_ text: String?) -> Result<WaitWindow, WaitWindowError> {
+        WaitWindow.parse(days: .some(text), from: nil, to: nil, now: 10_000_000_000_000, timeZone: TimeZone(identifier: "UTC")!)
+    }
+
+    @Test func daysIsBoundedSoTheWindowCannotOverflow() throws {
+        #expect(try days("36500").get() == WaitWindow(lo: 10_000_000_000_000 - 36_500 * 86_400_000, hi: 10_000_000_000_001))
+        for bad in ["36501", "106751991168", "999999999999999999", "99999999999999999999999"] {
+            #expect(throws: WaitWindowError.self) { try days(bad).get() }
+        }
+    }
+
+    @Test func onlyASCIIDigitsCount() {
+        #expect(throws: WaitWindowError.self) { try days("\u{0663}").get() }
+        let arabicDate = WaitWindow.parse(
+            days: nil, from: .some("2026-11-\u{0660}\u{0661}"), to: .some("2026-11-02"), now: 0,
+            timeZone: TimeZone(identifier: "UTC")!)
+        #expect(throws: WaitWindowError.self) { try arabicDate.get() }
+        #expect(epochMs(fromTimestamp: "2026-11-1\u{0660}T00:00:00Z") == nil)
+    }
+
+    @Test func yearZeroIsNotATimestamp() {
+        #expect(epochMs(fromTimestamp: "0000-01-01T00:00:00Z") == nil)
+        #expect(epochMs(fromTimestamp: "0001-01-01T00:00:00Z") == -62_135_596_800_000)
+        #expect(epochMs(fromTimestamp: "2026-11-10T00:00:00Z") == 1_794_268_800_000)
+    }
+}
