@@ -154,7 +154,7 @@ extension EvidenceFold {
 
 extension DeliveryEvidence {
     static func checkedAfterLastChange(_ check: ObservedCheck) -> DeliveryEvidence {
-        .checkedAfterLastChange(check, testEdits: [])
+        .checkedAfterLastChange(check, testEdits: nil)
     }
 
     var issueOnly: DeliveryEvidence {

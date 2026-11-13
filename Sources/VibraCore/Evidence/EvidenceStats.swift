@@ -9,13 +9,17 @@ public enum EvidenceStats {
         var checks: [String: Int] = [:]
         var changes: [String: Int] = [:]
         var reported: [String: Int] = [:]
+        var qualified: [String: Int] = [:]
         for (agent, fold) in rows {
             let name = agent.rawValue
             sessions["sessions agent=\(name)", default: 0] += 1
             let evidence = DeliveryEvidence.build(events: fold.events, sawToolRecords: fold.sawToolRecords)
             cases["case agent=\(name) case=\(evidence.caseName)", default: 0] += 1
-            if case .checkedAfterLastChange(let check, _) = evidence {
+            if case .checkedAfterLastChange(let check, let testEdits) = evidence {
                 reported["reported agent=\(name) kind=\(check.kind.rawValue) result=\(check.result.statsName)", default: 0] += 1
+                for effect in testEdits?.effects ?? [] {
+                    qualified["qualified agent=\(name) effect=\(effect.rawValue)", default: 0] += 1
+                }
             }
             for event in fold.events {
                 switch event {
@@ -26,7 +30,7 @@ public enum EvidenceStats {
                 }
             }
         }
-        return [sessions, cases, reported, checks, changes]
+        return [sessions, cases, reported, checks, changes, qualified]
             .flatMap { group in group.sorted { $0.key < $1.key }.map { "\($0.key) n=\($0.value)\n" } }
             .joined()
     }

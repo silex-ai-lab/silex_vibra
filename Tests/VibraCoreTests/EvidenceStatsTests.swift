@@ -43,4 +43,32 @@ struct EvidenceStatsTests {
     @Test func noSessionsPrintsNothing() {
         #expect(EvidenceStats.format([]) == "")
     }
+
+    @Test func qualifiedLinesNameEachEffectTheClauseCarries() {
+        let failure = ObservedCheck(
+            at: t.addingTimeInterval(1), completedAt: t.addingTimeInterval(2), kind: .test,
+            result: .failed(.exitStatus))
+        let pass = ObservedCheck(
+            at: t.addingTimeInterval(9), completedAt: t.addingTimeInterval(10), kind: .test,
+            result: .passed(.exitStatus))
+        let edit = CodeChange(
+            at: t.addingTimeInterval(4), completedAt: t.addingTimeInterval(5),
+            target: .test(
+                path: PathKey(path: "/work/tests/a.swift"),
+                before: PatternCounts(assertion: 1, skip: 0, focus: 0, expectedFailure: 0, testFunction: 0),
+                after: PatternCounts(assertion: 0, skip: 1, focus: 0, expectedFailure: 0, testFunction: 0)))
+        let rows: [(agent: AgentKind, fold: EvidenceFold)] = [
+            (.claudeCode, EvidenceFold(events: [.codeChange(edit), .check(failure), .check(pass)], sawToolRecords: true)),
+            (.codex, EvidenceFold(events: [.check(failure), .check(pass)], sawToolRecords: true)),
+        ]
+
+        let qualified = EvidenceStats.format(rows)
+            .split(separator: "\n")
+            .filter { $0.hasPrefix("qualified ") }
+
+        #expect(qualified == [
+            "qualified agent=claudeCode effect=fewerAssertionMatches n=1",
+            "qualified agent=claudeCode effect=moreSkipMatches n=1",
+        ])
+    }
 }
