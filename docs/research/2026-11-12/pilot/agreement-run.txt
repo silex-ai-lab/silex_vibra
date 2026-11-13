@@ -1,0 +1,16 @@
+agreement_run.sh at 18b42a2, binary built from it
+snapshot taken 2026-11-13T14:50:32Z: 950 files, 2545503411 bytes (sum of file sizes)
+swift-oracle run swift: exit 0, 28 lines, 81.8 s wall, stderr: read 2562743197 bytes in 81.51 s
+swift-oracle run oracle: exit 0, 28 lines, 6.2 s wall, stderr: 
+swift-oracle: swift and oracle identical
+oracle-swift run oracle: exit 0, 28 lines, 5.9 s wall, stderr: 
+oracle-swift run swift: exit 0, 28 lines, 81.0 s wall, stderr: read 2562743197 bytes in 80.81 s
+oracle-swift: swift and oracle identical
+swift run 1 == swift run 2
+live: swift and oracle identical
+live vs snapshot (diagnostic):
+3c3
+< open agent=claudeCode n=82
+---
+> open agent=claudeCode n=83
+snapshot deleted 2026-11-13T14:55:10Z

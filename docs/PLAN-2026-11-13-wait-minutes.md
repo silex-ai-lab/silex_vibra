@@ -637,3 +637,26 @@ happens only after the code gate.
 | 6 | Done, `569e647` (DeepSeek) | 617 tests, `waitSentinelsNeverLeak` in `CANARIES`. Planner mutation run in a separate worktree (`pilot/canary-mutations.txt`): a `WaitFold` field holding the prompt text fails it naming `SENTINEL_PROMPT_2b7`; a `HumanWait` field holding tool input fails it naming `SENTINEL_INPUT_6e4`; restored green |
 | 7 | Done, `94659b9` (planner) | Snapshot (950 files, 2,479,108 KB), `TZ=America/Los_Angeles`, `--from 2026-10-14 --to 2026-11-12`: Swift and oracle `diff` empty in both orders (28 lines); live run identical between the two, and differs from the snapshot only in `open agent=claudeCode` 84 vs 85. Snapshot deleted after the run. Round-4 notes: the probe now counts `<user_shell_command>` closures separately, and the preview row's "3 of them" is confirmed (`turn wait closed by user_shell_command 3`); the notification fixture quoting `<command-name>` is in `claude-dispatch` |
 | 8 | Done, `5647c15` (planner) | `tools/readme-anchors.sh` exits 0; every number in the new text is from `wait-pilot.md` |
+
+## Code gate record
+
+Base `e75aa84` for every round. Implementation paths: every path changed
+since the base except this plan file.
+
+**Round 1** at `238856d`, diff hash `06a7362e76750471eac510ec50a56eb64efc2635`
+(64 paths). reviewer-claude (`claude-fable-5-2`): IMPL-APPROVED, with six
+non-blocking notes. reviewer-sol (`us.openai.gpt-6.1-sol`): its first call
+(`sol-impl-r1`) failed before sending because the AWS SSO session had
+expired (no request, no spend); after the owner logged in, the identical
+prompt went as `sol-impl-r1-a2`: IMPL-REJECTED, 5 blocking (88,600 input and
+2,534 output tokens, USD 0.2228).
+
+| Objection | From | Change |
+|---|---|---|
+| A Codex block with two `<user_shell_command>` elements counted as a command; the spec says exactly one | sol 1 | Both implementations now require one opening and one closing tag (`isSingleElement`, `is_single_element`). Shared fixture added to `codex-turns`: the two-element record no longer closes the wait, a later prompt does. A new oracle mutation removing the rule fails the selftest |
+| `--days 106751991168` overflowed and trapped Swift | sol 2, claude 1 | `--days` takes 1 to 36500 in both (exit 2 otherwise). `WaitWindowTests` pins the bound, `106751991168` and an over-long number |
+| A non-string `decision` or `tool_use_id` crashed the oracle | sol 3 | Type-checked; the oracle selftest feeds `decision: []` and a list `tool_use_id` and expects one `unknown` question wait |
+| The pilot's run measurements had no committed output | sol 4 | `probe/agreement_run.sh` reruns the whole agreement on the fixed code and records everything it measured in `pilot/agreement-run.txt`; the pilot and `features.md` now cite it. The rerun gave different counts from the first snapshot (the window starts at the retention edge); the pilot says so and uses the recorded run |
+| The pilot's limits list was incomplete | sol 5 | The pilot lists every known limit from the plan |
+| Non-blocking folded | sol, claude 2, 4, 5, 6 | Privacy wording names what a dropped record is searched for; only ASCII digits parse, and year 0 is not a timestamp, in both; a run that hits the 600 s deadline says so on stderr; the pilot gives bytes, not KB; the oracle, like Swift, reads a content list only when every element is an object, with a shared fixture and a mutation |
+| Non-blocking answered | claude 3, sol | The canary mutations exercise the reflected-value check: `WaitStats.format` receives only `WaitFold` values, which carry no text, id or path, so an output-text leak needs a type change first, which is what the two recorded mutations make. CI on Swift 6.1.2 runs when the branch is pushed after the gate, and is recorded before merge |

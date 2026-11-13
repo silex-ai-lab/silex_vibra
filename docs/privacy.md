@@ -60,7 +60,9 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   durations.** It reads Claude Code and Codex transcripts from disk. A prompt
   goes through the same History rule, in memory, only to decide whether you
   typed it or a fleet planner dispatched it; a record History drops is
-  searched only for a leading slash-command or shell-run tag; tool input is
+  searched only for a leading `<command-name>`, `<command-message>` or
+  `<bash-input>` tag and a `<command-name>` element (Claude Code), or for one
+  whole `<user_shell_command>` element (Codex); tool input is
   never read, only a tool's name, its id and the decision Claude Code
   records. What it keeps per transcript is times, and what it prints is
   counts and durations. The `waitSentinelsNeverLeak` canary plants sentinels

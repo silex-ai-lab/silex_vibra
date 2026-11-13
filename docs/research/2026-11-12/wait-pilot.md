@@ -11,10 +11,12 @@ a pilot measurement, not a result about anyone else.
   so it is 30 calendar days and 721 hours).
 - Input: a read-only snapshot of the owner's Claude Code and Codex
   transcripts (every `.jsonl` under `.claude/projects` and every
-  `rollout-*.jsonl` under `.codex/sessions` modified since 2026-10-12), 950
-  files, 2,479,108 KB on disk, copied with `cp -p` into the planner's private
-  scratchpad, read through `VIBRA_HOME`, deleted after the run. Nothing from
-  it is committed or was sent anywhere.
+  `rollout-*.jsonl` under `.codex/sessions` modified since 2026-10-12),
+  copied with `rsync -a` (times kept) into the planner's private scratchpad,
+  read through `VIBRA_HOME`, deleted after the run. Nothing from it is
+  committed or was sent anywhere. The run is `probe/agreement_run.sh`; its
+  complete output, with file count, sizes, timings and every diff result, is
+  `pilot/agreement-run.txt`.
 - Definitions: the plan's specification. In short, a **turn** wait runs from
   the agent's end of turn to the person's next prompt or slash command; a
   **question** wait from an `AskUserQuestion` call to its answer; an
@@ -24,26 +26,42 @@ a pilot measurement, not a result about anyone else.
 
 ## Agreement (the correctness gate)
 
-The Swift build (`e3b6540`) and the independent Python oracle
-(`tools/wait-oracle/wait_oracle.py`) were run on the same snapshot, the same
-window and the same time zone, in both orders.
+The Swift build at `18b42a2` and the independent Python oracle
+(`tools/wait-oracle/wait_oracle.py`) ran on the same snapshot, window and time
+zone, in both orders (`pilot/agreement-run.txt`, taken 2026-11-13 14:50 UTC):
 
-| Run | Result |
+| Check | Result |
 |---|---|
-| Swift then oracle (11:23-11:25 UTC) | `diff` empty, 28 lines |
-| Oracle then Swift | `diff` empty; Swift run 1 equals Swift run 2 |
-| Live transcripts, same window (diagnostic only) | Swift and oracle identical; live differs from the snapshot only in `open agent=claudeCode` (84 vs 85), the one line the plan expected to move while a session is still live |
+| Snapshot | 950 files, 2,545,503,411 bytes (sum of file sizes) |
+| Swift then oracle | identical, 28 lines each |
+| Oracle then Swift | identical; Swift run 1 equals run 2 |
+| Live transcripts, same window (diagnostic only) | Swift and oracle identical; live differs from the snapshot only in `open agent=claudeCode` (82 vs 83), the one line the plan expected to move while a session is still live |
+| Time | Swift 81.5 s and 80.8 s (its own `read … in` line); the oracle 6.2 s and 5.9 s wall clock |
 
-Swift read 2,553,757,292 bytes in 82.61 s on the snapshot. The oracle took
-about 6 s on the same input (wall clock between its start and end stamps).
-The gap is a measured cost of the Swift path; its cause is not measured here
-(inferred: each line is parsed as JSON twice, once for the History extractor
-and once for the wait rules, and the History wrapper regexes are compiled per
-call).
+Swift reports reading 2,562,743,197 bytes, more than the snapshot holds. The
+line reader counts every chunk it reads, and a read that stops at 2,000 lines
+re-reads the rest of that chunk on the next call (`IncrementalLineReader`,
+inferred from its code, not measured). The 13x gap to the oracle is a measured
+cost of the Swift path; its cause is not measured (inferred: each line is
+parsed as JSON twice, once for History and once for the wait rules, and the
+History wrapper regexes are compiled on every call).
+
+**The window sits at the retention edge.** An earlier snapshot of the same
+window, taken at 11:23 UTC the same day by the code at `e3b6540`, also
+agreed in both orders but gave 101 Claude Code sessions and 750 turn waits
+(22 Codex sessions, 132 waits; its output is the version of
+`pilot/wait-stats-2026-10-14_2026-11-12.txt` committed at `94659b9`) against
+99, 701, 21 and 130 here. A window
+that ended the day before cannot gain or lose waits, so transcripts left the
+disk between the two snapshots. The likely cause is Claude Code's 30-day
+cleanup of old transcripts (the window starts 30 days back) and Codex moving
+rollouts out of `sessions/`; that cause is inferred, not verified. The
+numbers below are from the later run, which is the one whose output is
+committed.
 
 Supporting evidence: the oracle and the Swift tests pass the same eight
 hand-derived fixture scenarios byte for byte (`oracle_selftest.py`,
-`WaitStatsTests`, and the CLI); seven rule mutations each fail the oracle's
+`WaitStatsTests`, and the CLI); nine rule mutations each fail the oracle's
 selftest (`pilot/oracle-mutations.txt`); the `waitSentinelsNeverLeak` canary
 fails when a fold keeps prompt text or a wait keeps tool input
 (`pilot/canary-mutations.txt`).
@@ -53,73 +71,88 @@ fails when a fold keeps prompt text or a wait keeps tool input
 `pilot/wait-stats-2026-10-14_2026-11-12.txt`, verbatim:
 
 ```
-sessions agent=claudeCode n=101
-sessions agent=codex n=22
-open agent=claudeCode n=84
+sessions agent=claudeCode n=99
+sessions agent=codex n=21
+open agent=claudeCode n=82
 open agent=codex n=19
-waits agent=claudeCode kind=approval answer=accept n=8
-waits agent=claudeCode kind=question answer=accept n=44
+waits agent=claudeCode kind=approval answer=accept n=7
+waits agent=claudeCode kind=question answer=accept n=43
 waits agent=claudeCode kind=question answer=reject n=7
 waits agent=claudeCode kind=question answer=unknown n=4
-waits agent=claudeCode kind=turn n=750
-waits agent=codex kind=turn n=132
+waits agent=claudeCode kind=turn n=701
+waits agent=codex kind=turn n=130
 over_cap agent=claudeCode kind=approval n=1
 over_cap agent=claudeCode kind=question n=12
 over_cap agent=claudeCode kind=turn n=78
 over_cap agent=codex kind=turn n=25
-seconds agent=claudeCode kind=approval p25=43 p50=60 p75=186 n=8
-seconds agent=claudeCode kind=question p25=57 p50=597 p75=5951 n=55
-seconds agent=claudeCode kind=turn p25=157 p50=606 p75=3264 n=750
-seconds agent=codex kind=turn p25=20 p50=332 p75=3722 n=132
-seconds agent=claudeCode kind=approval ordinal=1 p25=50 p50=69 p75=504 n=5
+seconds agent=claudeCode kind=approval p25=37 p50=52 p75=292 n=7
+seconds agent=claudeCode kind=question p25=62 p50=605 p75=6149 n=54
+seconds agent=claudeCode kind=turn p25=174 p50=672 p75=3274 n=701
+seconds agent=codex kind=turn p25=23 p50=366 p75=3764 n=130
+seconds agent=claudeCode kind=approval ordinal=1 p25=43 p50=277 p75=2178 n=4
 seconds agent=claudeCode kind=approval ordinal=2-3 p25=29 p50=52 p75=66 n=3
 seconds agent=claudeCode kind=question ordinal=1 p25=59 p50=497 p75=3095 n=28
 seconds agent=claudeCode kind=question ordinal=2-3 p25=55 p50=1079 p75=7200 n=15
-seconds agent=claudeCode kind=question ordinal=4-7 p25=46 p50=381 p75=1607 n=8
+seconds agent=claudeCode kind=question ordinal=4-7 p25=99 p50=614 p75=2321 n=7
 seconds agent=claudeCode kind=question ordinal=8+ p25=319 p50=1977 p75=4074 n=4
-blocked agent=claudeCode scope=all unit=min p25=17 p50=121 p75=283 total=24792 n=101
-blocked agent=claudeCode scope=within_cap unit=min p25=13 p50=70 p75=178 total=13872 n=101
-blocked agent=codex scope=all unit=min p25=0 p50=0 p75=120 total=4555 n=22
-blocked agent=codex scope=within_cap unit=min p25=0 p50=0 p75=0 total=1555 n=22
+blocked agent=claudeCode scope=all unit=min p25=15 p50=100 p75=288 total=24289 n=99
+blocked agent=claudeCode scope=within_cap unit=min p25=12 p50=70 p75=163 total=13369 n=99
+blocked agent=codex scope=all unit=min p25=0 p50=0 p75=120 total=4554 n=21
+blocked agent=codex scope=within_cap unit=min p25=0 p50=0 p75=0 total=1554 n=21
 ```
 
 ## Readings
 
 Each line below is arithmetic on the output above, or labelled.
 
-1. **A finished Claude Code turn waited a median of 10 minutes** (606 s,
-   IQR 157-3,264 s, 750 waits in 101 sessions). Codex: median 332 s, IQR
-   20-3,722 s, 132 waits in 22 sessions.
-2. **The 2 h cap carries much of the total.** Claude Code: 10,920 of 24,792
-   blocked minutes (44%) come from the 91 waits over 2 h; Codex: 3,000 of
-   4,555 (66%). The within-cap median per Claude Code session is 70 min
-   (IQR 13-178). Any headline figure depends on the cap, so it would need to
+1. **A finished Claude Code turn waited a median of 11 minutes** (672 s,
+   IQR 174-3,274 s, 701 waits in 99 sessions). Codex: median 366 s, IQR
+   23-3,764 s, 130 waits in 21 sessions.
+2. **The 2 h cap carries much of the total.** Claude Code: 10,920 of 24,289
+   blocked minutes (45%) come from the 91 waits over 2 h; Codex: 3,000 of
+   4,554 (66%). The within-cap median per Claude Code session is 70 min
+   (IQR 12-163). Any headline figure depends on the cap, so it would need to
    show `within_cap` or say what the cap is.
-3. **Most sessions end waiting.** 84 of 101 Claude Code sessions and 19 of 22
+3. **Most sessions end waiting.** 82 of 99 Claude Code sessions and 19 of 21
    Codex sessions end on a turn wait that was never closed; those final waits
    are not counted.
-4. **Approvals are rare here, questions are not.** 8 human-decided approvals
-   in 30 days (auto mode), against 55 `AskUserQuestion` answers (median 597 s,
-   12 over 2 h). An approval median of 60 s includes the tool's own run time.
+4. **Approvals are rare here, questions are not.** 7 human-decided approvals
+   in 30 days (auto mode), against 54 `AskUserQuestion` answers (43 accept,
+   7 reject, 4 with no decision; median 605 s, 12 over 2 h). The approval
+   median of 52 s includes the tool's own run time.
 5. **No habituation curve can be read from this.** Question medians by
-   ordinal are 497 s (1st, n=28), 1,079 s (2nd-3rd, n=15), 381 s (4th-7th,
-   n=8), 1,977 s (8th and later, n=4): no monotone trend, and the later
+   ordinal are 497 s (1st, n=28), 1,079 s (2nd-3rd, n=15), 614 s (4th-7th,
+   n=7), 1,977 s (8th and later, n=4): no monotone trend, and the later
    buckets are too small to separate from noise.
-6. **Why 101, not the plan preview's 221.** The preview counted any
-   transcript with a typed-looking prompt. On the snapshot, 118 of those are
-   `sdk-cli` (unattended `claude -p`) runs and 105 are interactive
+6. **Why about 100 sessions, not the plan preview's 221.** The preview counted
+   any transcript with a typed-looking prompt. On the earlier snapshot, 118 of
+   those were `sdk-cli` (unattended `claude -p`) runs and 105 interactive
    (`probe/session-kinds-snapshot.txt`); History, and so this metric,
-   excludes the unattended ones. Which rule leaves out the other 4 of 105
-   (no human event or wait inside the window, or only text History drops)
-   was not measured.
+   excludes the unattended ones. Which rule leaves out the remaining few
+   interactive transcripts (no human event or wait inside the window, or only
+   text History drops) was not measured.
 
 ## What is left unmeasured or uncertain
 
-- Every item in the plan's "Known limits": approval waits include tool run
-  time; open final waits are not counted; non-`end_turn` stop reasons open no
-  wait; a resumed or forked transcript can count twice (one Codex prompt in
-  30 days); minutes overlap in wall time across sessions; dispatch-only fleet
-  seats and slash-command-only sessions are not eligible.
+- The plan's known limits, all of which apply here:
+  - an approval wait includes the approved tool's run time;
+  - a turn wait still open when the transcript ends is not counted;
+  - a turn that ends with `stop_reason` `stop_sequence`, `refusal`,
+    `max_tokens` or none opens no wait;
+  - a background `<task-notification>` that restarts the agent after
+    `end_turn` clears the wait, which then starts at the later `end_turn`;
+  - an interrupted turn (Claude Code interrupt, Codex `turn_aborted`) opens
+    no wait, although the agent then waits;
+  - a prompt queued while the agent works can close a wait of about zero
+    seconds;
+  - a transcript copied into a second file by a resume or fork counts its
+    waits in both (one Codex prompt in 30 days, `probe/wait-rule-30d.txt`);
+  - one person waits on several sessions at once, so session minutes overlap
+    in wall time;
+  - a session driven only by slash commands, and a fleet seat with only
+    dispatch prompts, are not eligible (4 such seat transcripts with 6
+    human-answered dialogs in 30 days);
+  - the cap is 2 h, and `scope=within_cap` shows what it carries.
 - Tag-led prompts that still pass History after task 3
   (`probe/wait-rule-after-task3-30d.txt`): Claude Code 1
   (`artifact-content-authored-by-others`, a block whose element is not a

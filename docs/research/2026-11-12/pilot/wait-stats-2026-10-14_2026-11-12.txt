@@ -1,28 +1,28 @@
-sessions agent=claudeCode n=101
-sessions agent=codex n=22
-open agent=claudeCode n=84
+sessions agent=claudeCode n=99
+sessions agent=codex n=21
+open agent=claudeCode n=82
 open agent=codex n=19
-waits agent=claudeCode kind=approval answer=accept n=8
-waits agent=claudeCode kind=question answer=accept n=44
+waits agent=claudeCode kind=approval answer=accept n=7
+waits agent=claudeCode kind=question answer=accept n=43
 waits agent=claudeCode kind=question answer=reject n=7
 waits agent=claudeCode kind=question answer=unknown n=4
-waits agent=claudeCode kind=turn n=750
-waits agent=codex kind=turn n=132
+waits agent=claudeCode kind=turn n=701
+waits agent=codex kind=turn n=130
 over_cap agent=claudeCode kind=approval n=1
 over_cap agent=claudeCode kind=question n=12
 over_cap agent=claudeCode kind=turn n=78
 over_cap agent=codex kind=turn n=25
-seconds agent=claudeCode kind=approval p25=43 p50=60 p75=186 n=8
-seconds agent=claudeCode kind=question p25=57 p50=597 p75=5951 n=55
-seconds agent=claudeCode kind=turn p25=157 p50=606 p75=3264 n=750
-seconds agent=codex kind=turn p25=20 p50=332 p75=3722 n=132
-seconds agent=claudeCode kind=approval ordinal=1 p25=50 p50=69 p75=504 n=5
+seconds agent=claudeCode kind=approval p25=37 p50=52 p75=292 n=7
+seconds agent=claudeCode kind=question p25=62 p50=605 p75=6149 n=54
+seconds agent=claudeCode kind=turn p25=174 p50=672 p75=3274 n=701
+seconds agent=codex kind=turn p25=23 p50=366 p75=3764 n=130
+seconds agent=claudeCode kind=approval ordinal=1 p25=43 p50=277 p75=2178 n=4
 seconds agent=claudeCode kind=approval ordinal=2-3 p25=29 p50=52 p75=66 n=3
 seconds agent=claudeCode kind=question ordinal=1 p25=59 p50=497 p75=3095 n=28
 seconds agent=claudeCode kind=question ordinal=2-3 p25=55 p50=1079 p75=7200 n=15
-seconds agent=claudeCode kind=question ordinal=4-7 p25=46 p50=381 p75=1607 n=8
+seconds agent=claudeCode kind=question ordinal=4-7 p25=99 p50=614 p75=2321 n=7
 seconds agent=claudeCode kind=question ordinal=8+ p25=319 p50=1977 p75=4074 n=4
-blocked agent=claudeCode scope=all unit=min p25=17 p50=121 p75=283 total=24792 n=101
-blocked agent=claudeCode scope=within_cap unit=min p25=13 p50=70 p75=178 total=13872 n=101
-blocked agent=codex scope=all unit=min p25=0 p50=0 p75=120 total=4555 n=22
-blocked agent=codex scope=within_cap unit=min p25=0 p50=0 p75=0 total=1555 n=22
+blocked agent=claudeCode scope=all unit=min p25=15 p50=100 p75=288 total=24289 n=99
+blocked agent=claudeCode scope=within_cap unit=min p25=12 p50=70 p75=163 total=13369 n=99
+blocked agent=codex scope=all unit=min p25=0 p50=0 p75=120 total=4554 n=21
+blocked agent=codex scope=within_cap unit=min p25=0 p50=0 p75=0 total=1554 n=21
