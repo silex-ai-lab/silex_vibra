@@ -1,0 +1,4 @@
+2026-11-13T10:56:32Z
+32 bash-input no <command-name> element
+63 command-message has <command-name> element
+100 command-name has <command-name> element
