@@ -10,7 +10,7 @@ rules, because both sides follow docs/PLAN-2026-11-08-delivery-evidence.md.
 --agreement instead compares the runner summary with the real exit status, on
 checks whose exit status alone decides.
 """
-import collections, glob, json, os, re, shlex, sys, time
+import collections, fnmatch, glob, json, os, re, shlex, sys, time
 from datetime import datetime
 
 FAIL = re.compile(
@@ -54,6 +54,23 @@ CONTROL = {"exit", "return", "trap", "set", "setopt", "eval", "exec", "source", 
            "else", "elif", "fi", "for", "while", "until", "do", "done", "{", "}", "!"}
 WORD_WRAPPERS = {"env", "time", "command", "npx", "bunx", "do", "then", "if", "elif", "else", "while", "until"}
 RANK = {"test": 0, "build": 1, "lint": 2}
+TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "Tests", "testing"}
+NEVER_TEST_DIRS = {"fixtures", "Fixtures", "testdata", "test_data", "__snapshots__"}
+TEST_NAMES = ("test_*.py", "*_test.py", "*_test.go", "*_test.rs", "*_test.rb",
+              "*.test.js", "*.test.jsx", "*.test.ts", "*.test.tsx", "*.spec.js", "*.spec.jsx", "*.spec.ts", "*.spec.tsx",
+              "*Test.swift", "*Test.java", "*Test.kt", "*Tests.swift", "*Tests.java", "*Tests.kt", "conftest.py")
+COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*|#(\s|$))")
+FAMILIES = {
+    "assertion": re.compile(r"\bassert\w*\b|\bXCTAssert\w*|#expect\b|#require\b|\bexpect\(|\.should\b|\bt\.(?:Error|Fatal)f?\(|\brequire\.[A-Z]\w*\("),
+    "skip": re.compile(r"pytest\.mark\.skip\w*|\b(?:it|test|describe|context|suite|pytest|this)\.skip\(|\.skipTest\(|(?<![.\w])xit\(|(?<![.\w])xdescribe\(|\bXCTSkip\w*|@Disabled\b|\.disabled\(|\bt\.Skip\w*\(|#\[ignore\]|@unittest\.skip\w*"),
+    "focus": re.compile(r"\b(?:it|test|describe|context|suite)\.only\(|(?<![.\w])fit\(|(?<![.\w])fdescribe\("),
+    "expectedFailure": re.compile(r"pytest\.mark\.xfail\b|\bwithKnownIssue\b|\bXCTExpectFailure\b|@unittest\.expectedFailure\b|\b(?:it|test)\.failing\("),
+    "testFunction": re.compile(r"\bdef test_\w*|\bfunc test\w*|@Test\b|(?<![.\w])it\(|(?<![.\w])test\(|#\[test\]|\bfunc Test\w+\("),
+}
+# (effect name, family, sign the effect needs), in TestEditEffect.allCases order.
+EFFECTS = (("fewerAssertionMatches", "assertion", -1), ("moreSkipMatches", "skip", 1), ("moreFocusMatches", "focus", 1),
+           ("moreExpectedFailureMatches", "expectedFailure", 1), ("fewerTestFunctionMatches", "testFunction", -1))
+INF = float("inf")
 PM = {"npm", "pnpm", "yarn", "bun"}
 
 
@@ -355,6 +372,61 @@ def counts_as_change(path):
     return path.rsplit(".", 1)[-1].lower() not in DOC_EXT if "." in os.path.basename(path) else True
 
 
+def absolute(raw, cwd, home):
+    """Mirror of IncidentPaths.absolute."""
+    if not raw:
+        return None
+    v = raw
+    if v in ("~", "$HOME", "${HOME}"):
+        v = home
+    elif v.startswith("~/"):
+        v = home + v[1:]
+    elif v.startswith("$HOME/"):
+        v = home + v[5:]
+    elif v.startswith("${HOME}/"):
+        v = home + v[7:]
+    if not v.startswith("/"):
+        if not cwd or not cwd.startswith("/"):
+            return None
+        v = cwd + "/" + v
+    v = os.path.normpath(v)
+    for prefix in ("/private/var", "/private/tmp"):
+        if v == prefix or v.startswith(prefix + "/"):
+            return v[len("/private"):]
+    return v
+
+
+def is_test_path(raw, cwd, home):
+    """Directory components count only below the workspace root; elsewhere, the file name alone decides."""
+    path = absolute(raw, cwd, home) or raw
+    root = absolute(cwd, None, home) if cwd else None
+    name = path.rsplit("/", 1)[-1]
+    dirs = []
+    if root and (root == "/" and path.startswith("/") or path.startswith(root + "/")):
+        dirs = path[len(root.rstrip("/")) + 1:].split("/")[:-1]
+    if any(d in NEVER_TEST_DIRS for d in dirs):
+        return False
+    return any(d in TEST_DIRS for d in dirs) or any(fnmatch.fnmatchcase(name, g) for g in TEST_NAMES)
+
+
+def pattern_counts(text):
+    kept = "\n".join(l for l in text.split("\n") if not COMMENT_LINE.match(l))
+    return {f: len(rx.findall(kept)) for f, rx in FAMILIES.items()}
+
+
+def edit_counts(name, inp):
+    """(before, after) pattern counts from a Claude edit's input, or (None, None) when its text is not available."""
+    if name == "Edit" and isinstance(inp.get("old_string"), str) and isinstance(inp.get("new_string"), str) \
+            and inp.get("replace_all") is not True:
+        return pattern_counts(inp["old_string"]), pattern_counts(inp["new_string"])
+    if name == "MultiEdit" and isinstance(inp.get("edits"), list) and inp["edits"] and all(
+            isinstance(e, dict) and isinstance(e.get("old_string"), str) and isinstance(e.get("new_string"), str)
+            and e.get("replace_all") is not True for e in inp["edits"]):
+        return (pattern_counts("\n".join(e["old_string"] for e in inp["edits"])),
+                pattern_counts("\n".join(e["new_string"] for e in inp["edits"])))
+    return None, None
+
+
 def claude_exit(err, text):
     if text.startswith(("Command running in background", "Command was manually backgrounded")) or "Command was moved to the background" in text:
         return "unfinished"
@@ -364,7 +436,7 @@ def claude_exit(err, text):
     return int(m.group(1)) if m and "Command timed out after" not in text and "Command killed:" not in text else "errored"
 
 
-def fold_claude(path, truth):
+def fold_claude(path, truth, home):
     uses, results, order, saw = {}, {}, [], False
     for line in open(path, errors="replace"):
         try:
@@ -379,14 +451,15 @@ def fold_claude(path, truth):
                 continue
             if b.get("type") == "tool_use":
                 if b.get("id") not in uses and r.get("timestamp"):
-                    uses[b.get("id")] = (b.get("name"), b.get("input") or {}, r.get("timestamp"))
+                    uses[b.get("id")] = (b.get("name"), b.get("input") or {}, r.get("timestamp"), r.get("cwd"))
                     order.append(b.get("id"))
             elif b.get("type") == "tool_result":
-                results.setdefault(b.get("tool_use_id"), (b.get("is_error") is True, body(b.get("content"))))
+                results.setdefault(b.get("tool_use_id"), (b.get("is_error") is True, body(b.get("content")), r.get("timestamp")))
     events = []
     for i in order:
-        name, inp, stamp = uses[i]
-        err, text = results.get(i, (False, None))
+        name, inp, stamp, cwd = uses[i]
+        err, text, done = results.get(i, (False, None, None))
+        done = when(done) if done else None
         if text is not None and err and text.startswith(NEVER_RAN):
             if name == "Bash" and isinstance(inp.get("command"), str) or name in EDITS:
                 saw = True
@@ -397,7 +470,12 @@ def fold_claude(path, truth):
                 continue
             saw = True
             if text is not None and not err and counts_as_change(p):
-                events.append((when(stamp), "change", None, None))
+                target = None
+                if is_test_path(p, cwd if isinstance(cwd, str) else None, home):
+                    before, after = edit_counts(name, inp)
+                    key = absolute(p, cwd if isinstance(cwd, str) else None, home) or p
+                    target = ("test", key, before, after)
+                events.append((when(stamp), "change", None, None, done, target))
         elif name == "Bash":
             if not isinstance(inp.get("command"), str):
                 continue
@@ -409,13 +487,22 @@ def fold_claude(path, truth):
             if inp.get("run_in_background") is True:
                 proof = "none"
             res = "unknown" if text is None else result_of(proof, claude_exit(err, text), text, kind, truth, "claudeCode")
-            events.append((when(stamp), "check", kind, res))
+            events.append((when(stamp), "check", kind, res, done if text is not None else None))
     return events, saw
 
 
-def fold_codex(path, truth):
-    events, saw = [], False
+def fold_codex(path, truth, home):
+    events, saw, cwd = [], False, None
     for line in open(path, errors="replace"):
+        if '"session_meta"' in line or '"turn_context"' in line:
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            p = r.get("payload")
+            if r.get("type") in ("session_meta", "turn_context") and isinstance(p, dict) and isinstance(p.get("cwd"), str) and p["cwd"]:
+                cwd = p["cwd"]
+            continue
         if '"item_completed"' not in line:
             continue
         try:
@@ -442,11 +529,14 @@ def fold_codex(path, truth):
             d = it.get("duration") or {}
             start = when(stamp) - float(d.get("secs", 0)) - float(d.get("nanos", 0)) / 1e9
             res = result_of(proof, it.get("exit_code"), it.get("aggregated_output") or "", kind, truth, "codex")
-            events.append((start, "check", kind, res))
+            events.append((start, "check", kind, res, when(stamp)))
         elif it.get("type") == "FileChange" and isinstance(it.get("changes"), dict):
             saw = True
-            if it.get("status") == "completed" and any(counts_as_change(str(k)) for k in it["changes"]):
-                events.append((when(stamp), "change", None, None))
+            code = sorted(str(k) for k in it["changes"] if counts_as_change(str(k)))
+            if it.get("status") == "completed" and code:
+                tests = [k for k in code if is_test_path(k, cwd, home)]
+                target = ("test", absolute(tests[0], cwd, home) or tests[0], None, None) if tests else None
+                events.append((when(stamp), "change", None, None, when(stamp), target))
     return events, saw
 
 
@@ -464,7 +554,33 @@ def verdict(events, saw):
         return ("changedAfterLastCheck" if checks else "changedWithoutCheck"), None
     latest = [max((c for c in after if c[2] == k), key=lambda c: c[0]) for k in RANK if any(c[2] == k for c in after)]
     pick = next((c for c in latest if c[3].startswith("failed")), latest[0])
-    return "checkedAfterLastChange", (pick[2], pick[3])
+    return "checkedAfterLastChange", (pick[2], pick[3], test_edits(events, pick))
+
+
+def test_edits(events, p):
+    """Effect names the clause would name for reported check p, in TestEditEffect order."""
+    if p[2] != "test" or not p[3].startswith("passed"):
+        return []
+    earlier = [c for c in events if c[1] == "check" and c[2] == "test" and c[0] < p[0]]
+    if not earlier:
+        return []
+    f = max(earlier, key=lambda c: c[0])
+    if not f[3].startswith("failed") or f[4] is None:
+        return []
+    fc, files = f[4], collections.defaultdict(list)
+    for c in events:
+        if c[1] != "change" or c[5] is None:
+            continue
+        done = INF if c[4] is None else c[4]
+        if c[0] < p[0] and done > fc:
+            files[c[5][1]].append((fc < c[0] and done < p[0], c[5][2], c[5][3]))
+    nets = []
+    for changes in files.values():
+        if any(not inside or before is None or after is None for inside, before, after in changes):
+            continue
+        nets.append({fam: sum(a[fam] - b[fam] for _, b, a in changes) for fam in FAMILIES})
+    return [name for name, fam, sign in EFFECTS
+            if any(n[fam] * sign > 0 for n in nets) and sum(n[fam] for n in nets) * sign > 0]
 
 
 def claude_sessions(home, cut):
@@ -530,7 +646,7 @@ def run(home, days, agreement):
         for files in sessions:
             events, saw = [], False
             for f in files:
-                e, s = fold(f, truth)
+                e, s = fold(f, truth, home)
                 events += e
                 saw = saw or s
             lines[f"sessions agent={agent}"] += 1
@@ -538,11 +654,15 @@ def run(home, days, agreement):
             lines[f"case agent={agent} case={name}"] += 1
             if pick:
                 lines[f"reported agent={agent} kind={pick[0]} result={pick[1]}"] += 1
+                for effect in pick[2]:
+                    lines[f"qualified agent={agent} effect={effect}"] += 1
             for e in events:
                 if e[1] == "check":
                     lines[f"check agent={agent} kind={e[2]} result={e[3]}"] += 1
                 else:
-                    lines[f"change agent={agent}"] += 1
+                    t = e[5]
+                    label = "source" if t is None else "test.compared" if t[2] is not None and t[3] is not None else "test.unseen"
+                    lines[f"change agent={agent} target={label}"] += 1
     if agreement:
         c = collections.Counter(
             f"{agent} {'exitN' if err else 'exit0'} text={'undecided' if v is None else 'passed' if v else 'failed'}"
