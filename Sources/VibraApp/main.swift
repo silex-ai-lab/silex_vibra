@@ -553,7 +553,7 @@ if CommandLine.arguments.contains("--wait-stats") {
     Task.detached {
         let started = Date()
         let rows = await ingest.collect(since: window.lo)
-        _ = rows
+        print(WaitStats.format(rows, window: window), terminator: "")
         let bytes = await ingest.lastBytesRead
         let seconds = String(format: "%.2f", Date().timeIntervalSince(started))
         FileHandle.standardError.write(Data("read \(bytes) bytes in \(seconds) s\n".utf8))
