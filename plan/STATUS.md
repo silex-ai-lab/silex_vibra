@@ -3,15 +3,16 @@
 Resume point for [OSS-GROWTH-PLAN.md](OSS-GROWTH-PLAN.md). Update this file at
 the end of every session.
 
-**Last updated:** 2026-10-01 · **Baseline commit:** `6840769` · **Repo stats:**
-1 star, 0 forks, 0 open issues, no topics, no homepage, Release 2026-09-27 has
-no assets.
+**Last updated:** 2026-11-13 · **Baseline commit:** `af95fc0` (branch
+`feat/release-and-test-integrity`, not merged) · **Repo stats:** not rechecked
+in this run (the run makes no network request); the last recorded figure, 1
+star, is from 2026-10-01 and is stale.
 
 ## Items
 
 | # | Item | State | Notes |
 |---|---|---|---|
-| 1 | Signing and distribution | **Blocked — owner decision** | Developer ID yes/no (ROADMAP P3.1). Unblocks #10 listing and launch. |
+| 1 | Signing and distribution | **Pipeline built, awaiting certificate** 2026-11-13 | Owner chose Developer ID; enrollment due about 2026-11-15. Universal hardened DMG, CI dry run green (run 43382966703), tag-only `release.yml`. Waits on Apple enrollment and the 8 secrets (`docs/RUNBOOK-developer-id.md`), then plan task 14. Unblocks #10 listing and launch. |
 | 2 | First-screen demo | Not started — owner | Needs a real screen recording with live sessions. |
 | 3 | Outcome headline | **Done** 2026-09-28 (branch `oss-growth-day1`, not yet pushed) | |
 | 4 | Slim README | **Done** 2026-09-28 (not yet pushed) | 149 lines; moved to `docs/features.md`, `troubleshooting.md`, `development.md`, `privacy.md`, `CHANGELOG.md`. |
@@ -25,8 +26,11 @@ no assets.
 
 ## Open decisions
 
-- **Developer ID** (USD 99/yr): approve or not. If not, the README must state
-  plainly how to open an ad-hoc signed app, and launch promotion stays on hold.
+- **Developer ID**: the owner chose it and asked for a runbook (2026-11-12).
+  Enrollment (Organization or Individual) waits about two days from
+  2026-11-13, then the runbook's secrets.
+- **Launch**: post only after plan task 14 passes. Copy and checklist are in
+  [LAUNCH-KIT.md](LAUNCH-KIT.md).
 
 ## How to resume
 
@@ -49,3 +53,11 @@ no assets.
   request, reversing the growth plan's "no translated READMEs". Branch
   `readme-agent-reach-style`, base `6840769`. Record:
   [PLAN-2026-10-01-readme-restyle-i18n.md](PLAN-2026-10-01-readme-restyle-i18n.md).
+- 2026-11-13. Release pipeline and test-edit evidence built on branch
+  `feat/release-and-test-integrity` with the orca fleet (recorded in
+  `docs/PLAN-2026-11-12-release-and-test-integrity.md`). Code checks says
+  when test-file edits between a failed and a passing run changed its
+  test-pattern counts; it fired
+  0 times on the owner's 30-day data (plan task 4). Review Agent Activity names
+  related OWASP Agentic categories. 563 tests pass. Pending: task 11 live check
+  of the hardened build, the code gate, then task 14 after enrollment.

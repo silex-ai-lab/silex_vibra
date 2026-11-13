@@ -8,17 +8,55 @@ CONFIG      := release
 BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
-BIN_SRC     := .build/$(CONFIG)/VibraApp
+DMG         := $(BUILD_DIR)/$(APP_NAME)-$(VERSION).dmg
 
-.PHONY: all build app run test clean fmt install uninstall probe bench restart query
+# Empty (the default) builds the host arch where SwiftPM puts it.
+# ARCHS="arm64 x86_64" builds each arch into its own scratch path and lipos
+# them together, for a DMG that runs natively on both.
+ARCHS ?=
+ifeq ($(strip $(ARCHS)),)
+BIN_SRC := .build/$(CONFIG)/VibraApp
+else
+BIN_SRC := .build/universal/VibraApp
+endif
+
+# HARDENED=1 signs for distribution: hardened runtime plus the entitlements
+# file. It does not imply an identity - the dry run is hardened and ad hoc.
+HARDENED ?=
+
+# --timestamp only under HARDENED with a real identity: ad hoc has no
+# timestamp to request and codesign rejects the flag there. Outside HARDENED
+# signing behaves exactly as before, for the tap formula's `make app`.
+SIGN_IDENTITY_TRIMMED := $(strip $(SIGN_IDENTITY))
+SIGN_TIMESTAMP := $(if $(SIGN_IDENTITY_TRIMMED),$(if $(filter -,$(SIGN_IDENTITY_TRIMMED)),,--timestamp),)
+DIST_SIGN_FLAGS := $(if $(strip $(HARDENED)),--options runtime --entitlements packaging/Vibra.entitlements $(SIGN_TIMESTAMP),)
+
+.PHONY: all build app dmg run test clean fmt install uninstall probe bench restart query
 
 all: app
 
 # --product VibraApp deliberately: a release build of the whole package would
 # also try to compile the test target, whose `@testable import` requires
 # -enable-testing and fails outside a debug build.
+#
+# Per arch: a separate scratch path, because one scratch dir cannot hold two
+# targets' modules at once. Each slice's binary is asked for with
+# --show-bin-path instead of assumed, since the layout is SwiftPM's.
 build:
+ifeq ($(strip $(ARCHS)),)
 	swift build -c $(CONFIG) --product VibraApp
+else
+	@set -e; slices=''; \
+	  for arch in $(ARCHS); do \
+	    triple=$$arch-apple-macosx14.0; \
+	    swift build -c $(CONFIG) --product VibraApp --triple $$triple --scratch-path .build/$$arch; \
+	    slice=$$(swift build -c $(CONFIG) --product VibraApp --triple $$triple --scratch-path .build/$$arch --show-bin-path)/VibraApp; \
+	    slices="$$slices $$slice"; \
+	  done; \
+	  mkdir -p .build/universal; \
+	  lipo -create $$slices -output $(BIN_SRC); \
+	  lipo -archs $(BIN_SRC)
+endif
 
 # Opt-in SwiftPM build backend for the test run, e.g. `make test
 # SWIFT_BUILD_SYSTEM=native`. Unset, `swift run` keeps its default. On Swift
@@ -101,7 +139,7 @@ app: build
 	# hypothetical: on 2026-09-21 a `make install SIGN_IDENTITY=...` was denied
 	# keychain access, the `2>/dev/null ||` ate it, the build reported success,
 	# and the bundle was quietly ad-hoc.
-	@codesign --force --deep --sign $(if $(SIGN_IDENTITY),"$(SIGN_IDENTITY)",-) $(APP_BUNDLE) || { \
+	@codesign --force --deep $(DIST_SIGN_FLAGS) --sign $(if $(SIGN_IDENTITY),"$(SIGN_IDENTITY)",-) $(APP_BUNDLE) || { \
 	  echo "error: codesign failed. The bundle would run but could not hold any"; \
 	  echo "       permission: no notifications, no terminal jump-back."; \
 	  $(if $(SIGN_IDENTITY),echo "       Check that SIGN_IDENTITY=$(SIGN_IDENTITY) names a code-signing"; \
@@ -121,6 +159,28 @@ app: build
 	  echo "signed with $(SIGN_IDENTITY)"; \
 	fi
 	@echo "built $(APP_BUNDLE)"
+
+# Packaging only. No prerequisite, so it can never rebuild the bundle under a
+# check that already verified it: whatever is on disk is what ships.
+dmg:
+	@if [ ! -d $(APP_BUNDLE) ]; then \
+	  echo "error: $(APP_BUNDLE) is missing."; \
+	  echo "       make dmg only packages an existing bundle; run 'make app' first."; \
+	  exit 1; \
+	fi
+	@rm -rf $(BUILD_DIR)/dmg-root $(DMG)
+	@mkdir -p $(BUILD_DIR)/dmg-root
+	@cp -R $(APP_BUNDLE) $(BUILD_DIR)/dmg-root/
+	@ln -s /Applications $(BUILD_DIR)/dmg-root/Applications
+	@hdiutil create -quiet -volname "$(APP_NAME)" -srcfolder $(BUILD_DIR)/dmg-root -format UDZO -ov $(DMG)
+	@rm -rf $(BUILD_DIR)/dmg-root
+	@if [ -n "$(SIGN_TIMESTAMP)" ]; then \
+	  codesign --force --timestamp --sign "$(SIGN_IDENTITY)" $(DMG) || { \
+	    echo "error: codesign failed on $(DMG)"; exit 1; }; \
+	  echo "signed $(DMG)"; \
+	else \
+	  echo "wrote $(DMG) unsigned (SIGN_IDENTITY is not a real identity)"; \
+	fi
 
 run: app
 	open $(APP_BUNDLE)

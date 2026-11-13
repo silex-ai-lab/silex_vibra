@@ -1,0 +1,9 @@
+window_days=30 run_at=2026-11-12T16:59:49
+recovery scope=mixed n=3
+recovery scope=mixed edit_kind=fewer_assertions n=2
+recovery scope=mixed edit_kind=other n=2
+recovery scope=mixed weakening_any n=2
+recovery scope=only_test_edits n=8
+recovery scope=only_test_edits edit_kind=fewer_assertions n=1
+recovery scope=only_test_edits edit_kind=other n=8
+recovery scope=only_test_edits weakening_any n=1

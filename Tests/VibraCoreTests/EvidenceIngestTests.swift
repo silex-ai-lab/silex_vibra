@@ -43,9 +43,9 @@ struct EvidenceIngestTests {
 
         let fold = await ingest.collect(for: session(.claudeCode, id: "sess-1"))
 
-        #expect(fold?.events.count == 2)
-        #expect(fold?.events.contains(.codeChange(F.at(1))) == true)
-        #expect(fold?.events.contains(.check(ObservedCheck(at: F.at(10), kind: .test, result: .passed(.exitStatus)))) == true)
+        #expect(fold?.issueOnly.events.count == 2)
+        #expect(fold?.issueOnly.events.contains(.codeChange(at: F.at(1))) == true)
+        #expect(fold?.issueOnly.events.contains(.check(ObservedCheck(at: F.at(10), kind: .test, result: .passed(.exitStatus)))) == true)
         let bytes = await ingest.lastBytesRead
         #expect(bytes > 0)
     }
@@ -58,7 +58,7 @@ struct EvidenceIngestTests {
 
         let evidence = await ingest.evidence(for: session(.claudeCode, id: "sess-1"))
 
-        #expect(evidence == .checkedAfterLastChange(ObservedCheck(at: F.at(10), kind: .test, result: .passed(.exitStatus))))
+        #expect(evidence?.issueOnly == .checkedAfterLastChange(ObservedCheck(at: F.at(10), kind: .test, result: .passed(.exitStatus))))
     }
 
     @Test func aTranscriptLongerThanOneBatchStillPairsItsCalls() async throws {
@@ -72,7 +72,7 @@ struct EvidenceIngestTests {
 
         let fold = await ingest.collect(for: session(.claudeCode, id: "sess-1"))
 
-        #expect(fold?.events == [.codeChange(F.at(1))])
+        #expect(fold?.issueOnly.events == [.codeChange(at: F.at(1))])
     }
 
     // MARK: Codex
@@ -106,7 +106,7 @@ struct EvidenceIngestTests {
 
         let evidence = await ingest.evidence(for: session(.codex, id: "root-1", started: 0))
 
-        #expect(evidence == .checkedAfterLastChange(ObservedCheck(at: F.at(15), kind: .test, result: .passed(.exitStatus))))
+        #expect(evidence?.issueOnly == .checkedAfterLastChange(ObservedCheck(at: F.at(15), kind: .test, result: .passed(.exitStatus))))
     }
 
     // MARK: Agents without an extractor

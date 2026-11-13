@@ -31,7 +31,7 @@ Current state: see [STATUS.md](STATUS.md).
 | 4 | P4.5 OpenClaw adapter | **Deferred** — not installed here; would be a guessed format |
 | 4 | P4.6 Code checks in Session Details | **Done** 2026-11-08, [plan](PLAN-2026-11-08-delivery-evidence.md) |
 | 4 | P4.7 Review Agent Activity | **Done** 2026-11-09, [plan](PLAN-2026-11-09-agent-incidents.md) |
-| 3 | P3.1 Developer ID signing | Blocked on a user decision |
+| 3 | P3.1 Developer ID signing | Pipeline built, awaiting certificate |
 | 3 | P3.2 Sparkle auto-update | **Cut** 2026-11-11 — an updater is network egress |
 | 3 | P3.3 Homebrew distribution | **Done (source formula)** — a signed cask still needs P3.1 |
 
@@ -426,6 +426,18 @@ make the app distributable.
 change.** Confirmed empirically: an ad-hoc signed bundle gets
 `authorization granted: false` with "Notifications are not allowed for this
 application". No code change substitutes for a signature.
+
+### Status 2026-11-13: pipeline built, awaiting certificate
+
+The repository side is built (plan
+`docs/PLAN-2026-11-12-release-and-test-integrity.md`, tasks 8 to 10).
+`tools/release/package.sh --dry-run` builds a universal, hardened app, packages
+it in a DMG and checks the mounted app. CI runs it on Apple Silicon and Intel
+(run 43382966703, green). `.github/workflows/release.yml` signs, notarizes and
+drafts a release on a `v*` tag. It has not run, because the owner's Apple
+Developer enrollment and the eight secrets in `docs/RUNBOOK-developer-id.md`
+are pending. P3.1 is done only when the first tagged release passes plan task
+14.
 
 ## P3.2 — Sparkle auto-update — **CUT** 2026-11-11
 

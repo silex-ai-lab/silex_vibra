@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The environment's required reviewer is the real gate; these checks only
+      # stop a tag that cannot ship (wrong version, no notes, not on main).
+      - name: Check the tag, the release notes and origin/main
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^VERSION[[:space:]]*:=[[:space:]]*//p' Makefile | head -n 1)
+          if [ -z "$version" ]; then
+            echo "error: could not read VERSION from the Makefile"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "error: tag $GITHUB_REF_NAME is not v$version, the Makefile's VERSION"
+            exit 1
+          fi
+          if [ ! -f "docs/releases/v$version.md" ]; then
+            echo "error: docs/releases/v$version.md is missing"
+            exit 1
+          fi
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "error: the tagged commit $GITHUB_SHA is not on origin/main"
+            exit 1
+          fi
+          echo "tag v$version, its release notes and origin/main ancestry check out"
+
+      - name: Decode the signing certificate and the notary key
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$MACOS_CERT_P12_BASE64" | base64 --decode >"$RUNNER_TEMP/cert.p12"
+          printf '%s' "$NOTARY_KEY_P8_BASE64" | base64 --decode >"$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Set up the signing keychain
+        env:
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: tools/release/keychain.sh setup "$RUNNER_TEMP/cert.p12" "$MACOS_SIGN_IDENTITY" valid
+
+      - name: Build, sign, package and notarize
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: tools/release/package.sh --release
+
+      # Before any asset is uploaded: no decoded key may exist from here on.
+      - name: Remove the decoded keys
+        run: rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^VERSION[[:space:]]*:=[[:space:]]*//p' Makefile | head -n 1)
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --notes-file "docs/releases/v$version.md" \
+            "build/Vibra-$version.dmg" "build/Vibra-$version.dmg.sha256"
+
+      - name: Remove the keychain and any decoded key
+        if: always()
+        run: |
+          tools/release/keychain.sh teardown
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"

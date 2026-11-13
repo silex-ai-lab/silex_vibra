@@ -103,6 +103,7 @@ struct VendorReportTests {
 
             A read of a credential. Rotate the secret if you did not expect this.
             It was named in a shell command line and may not have run.
+            Related OWASP category (Top 10 for Agentic Applications 2026): ASI03
 
             What I expected
             """ + "\n")
@@ -126,6 +127,53 @@ struct VendorReportTests {
 
             What I expected
             """ + "\n")
+    }
+
+    // MARK: - OWASP
+
+    @Test func everyKindCarriesItsOwaspAgenticCategories() {
+        let expected: [IncidentKind: [String]] = [
+            .credentialReadAttempt: ["ASI03"],
+            .workspaceSecretFileNamed: ["ASI03"],
+            .unrestrictedSession: ["ASI03"],
+            .deniedCallRanLater: ["ASI02"],
+            .writeToPathOutsideWorkspace: ["ASI02"],
+            .forcePushAttempt: ["ASI02"],
+            .authFailure: [],
+            .unexplainedVendorUsage: [],
+        ]
+        #expect(Set(expected.keys) == Set(IncidentKind.allCases))
+        for kind in IncidentKind.allCases {
+            #expect(kind.owaspAgentic == expected[kind], "\(kind)")
+        }
+    }
+
+    @Test func theDraftNamesTheCategoryAfterTheFactsForAKindWithIds() throws {
+        let preparedDraft = try draft(incident(kind: .forcePushAttempt, agent: .codex, evidence: .commandLine))
+        let lines = preparedDraft.body.split(separator: "\n", omittingEmptySubsequences: false)
+        let category = try #require(lines.firstIndex {
+            $0.hasPrefix("Related OWASP category")
+        })
+        #expect(lines[category] == "Related OWASP category (Top 10 for Agentic Applications 2026): ASI02")
+        #expect(lines[category - 1] == "It was named in a shell command line and may not have run.")
+        #expect(lines[category + 1] == "")
+        #expect(lines[category + 2] == "What I expected")
+    }
+
+    @Test func aKindWithNoIdsGetsNoCategoryLineEvenThoughItHasADraft() throws {
+        // Vendor usage is a fact for the user, not an agent behaviour, and it
+        // still has a draft: the line must not appear.
+        let preparedDraft = try draft(vendor())
+        #expect(!preparedDraft.body.contains("OWASP"))
+        #expect(!preparedDraft.body.contains("ASI0"))
+        for kind in IncidentKind.allCases where kind.owaspAgentic.isEmpty {
+            for agent in [AgentKind.claudeCode, .codex] {
+                if let preparedDraft = VendorReport.draft(
+                    incident: incident(kind: kind, agent: agent), appVersion: "1", osVersion: "o") {
+                    #expect(!preparedDraft.body.contains("OWASP"), "\(kind)")
+                }
+            }
+        }
     }
 
     // MARK: - Kinds and routes

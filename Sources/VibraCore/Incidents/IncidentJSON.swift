@@ -60,6 +60,8 @@ public enum IncidentJSON {
         let id: String
         let kind: IncidentKind
         let severity: IncidentSeverity
+        /// Always present, empty for a kind that is not an agent behaviour.
+        let owasp: [String]
         let agent: AgentKind?
         let evidence: FindingEvidence
         let at: Date
@@ -72,6 +74,7 @@ public enum IncidentJSON {
             id = row.incident.id.hex
             kind = row.incident.kind
             severity = row.incident.kind.rule.severity
+            owasp = row.incident.kind.owaspAgentic
             agent = row.incident.agent
             evidence = row.incident.evidence
             at = row.incident.at

@@ -1,0 +1,15 @@
+window_days=30 run_at=2026-11-12T16:59:11
+claudeCode changes n=1055
+claudeCode fail_then_pass n=107
+claudeCode fail_then_pass_only_test_edits n=8
+claudeCode fail_then_pass_with_test_edit n=11
+claudeCode sessions n=204
+claudeCode sessions_with_only_test_edit_recovery n=3
+claudeCode sessions_with_test_check n=36
+claudeCode sessions_with_test_edit_recovery n=3
+claudeCode test_file_changes n=333
+codex changes n=7
+codex fail_then_pass n=2
+codex sessions n=35
+codex sessions_with_test_check n=6
+codex test_file_changes n=2
