@@ -3,8 +3,8 @@
 Resume point for [OSS-GROWTH-PLAN.md](OSS-GROWTH-PLAN.md). Update this file at
 the end of every session.
 
-**Last updated:** 2026-11-13 · **Baseline commit:** `af95fc0` (branch
-`feat/release-and-test-integrity`, not merged) · **Repo stats:** not rechecked
+**Last updated:** 2026-11-13 · **Baseline commit:** `3180b69` (`main`, after
+PR #16) · **Repo stats:** not rechecked
 in this run (the run makes no network request); the last recorded figure, 1
 star, is from 2026-10-01 and is stale.
 
@@ -23,7 +23,24 @@ star, is from 2026-10-01 and is stale.
 | 9 | Topics / homepage | **Pending owner go-ahead** | Topics proposed in the Day-1 plan. Homepage after #1. |
 | 10 | `--query` + skill ecosystem | **Example done** 2026-09-28 | In `docs/features.md`; listing after #1. |
 | 11 | CONTRIBUTING + issue templates | Not started | After #1. |
-| 12 | Evidence: minutes agents waited on you | **Measured** 2026-11-13 (branch `feat/wait-stats`, not merged) | `Vibra --wait-stats`; n=1 pilot in `docs/research/2026-11-12/wait-pilot.md`. No UI yet: decided after the notifications on/off weeks (plan task 9). |
+| 12 | Evidence: minutes agents waited on you | **Merged** 2026-11-13 (PR #16, `3180b69`); **next: plan task 9, owner** | `Vibra --wait-stats`; n=1 pilot in `docs/research/2026-11-12/wait-pilot.md`. No UI yet: decided after the notifications on/off weeks. Next step below. |
+
+## Next step: notifications on/off weeks (item 12, plan task 9)
+
+Owner task, not started. Protocol: "Notifications on/off protocol" in
+[PLAN-2026-11-13-wait-minutes.md](../docs/PLAN-2026-11-13-wait-minutes.md).
+
+1. Week A: System Settings → Notifications → Vibra → Allow Notifications
+   **on**. Leave Vibra running. Write the first and last date here.
+2. Week B: the same switch **off**, Vibra still running. Write the dates here.
+3. Then ask an agent to run, for each week,
+   `/Applications/Vibra.app/Contents/MacOS/Vibra --wait-stats --from <first> --to <last>`
+   and record both outputs and the p50 and IQR differences of `turn` seconds
+   and `blocked` minutes, with n, in `docs/research/2026-11-12/`. It is an
+   n=1 descriptive pilot: workload differs between weeks, so no causal claim.
+4. Decide whether a "minutes waited" UI surface earns its place.
+
+Dates: week A `____` to `____`; week B `____` to `____`.
 
 ## Open decisions
 
@@ -62,3 +79,8 @@ star, is from 2026-10-01 and is stale.
   0 times on the owner's 30-day data (plan task 4). Review Agent Activity names
   related OWASP Agentic categories. 563 tests pass. Pending: task 11 live check
   of the hardened build, the code gate, then task 14 after enrollment.
+- 2026-11-13. `Vibra --wait-stats` (research direction C) built with the orca
+  fleet and merged as PR #16 (`3180b69`); record in
+  `docs/PLAN-2026-11-13-wait-minutes.md`, pilot in
+  `docs/research/2026-11-12/wait-pilot.md`. 622 tests pass. Next: plan task 9
+  (above), owner.
