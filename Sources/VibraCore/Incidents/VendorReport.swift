@@ -66,6 +66,14 @@ public enum VendorReport {
         lines.append("")
         lines.append(rule.guidance)
         lines.append(incident.evidence.sentence)
+        // A related category, offered as context: an agent can misuse a tool
+        // without a vendor defect, and this line sits after the facts so it
+        // cannot read as a finding against the vendor.
+        if !incident.kind.owaspAgentic.isEmpty {
+            lines.append(
+                "Related OWASP category (Top 10 for Agentic Applications 2026): "
+                    + incident.kind.owaspAgentic.joined(separator: ", "))
+        }
         lines.append("")
         lines.append("What I expected")
 

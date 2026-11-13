@@ -201,6 +201,20 @@ public struct IncidentRule: Sendable {
 }
 
 extension IncidentKind {
+    /// Related OWASP Top 10 for Agentic Applications 2026 categories, empty
+    /// when the kind is not an agent behaviour. Exhaustive on purpose: a new
+    /// kind must decide its category rather than inherit an empty one.
+    public var owaspAgentic: [String] {
+        switch self {
+        case .credentialReadAttempt, .workspaceSecretFileNamed, .unrestrictedSession:
+            ["ASI03"]
+        case .deniedCallRanLater, .writeToPathOutsideWorkspace, .forcePushAttempt:
+            ["ASI02"]
+        case .authFailure, .unexplainedVendorUsage:
+            []
+        }
+    }
+
     /// The one place that decides severity, wording and route for a kind.
     public var rule: IncidentRule {
         switch self {

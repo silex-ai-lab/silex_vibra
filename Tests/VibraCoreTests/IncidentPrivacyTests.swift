@@ -4,12 +4,14 @@ import Testing
 @testable import VibraCore
 
 @Suite struct IncidentJSONShapeTests {
-    private func row(_ detail: IncidentDetail, disposition: Disposition) -> IncidentJSON.Row {
+    private func row(
+        _ detail: IncidentDetail, disposition: Disposition, kind: IncidentKind = .forcePushAttempt
+    ) -> IncidentJSON.Row {
         let at = Date(timeIntervalSince1970: 1_800_000_000)
         return IncidentJSON.Row(
             incident: Incident(
-                id: IncidentID(agent: .claudeCode, session: "s", kind: .forcePushAttempt, anchor: "a"),
-                kind: .forcePushAttempt, agent: .claudeCode, evidence: .commandLine,
+                id: IncidentID(agent: .claudeCode, session: "s", kind: kind, anchor: "a"),
+                kind: kind, agent: .claudeCode, evidence: .commandLine,
                 at: at, completedAt: at, posture: .unknown, detail: detail),
             disposition: disposition)
     }
@@ -23,8 +25,15 @@ import Testing
     @Test func topLevelKeysAreExactlyTheBoundedSet() throws {
         let keys = Set(try object(row(.authError, disposition: .open)).keys)
         #expect(keys == [
-            "id", "kind", "severity", "agent", "evidence", "at", "completedAt", "posture", "detail", "disposition",
+            "id", "kind", "severity", "owasp", "agent", "evidence", "at", "completedAt", "posture", "detail",
+            "disposition",
         ])
+    }
+
+    @Test func owaspIsAnArrayPresentForBothAnAgentKindAndANoneKind() throws {
+        #expect(try object(row(.credential(.sshKey), disposition: .open, kind: .credentialReadAttempt))["owasp"]
+            as? [String] == ["ASI03"])
+        #expect(try object(row(.authError, disposition: .open, kind: .authFailure))["owasp"] as? [String] == [])
     }
 
     @Test func detailKeysCarryOnlyTheVariantsValues() throws {
