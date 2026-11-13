@@ -169,9 +169,9 @@ def sources(home, lo):
 # ---- History's rule ---------------------------------------------------------
 
 def is_swift_space(c):
-    """Foundation's whitespacesAndNewlines: Unicode Z* categories, U+0009-U+000D and U+0085.
-    Python's str.strip() also removes U+001C-U+001F, which Swift keeps."""
-    return c in "\t\n\x0b\x0c\r\x85" or unicodedata.category(c) in ("Zs", "Zl", "Zp")
+    """Foundation's whitespacesAndNewlines: Unicode Z* categories, U+0009-U+000D, U+0085 and
+    U+200B. Python's str.strip() also removes U+001C-U+001F, which Swift keeps."""
+    return c in "\t\n\x0b\x0c\r\x85\u200b" or unicodedata.category(c) in ("Zs", "Zl", "Zp")
 
 
 def trim(text):
@@ -200,7 +200,7 @@ def is_injected_wrapper(text, tags):
 
 def lstrip_spaces(text):
     i = 0
-    while i < len(text) and (text[i] == "\t" or unicodedata.category(text[i]) == "Zs"):
+    while i < len(text) and (text[i] in "\t\u200b" or unicodedata.category(text[i]) == "Zs"):
         i += 1
     return text[i:]
 
