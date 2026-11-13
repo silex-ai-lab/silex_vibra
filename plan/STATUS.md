@@ -55,8 +55,9 @@ star, is from 2026-10-01 and is stale.
   [PLAN-2026-10-01-readme-restyle-i18n.md](PLAN-2026-10-01-readme-restyle-i18n.md).
 - 2026-11-13. Release pipeline and test-edit evidence built on branch
   `feat/release-and-test-integrity` with the orca fleet (recorded in
-  `docs/PLAN-2026-11-12-release-and-test-integrity.md`). Code checks names
-  test edits that weakened tests between a failed and a passing run; it fired
+  `docs/PLAN-2026-11-12-release-and-test-integrity.md`). Code checks says
+  when test-file edits between a failed and a passing run changed its
+  test-pattern counts; it fired
   0 times on the owner's 30-day data (plan task 4). Review Agent Activity names
   related OWASP Agentic categories. 563 tests pass. Pending: task 11 live check
   of the hardened build, the code gate, then task 14 after enrollment.

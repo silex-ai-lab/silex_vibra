@@ -17,6 +17,8 @@ by an agent. Every claim below is backed by a test, a CI run or the README.
 - [ ] A downloaded copy, still quarantined, opens without the
       unidentified-developer block.
 - [ ] Vibra's Setup window reports notification authorization granted.
+- [ ] The release body no longer opens with the "Draft" note from
+      `docs/releases/v0.5.0.md`; rewrite it before publishing.
 - [ ] You published the draft release yourself.
 - [ ] The README and tap changes below are merged.
 

@@ -2,7 +2,7 @@
 
 ## 0.5.0 (unreleased)
 
-- **Code checks names test edits that weakened tests.** When the reported
+- **Code checks says when test-file edits changed its test-pattern counts.** When the reported
   check is a passing test run and the test run just before it failed, the row
   now adds one sentence if edits to test files in between lowered Vibra's
   assertion or test-function matches, or raised its skip, focus (`.only`) or
