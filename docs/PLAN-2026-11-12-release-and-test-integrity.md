@@ -569,3 +569,27 @@ unchanged.
 | 7 | Done, `2fc8354` (DeepSeek). The canary feeds Claude Code Edit, MultiEdit and Write and a Codex FileChange on test paths whose path, `old_string` and `new_string` carry sentinels, and asserts the clause fires first | Mutation run (`mutate-canary.sh`, planner worktree at `99f758e` plus the new test): baseline green; M1, `PathKey` keeps the raw path: red, 6 issues, `SENTINEL_TESTPATH_7d1`; M2, the Claude extractor keys an edit by its `new_string` on top of M1: red, 9 issues, `SENTINEL_NEW_6c2` and `SENTINEL_TESTPATH_7d1`; restored: green. 559 tests |
 | 6 | Done, `af95fc0` (DeepSeek). Exhaustive `IncidentKind.owaspAgentic` per the task 5 table; `owasp` array on every `--incidents` row; vendor draft line after the facts. `IncidentPrivacyTests.swift` also changed, outside the listed files, because it pins the exact JSON key set (reported by DeepSeek, accepted) | 563 tests; `incidentSentinelsNeverLeak` passes; mapping pinned against `IncidentKind.allCases` |
 | 12 | Done, `23c0ce6` (planner, drafted by a planner fork and reviewed). Known limits include every spec item plus the round-4 four; launch kit has no test-edit line (0 rows qualified, task 4); runbook keeps its human-takes-over rules; the entitlement line waits on task 11 | `tools/readme-anchors.sh` exit 0; no long dashes in added lines |
+
+## Code gate record
+
+Base `5005054` for every round. Implementation paths: every path changed
+since the base except this plan file.
+
+**Round 1** at `8c3cfd3`, diff hash `7673c8f4884dcae37412481a0c8d13dd0048fcdd`.
+Reviewers: reviewer-claude on `claude-fable-5-2` and reviewer-codex on
+GPT-6-Sol (Codex pane). Both IMPL-REJECTED.
+
+| Objection | From | Change |
+|---|---|---|
+| A Codex `FileChange` to a file named `session_meta` or `turn_context` was taken for metadata and lost, in Swift and in the oracle | codex 1 (claude non-blocking 6) | The record's `type` decides; the substring is a prefilter only. Swift `d455d41` with two tests; oracle `fbc8f35`, whose new selftest cases fail on the old oracle ("got 0, want 1") |
+| CRLF edit text was one "line" in Swift, so a leading comment dropped the whole edit; the oracle splits on `\n` | claude 1 | Swift splits on the `\n` scalar (`d455d41`); the CRLF case is pinned in both test suites |
+| CHANGELOG, v0.5.0 notes and STATUS said the feature names edits "that weakened tests" | codex 2, claude 2 | Reworded to "changed its test-pattern counts" (`d1f7693`) |
+| Non-blocking folded | claude 1, 2, 4, 5, 8 | keychain.sh comment made accurate; DMG detached before stapling; launch-kit checkbox to rewrite the "Draft" body; `PathKey` never-persist comment; `--verify-tag` |
+| Non-blocking answered | claude 3 | Both action pins were checked against the upstream tags with `git ls-remote` on 2026-11-13 (Execution record, task 9) |
+
+**Roster change for round 2, at the owner's request (2026-11-13).** The second
+reviewer moves from GPT-6-Sol in the Codex pane to GPT-6.1 Sol on Amazon
+Bedrock (`us.openai.gpt-6.1-sol`, US Geo, Responses API, `store=False`), one
+bounded call per round through `sol-review.py` in the fleet dir, spend logged
+against the owner's standing Sol cap. It cannot open the repo, so its prompt
+embeds the diff and this plan; reviewer-claude gets the same prompt file.
