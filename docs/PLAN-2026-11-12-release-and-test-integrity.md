@@ -543,3 +543,10 @@ notes and checked at the code gate (no change to the approved rules):
 PLANNER (claude): PLAN-APPROVED, plan v0.4 at `dc3168c`. Both reviewers'
 literal approvals were read in their reply files. The appended notes above
 change no rule, test or acceptance in the approved plan.
+
+## Execution record
+
+| Task | Result | Evidence |
+|---|---|---|
+| 1 | Done, `0b9398e`. `make test`: 514 tests (513 at `BASE`, measured just before the change, plus one completion-time test). Existing extractor tests compare on issue time through test-only views in `EvidenceFixtures.swift`; completion times have their own test | `--evidence-stats --days 30`, both binaries built first, run back to back twice in opposite orders (05:07-05:19 UTC). Apart from the renamed `change ... target=source` lines, the only differences are check counts that grow with run time whichever binary ran later (live sessions were writing), so they are drift, not the change |
+| 4a | Done, `b7fb3b2`. `oracle_selftest.py` passes: 14 path cases, 13 pinned non-matches, 10 matches, 21 clause cases, the same-instant case. Four mutations of the rule (straddle drop removed, v0.3 inside-only window, root ignored, cross-file sign removed) each fail it | Real 30-day run (05:21 UTC): **no `qualified` line, so 0 rows qualify**. Change targets: Claude Code source 804, test.compared 147, test.unseen 144; Codex source 5, test.unseen 2. Funnel (`docs/research/2026-11-12/probe/funnel_4a.py`, counts only): of 25 Claude Code rows reported as checked after the last change, 9 report a passed test, 1 has a failed test immediately before it, and that one has no change in the window. The probe's 107 counted every fail-then-pass pair in a session; the clause reads only the session's current row. Per the plan, the launch kit drops the test-edit line, and tasks 2-3 still run |
