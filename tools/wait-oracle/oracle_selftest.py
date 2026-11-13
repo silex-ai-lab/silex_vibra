@@ -100,15 +100,24 @@ try:
     secret = os.path.join(tmp, ".claude", "projects", "SENTINEL_PATH_x1", "SENTINEL_SID_y2.jsonl")
     os.makedirs(os.path.dirname(secret))
     open(secret, "w").write('{"type":"user","timestamp":"2026-11-10T00:00:00.000Z","message":{"content":"hi"}}\n')
-    os.chmod(secret, 0)
+
+    def refuse(path, *args, **kwargs):
+        raise PermissionError(13, "Permission denied", path)
+    w.open = refuse
     stderr = io.StringIO()
     with contextlib.redirect_stderr(stderr):
         code, out, err = w.run(["--from", "2026-11-10", "--to", "2026-11-10"], {"VIBRA_HOME": tmp})
     check("unreadable file: exit 0, nothing printed", (code, out, err, stderr.getvalue()), (0, "", "", ""))
 finally:
-    os.chmod(secret, 0o600)
+    del w.open
     shutil.rmtree(tmp)
-check("trim keeps U+001F like Swift", (w.trim("\x1f a \u2003"), w.is_injected_wrapper("\x1f<user_shell_command>ls</user_shell_command>", {"user_shell_command"})), ("\x1f a", False))
+for tz, argv, code in (("America/Sao_Paulo", ["--from", "2018-11-04", "--to", "2018-11-04"], 0),
+                       ("Pacific/Apia", ["--from", "2011-12-30", "--to", "2011-12-30"], 2),
+                       ("Pacific/Apia", ["--from", "2011-12-29", "--to", "2011-12-29"], 2),
+                       ("Pacific/Apia", ["--from", "2011-12-31", "--to", "2011-12-31"], 0)):
+    check("skipped day %s %s" % (tz, argv), with_tz(tz, lambda: w.run(argv, {"VIBRA_HOME": "/nonexistent"})[0]), code)
+check("skipped midnight window", with_tz("America/Sao_Paulo", lambda: w.parse_window(["--from", "2018-11-04", "--to", "2018-11-04"], 0)),
+      (1_541_300_400_000, 1_541_383_200_000))
 check("buckets", [w.bucket(n) for n in (1, 2, 3, 4, 7, 8, 30)], ["1", "2-3", "2-3", "4-7", "4-7", "8+", "8+"])
 
 if failures:

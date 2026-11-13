@@ -211,6 +211,13 @@ dst = {
            cu("2026-11-01T08:21:00.000Z", "a minute later")],
 }
 
+midnight_dst = {
+    "m1": [cu("2018-11-04T12:00:00.000Z", "inside the day"), ca("2018-11-05T02:20:00.000Z", "c1", "end_turn"),
+           cu("2018-11-05T02:30:00.000Z", "in the hour after hi")],
+    "m2": [cu("2018-11-04T03:00:00.000Z", "at lo, 01:00 local"), ca("2018-11-04T03:10:00.000Z", "c2", "end_turn"),
+           cu("2018-11-04T03:20:00.000Z", "ten minutes later")],
+}
+
 S = "SENTINEL"
 sentinel_claude = [dict(r, sessionId=S + "_SID_3a2", cwd="/Users/x/" + S + "_CWD_7c4") for r in [
     cu(T(D, "12:00:00.000"), S + "_PROMPT_5e8 do"),
@@ -254,6 +261,8 @@ def main():
         write("window-edges", P + name + ".jsonl", recs)
     for name, recs in dst.items():
         write("dst", P + name + ".jsonl", recs)
+    for name, recs in midnight_dst.items():
+        write("midnight-dst", P + name + ".jsonl", recs)
     write("sentinel", ".claude/projects/-Users-x-" + S + "_PATH_9f1/" + S + "_SID_3a2.jsonl", sentinel_claude)
     write("sentinel", X + "rollout-2026-11-10T12-00-00-" + S + "_SID_3a2.jsonl", sentinel_codex)
     write("empty", P + "scheduled.jsonl", scheduled)

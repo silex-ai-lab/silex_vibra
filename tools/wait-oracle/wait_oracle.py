@@ -89,7 +89,10 @@ def parse_window(argv, now_ms):
             raise ValueError("dates must be real YYYY-MM-DD dates from %d to %d" % (FIRST_YEAR, LAST_YEAR))
         if first > last:
             raise ValueError("--from must not be after --to")
-        return local_midnight_ms(first), local_midnight_ms(last + datetime.timedelta(days=1))
+        lo, hi = local_midnight_ms(first), local_midnight_ms(last + datetime.timedelta(days=1))
+        if lo is None or hi is None:
+            raise ValueError("a date (or the day after --to) does not exist in the local time zone")
+        return lo, hi
     n = 30
     if days is not None:
         text = days[0]
@@ -109,7 +112,10 @@ def local_date(text):
 
 
 def local_midnight_ms(date):
-    return int(time.mktime((date.year, date.month, date.day, 0, 0, 0, 0, 0, -1))) * 1000
+    """The first instant of that local day, or None when the day does not exist in this time zone."""
+    seconds = int(time.mktime((date.year, date.month, date.day, 0, 0, 0, 0, 0, -1)))
+    back = time.localtime(seconds)
+    return seconds * 1000 if (back.tm_year, back.tm_mon, back.tm_mday) == (date.year, date.month, date.day) else None
 
 
 # ---- reading --------------------------------------------------------------

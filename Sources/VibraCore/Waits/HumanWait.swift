@@ -143,13 +143,17 @@ public struct WaitWindow: Sendable, Equatable {
             guard let fromText = from ?? nil, let toText = to ?? nil else {
                 return .failure(.usage("--from and --to go together, each with a date"))
             }
+            guard let fromDay = civilDay(fromText), let toDay = civilDay(toText) else {
+                return .failure(.usage("dates must be real YYYY-MM-DD dates from 1970 to 9998"))
+            }
+            guard fromDay <= toDay else { return .failure(.usage("--from must not be after --to")) }
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = timeZone
-            guard let first = localMidnight(fromText, calendar: calendar),
-                  let last = localMidnight(toText, calendar: calendar),
-                  let after = calendar.date(byAdding: .day, value: 1, to: last)
-            else { return .failure(.usage("dates must be real YYYY-MM-DD dates from 1970 to 9998")) }
-            guard first <= last else { return .failure(.usage("--from must not be after --to")) }
+            // Each end is the local midnight of its own civil date, so a DST
+            // change that skips midnight cannot shift the other end.
+            guard let first = localMidnight(fromDay, calendar: calendar),
+                  let after = localMidnight(dayAfter(toDay), calendar: calendar)
+            else { return .failure(.usage("a date (or the day after --to) does not exist in the local time zone")) }
             return .success(WaitWindow(lo: milliseconds(first), hi: milliseconds(after)))
         }
         var n = defaultDays
@@ -162,13 +166,42 @@ public struct WaitWindow: Sendable, Equatable {
         return .success(WaitWindow(lo: now - Int64(n) * 86_400_000, hi: now + 1))
     }
 
-    private static func localMidnight(_ text: String, calendar: Calendar) -> Date? {
+    private struct CivilDay: Comparable {
+        let year: Int, month: Int, day: Int
+        static func < (a: CivilDay, b: CivilDay) -> Bool {
+            (a.year, a.month, a.day) < (b.year, b.month, b.day)
+        }
+    }
+
+    private static let utc: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }()
+
+    /// A real Gregorian `YYYY-MM-DD` in the supported years, independent of time zone.
+    private static func civilDay(_ text: String) -> CivilDay? {
         guard let m = text.wholeMatch(of: /([0-9]{4})-([0-9]{2})-([0-9]{2})/),
               let year = Int(m.1), let month = Int(m.2), let day = Int(m.3), years.contains(year),
-              let date = calendar.date(from: DateComponents(year: year, month: month, day: day))
+              let date = utc.date(from: DateComponents(year: year, month: month, day: day))
         else { return nil }
-        let back = calendar.dateComponents([.year, .month, .day], from: date)
+        let back = utc.dateComponents([.year, .month, .day], from: date)
         guard back.year == year, back.month == month, back.day == day else { return nil }
+        return CivilDay(year: year, month: month, day: day)
+    }
+
+    private static func dayAfter(_ d: CivilDay) -> CivilDay {
+        let date = utc.date(byAdding: .day, value: 1, to: utc.date(from: DateComponents(year: d.year, month: d.month, day: d.day))!)!
+        let c = utc.dateComponents([.year, .month, .day], from: date)
+        return CivilDay(year: c.year!, month: c.month!, day: c.day!)
+    }
+
+    /// The first instant of that local day, or nil when the day does not exist
+    /// in this time zone (a resolved date on another day).
+    private static func localMidnight(_ d: CivilDay, calendar: Calendar) -> Date? {
+        guard let date = calendar.date(from: DateComponents(year: d.year, month: d.month, day: d.day)) else { return nil }
+        let back = calendar.dateComponents([.year, .month, .day], from: date)
+        guard back.year == d.year, back.month == d.month, back.day == d.day else { return nil }
         return date
     }
 

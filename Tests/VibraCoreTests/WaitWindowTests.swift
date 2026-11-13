@@ -35,6 +35,20 @@ struct WaitWindowTests {
         #expect(throws: WaitWindowError.self) { try range("1969-12-31", "1970-01-01").get() }
     }
 
+    @Test func eachEndIsItsOwnLocalMidnight() throws {
+        func range(_ tz: String, _ from: String, _ to: String) -> Result<WaitWindow, WaitWindowError> {
+            WaitWindow.parse(days: nil, from: .some(from), to: .some(to), now: 0, timeZone: TimeZone(identifier: tz)!)
+        }
+        // Midnight is skipped on 2018-11-04 in Sao Paulo: the day starts at 01:00 (-02:00), and the next
+        // midnight is resolved on its own, not as 01:00 plus a day.
+        #expect(try range("America/Sao_Paulo", "2018-11-04", "2018-11-04").get()
+            == WaitWindow(lo: 1_541_300_400_000, hi: 1_541_383_200_000))
+        // 2011-12-30 does not exist in Apia, as a day or as the day after --to.
+        #expect(throws: WaitWindowError.self) { try range("Pacific/Apia", "2011-12-30", "2011-12-30").get() }
+        #expect(throws: WaitWindowError.self) { try range("Pacific/Apia", "2011-12-29", "2011-12-29").get() }
+        #expect((try? range("Pacific/Apia", "2011-12-31", "2011-12-31").get()) != nil)
+    }
+
     @Test func yearZeroIsNotATimestamp() {
         #expect(epochMs(fromTimestamp: "0000-01-01T00:00:00Z") == nil)
         #expect(epochMs(fromTimestamp: "0001-01-01T00:00:00Z") == -62_135_596_800_000)

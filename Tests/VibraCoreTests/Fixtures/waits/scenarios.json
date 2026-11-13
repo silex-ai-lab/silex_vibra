@@ -38,6 +38,12 @@
    "expected": "sessions agent=claudeCode n=3\nwaits agent=claudeCode kind=turn n=2\nseconds agent=claudeCode kind=turn p25=495 p50=930 p75=1365 n=2\nblocked agent=claudeCode scope=all unit=min p25=0 p50=1 p75=15 total=31 n=3\nblocked agent=claudeCode scope=within_cap unit=min p25=0 p50=1 p75=15 total=31 n=3\n"
   },
   {
+   "name": "midnight-dst",
+   "tz": "America/Sao_Paulo",
+   "args": "--from 2018-11-04 --to 2018-11-04",
+   "expected": "sessions agent=claudeCode n=2\nwaits agent=claudeCode kind=turn n=1\nseconds agent=claudeCode kind=turn p25=600 p50=600 p75=600 n=1\nblocked agent=claudeCode scope=all unit=min p25=2 p50=5 p75=7 total=10 n=2\nblocked agent=claudeCode scope=within_cap unit=min p25=2 p50=5 p75=7 total=10 n=2\n"
+  },
+  {
    "name": "sentinel",
    "tz": "UTC",
    "args": "--from 2026-11-10 --to 2026-11-10",
