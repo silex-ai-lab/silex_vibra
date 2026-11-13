@@ -20,10 +20,11 @@ out=$(mktemp -d)
 for order in swift-oracle oracle-swift; do
   for who in ${order/-/ }; do
     start=$(python3 -c 'import time; print(time.time())')
-    if [ "$who" = swift ]; then VIBRA_HOME="$snap" "$bin" --wait-stats --from "$from" --to "$to" > "$out/$order-$who.txt" 2> "$out/$order-$who.err"
-    else VIBRA_HOME="$snap" python3 -I "$repo/tools/wait-oracle/wait_oracle.py" --from "$from" --to "$to" > "$out/$order-$who.txt" 2> "$out/$order-$who.err"; fi
+    rc=0
+    if [ "$who" = swift ]; then VIBRA_HOME="$snap" "$bin" --wait-stats --from "$from" --to "$to" > "$out/$order-$who.txt" 2> "$out/$order-$who.err" || rc=$?
+    else VIBRA_HOME="$snap" python3 -I "$repo/tools/wait-oracle/wait_oracle.py" --from "$from" --to "$to" > "$out/$order-$who.txt" 2> "$out/$order-$who.err" || rc=$?; fi
     end=$(python3 -c 'import time; print(time.time())')
-    printf '%s run %s: exit 0, %s lines, %.1f s wall, stderr: %s\n' "$order" "$who" "$(wc -l < "$out/$order-$who.txt" | tr -d ' ')" "$(python3 -c "print($end-$start)")" "$(cat "$out/$order-$who.err")"
+    printf '%s run %s: exit %s, %s lines, %.1f s wall, stderr: %s\n' "$order" "$who" "$rc" "$(wc -l < "$out/$order-$who.txt" | tr -d ' ')" "$(python3 -c "print($end-$start)")" "$(cat "$out/$order-$who.err")"
   done
   if diff -q "$out/$order-swift.txt" "$out/$order-oracle.txt" >/dev/null; then echo "$order: swift and oracle identical"; else echo "$order: DIFFER"; diff "$out/$order-swift.txt" "$out/$order-oracle.txt" | head -20; fi
 done

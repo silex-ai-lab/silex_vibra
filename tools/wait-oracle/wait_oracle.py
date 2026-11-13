@@ -162,14 +162,29 @@ def sources(home, lo):
 
 # ---- History's rule ---------------------------------------------------------
 
+def is_swift_space(c):
+    """Foundation's whitespacesAndNewlines: Unicode Z* categories, U+0009-U+000D and U+0085.
+    Python's str.strip() also removes U+001C-U+001F, which Swift keeps."""
+    return c in "\t\n\x0b\x0c\r\x85" or unicodedata.category(c) in ("Zs", "Zl", "Zp")
+
+
+def trim(text):
+    i, j = 0, len(text)
+    while i < j and is_swift_space(text[i]):
+        i += 1
+    while j > i and is_swift_space(text[j - 1]):
+        j -= 1
+    return text[i:j]
+
+
 def strip_wrappers(text, tags):
     for tag in tags:
         text = re.sub(r"<%s(\s[^>]*)?>[\s\S]*?</%s>" % (re.escape(tag), re.escape(tag)), "", text)
-    return text.strip()
+    return trim(text)
 
 
 def is_injected_wrapper(text, tags):
-    trimmed = text.strip()
+    trimmed = trim(text)
     if not trimmed.startswith("<") or ">" not in trimmed:
         return False
     parts = [p for p in trimmed[1:trimmed.index(">")].split(" ") if p]
@@ -185,7 +200,7 @@ def lstrip_spaces(text):
 
 
 def normalized(text):
-    t = text.strip()
+    t = trim(text)
     return t if t else None
 
 
@@ -216,7 +231,7 @@ class ClaudeHistory:
             raw = "\n".join(b["text"] for b in content if b.get("type") == "text" and isinstance(b.get("text"), str))
         else:
             return None
-        typed = PASTES.sub("", strip_wrappers(raw, CLAUDE_WRAPPERS)).strip()
+        typed = trim(PASTES.sub("", strip_wrappers(raw, CLAUDE_WRAPPERS)))
         if typed.startswith("[Request interrupted by user"):
             return None
         text = normalized(typed)
@@ -280,7 +295,7 @@ def text_of(content):
 
 
 def is_single_element(text, tag):
-    t = text.strip()
+    t = trim(text)
     return (is_injected_wrapper(t, {tag}) and t.count("</%s>" % tag) == 1
             and t.count("<%s>" % tag) + t.count("<%s " % tag) == 1)
 
@@ -343,7 +358,7 @@ def claude_fold(lines):
             text = text_of(content)
             if text is None:
                 continue
-            s = text.strip()
+            s = trim(text)
             command = ((s.startswith("<command-name>") or s.startswith("<command-message>"))
                        and COMMAND_ELEMENT.search(s) is not None) or s.startswith("<bash-input>")
             if not command:

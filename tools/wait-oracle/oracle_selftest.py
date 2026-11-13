@@ -108,6 +108,7 @@ try:
 finally:
     os.chmod(secret, 0o600)
     shutil.rmtree(tmp)
+check("trim keeps U+001F like Swift", (w.trim("\x1f a \u2003"), w.is_injected_wrapper("\x1f<user_shell_command>ls</user_shell_command>", {"user_shell_command"})), ("\x1f a", False))
 check("buckets", [w.bucket(n) for n in (1, 2, 3, 4, 7, 8, 30)], ["1", "2-3", "2-3", "4-7", "4-7", "8+", "8+"])
 
 if failures:
