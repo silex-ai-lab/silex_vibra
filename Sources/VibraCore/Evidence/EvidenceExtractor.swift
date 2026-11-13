@@ -104,9 +104,12 @@ func patternCounts(in text: String) -> PatternCounts {
 /// exotic whitespace too.
 private let commentLine = regex(#"^\s*(?://|/\*|\*|#(?:\s|$))"#)
 
+/// Splits on the `\n` scalar, not on the `"\n"` Character: in Swift `"\r\n"` is
+/// one Character, so `split(separator: "\n")` would leave a CRLF edit as a
+/// single line and a leading comment would delete the whole edit. The oracle
+/// splits on the scalar too, and a trailing `\r` stays on the line.
 private func uncommented(_ text: String) -> String {
-    text.split(separator: "\n", omittingEmptySubsequences: false)
-        .map(String.init)
+    text.components(separatedBy: "\n")
         .filter { line in
             let range = NSRange(line.startIndex..., in: line)
             return commentLine.firstMatch(in: line, range: range) == nil
@@ -342,18 +345,24 @@ struct CodexEvidenceExtractor: EvidenceExtractor {
 
     mutating func fold(_ lines: [String]) {
         for line in lines {
-            if lineContains(line, "\"session_meta\"") || lineContains(line, "\"turn_context\"") {
-                if let record = jsonObject(line),
-                   let payload = record["payload"] as? [String: Any],
+            // The substring test is only a prefilter: a file named `session_meta`
+            // puts that token in a FileChange's own JSON, and that change must
+            // still be read. The record's type decides.
+            let mayBeMetadata = lineContains(line, "\"session_meta\"") || lineContains(line, "\"turn_context\"")
+            guard mayBeMetadata
+                    || (lineContains(line, "\"item_completed\"")
+                        && (lineContains(line, "\"CommandExecution\"") || lineContains(line, "\"FileChange\""))),
+                  let record = jsonObject(line)
+            else { continue }
+            let type = record["type"] as? String
+            if type == "session_meta" || type == "turn_context" {
+                if let payload = record["payload"] as? [String: Any],
                    let path = payload["cwd"] as? String, !path.isEmpty {
                     cwd = path
                 }
                 continue
             }
-            guard lineContains(line, "\"item_completed\"")
-                    && (lineContains(line, "\"CommandExecution\"") || lineContains(line, "\"FileChange\"")),
-                  let record = jsonObject(line),
-                  record["type"] as? String == "event_msg",
+            guard type == "event_msg",
                   let payload = record["payload"] as? [String: Any],
                   payload["type"] as? String == "item_completed",
                   let item = payload["item"] as? [String: Any],

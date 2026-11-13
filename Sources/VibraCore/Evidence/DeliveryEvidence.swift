@@ -51,7 +51,9 @@ public struct PatternCounts: Sendable, Equatable {
 }
 
 /// Identifies one file within a session so its edits can be netted. Holds a
-/// hash of the path, never the path, and is never printed.
+/// hash of the path, never the path, and is never printed. `String.hashValue`
+/// is seeded per process, so the key is in-memory only and must never be
+/// persisted: the same path hashes differently in the next launch.
 public struct PathKey: Sendable, Hashable {
     private let hash: Int
 

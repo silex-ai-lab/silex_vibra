@@ -124,6 +124,9 @@ attach_dmg "$dmg"
 check_mounted_app
 
 if [ "$mode" = release ]; then
+  # stapler rewrites the image, so the DMG checked in step 3 must not still be
+  # mounted; step 4 remounts the stapled image for the spctl checks.
+  detach_dmg
   note "step 4: notarize and staple"
   submit_out=$(xcrun notarytool submit "$dmg" "${notary_args[@]}" --wait --timeout 30m 2>&1) || {
     printf '%s\n' "$submit_out"

@@ -417,6 +417,10 @@ struct EvidenceExtractorTests {
         #expect(patternCounts(in: "#assert(x)").assertion == 1)
         // `\s` in the pattern covers Unicode spaces, not just ASCII ones.
         #expect(patternCounts(in: "\u{00A0}// XCTAssert(x)").assertion == 0)
+        // CRLF: lines split on the `\n` scalar, so a leading comment line drops
+        // itself and not the assertions below it.
+        #expect(patternCounts(in: "    assert a == 1\r\n    assert b == 2").assertion == 2)
+        #expect(patternCounts(in: "    # check both\r\n    assert a == 1\r\n    assert b == 2").assertion == 2)
     }
 
     // MARK: Test paths
@@ -612,5 +616,31 @@ struct EvidenceExtractorTests {
         // cd-ed into tests/: the directory is the root now, so it does not count.
         #expect(targets[1] == .source)
         #expect(targets[2].statsName == "test.unseen")
+    }
+
+    /// A file named after a metadata record puts that token in the change's own
+    /// JSON. The record's type must decide, or the edit disappears.
+    @Test(arguments: ["session_meta", "turn_context"])
+    func codexAFileNamedLikeAMetadataRecordIsStillAChange(name: String) throws {
+        let named = self.fold(CodexEvidenceExtractor(), batches: [[
+            F.codexMeta(cwd: "/work/app", at: 0),
+            F.codexChange([name], at: 5),
+            F.codexCommand("swift test", exit: 0, at: 9),
+        ]])
+        #expect(named.events == [
+            .codeChange(CodeChange(at: F.at(5), completedAt: F.at(5), target: .source)),
+            .check(ObservedCheck(at: F.at(9), completedAt: F.at(9), kind: .test, result: .passed(.exitStatus))),
+        ])
+        #expect(named.sawToolRecords)
+
+        let ordinary = self.fold(CodexEvidenceExtractor(), batches: [[
+            F.codexMeta(cwd: "/work/app", at: 0),
+            F.codexChange(["src/a.swift"], at: 5),
+            F.codexCommand("swift test", exit: 0, at: 9),
+        ]])
+        #expect(named.events == ordinary.events)
+
+        let evidence = DeliveryEvidence.build(events: named.events, sawToolRecords: named.sawToolRecords)
+        #expect(evidence.caseName == "checkedAfterLastChange")
     }
 }

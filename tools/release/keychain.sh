@@ -7,8 +7,9 @@
 # "valid" passes -v to security find-identity, which lists only identities
 # whose certificate chain verifies. The dry run uses "any": its throwaway
 # certificate is self-signed and no chain anchors it.
-# Passwords come from MACOS_CERT_PASSWORD and MACOS_KEYCHAIN_PASSWORD, never
-# from argv, so they never reach a process list.
+# Passwords come from MACOS_CERT_PASSWORD and MACOS_KEYCHAIN_PASSWORD, so this
+# script's own argv stays clean. `security` still receives them as -p/-P
+# arguments, which is acceptable on a single-tenant runner.
 set -euo pipefail
 
 die() { echo "error: $*" >&2; exit 1; }

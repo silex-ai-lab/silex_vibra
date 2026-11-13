@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           version=$(sed -n 's/^VERSION[[:space:]]*:=[[:space:]]*//p' Makefile | head -n 1)
-          gh release create "$GITHUB_REF_NAME" --draft \
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
             --notes-file "docs/releases/v$version.md" \
             "build/Vibra-$version.dmg" "build/Vibra-$version.dmg.sha256"
 
