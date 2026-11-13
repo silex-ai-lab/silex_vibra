@@ -25,6 +25,16 @@ struct WaitWindowTests {
         #expect(epochMs(fromTimestamp: "2026-11-1\u{0660}T00:00:00Z") == nil)
     }
 
+    @Test func fromAndToStayWithinTheSharedYearRange() {
+        func range(_ from: String, _ to: String) -> Result<WaitWindow, WaitWindowError> {
+            WaitWindow.parse(days: nil, from: .some(from), to: .some(to), now: 0, timeZone: TimeZone(identifier: "UTC")!)
+        }
+        #expect((try? range("9998-12-31", "9998-12-31").get()) != nil)
+        #expect((try? range("1970-01-01", "1970-01-01").get()) == WaitWindow(lo: 0, hi: 86_400_000))
+        #expect(throws: WaitWindowError.self) { try range("9999-12-31", "9999-12-31").get() }
+        #expect(throws: WaitWindowError.self) { try range("1969-12-31", "1970-01-01").get() }
+    }
+
     @Test func yearZeroIsNotATimestamp() {
         #expect(epochMs(fromTimestamp: "0000-01-01T00:00:00Z") == nil)
         #expect(epochMs(fromTimestamp: "0001-01-01T00:00:00Z") == -62_135_596_800_000)

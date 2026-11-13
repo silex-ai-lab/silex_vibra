@@ -91,6 +91,23 @@ odd = [json.dumps(r) for r in (
     {"type": "user", "timestamp": "2026-11-10T00:02:00.000Z", "permissionDecision": {"decision": [], "source": "user"},
      "message": {"content": [{"type": "tool_result", "tool_use_id": ["q"]}, {"type": "tool_result", "tool_use_id": "q"}]}})]
 check("odd decision and id types do not crash", w.claude_fold(odd).waits, [("question", 1794268860000, 1794268920000, "unknown")])
+for argv, code in ((["--from", "9998-12-31", "--to", "9998-12-31"], 0), (["--from", "9999-12-31", "--to", "9999-12-31"], 2),
+                   (["--from", "1969-12-31", "--to", "1970-01-01"], 2), (["--from", "1970-01-01", "--to", "1970-01-01"], 0)):
+    check("date range %s" % argv, w.run(argv, {"VIBRA_HOME": "/nonexistent"})[0], code)
+import tempfile, shutil, contextlib, io
+tmp = tempfile.mkdtemp()
+try:
+    secret = os.path.join(tmp, ".claude", "projects", "SENTINEL_PATH_x1", "SENTINEL_SID_y2.jsonl")
+    os.makedirs(os.path.dirname(secret))
+    open(secret, "w").write('{"type":"user","timestamp":"2026-11-10T00:00:00.000Z","message":{"content":"hi"}}\n')
+    os.chmod(secret, 0)
+    stderr = io.StringIO()
+    with contextlib.redirect_stderr(stderr):
+        code, out, err = w.run(["--from", "2026-11-10", "--to", "2026-11-10"], {"VIBRA_HOME": tmp})
+    check("unreadable file: exit 0, nothing printed", (code, out, err, stderr.getvalue()), (0, "", "", ""))
+finally:
+    os.chmod(secret, 0o600)
+    shutil.rmtree(tmp)
 check("buckets", [w.bucket(n) for n in (1, 2, 3, 4, 7, 8, 30)], ["1", "2-3", "2-3", "4-7", "4-7", "8+", "8+"])
 
 if failures:

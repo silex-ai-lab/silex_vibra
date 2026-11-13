@@ -126,6 +126,9 @@ public struct WaitWindow: Sendable, Equatable {
     /// A hundred years: far past any transcript, and small enough that the
     /// window arithmetic cannot overflow.
     public static let maxDays = 36_500
+    /// The years `--from`/`--to` accept, shared with the Python oracle (whose
+    /// date type ends at 9999-12-31, so the day after `to` must still exist).
+    public static let years = 1970...9998
 
     /// `--days N`, or `--from D --to D` as local dates in `timeZone`. Each flag
     /// is passed as present-with-value, present-without-value (`.some(nil)`),
@@ -145,7 +148,7 @@ public struct WaitWindow: Sendable, Equatable {
             guard let first = localMidnight(fromText, calendar: calendar),
                   let last = localMidnight(toText, calendar: calendar),
                   let after = calendar.date(byAdding: .day, value: 1, to: last)
-            else { return .failure(.usage("dates must be real YYYY-MM-DD dates")) }
+            else { return .failure(.usage("dates must be real YYYY-MM-DD dates from 1970 to 9998")) }
             guard first <= last else { return .failure(.usage("--from must not be after --to")) }
             return .success(WaitWindow(lo: milliseconds(first), hi: milliseconds(after)))
         }
@@ -161,7 +164,7 @@ public struct WaitWindow: Sendable, Equatable {
 
     private static func localMidnight(_ text: String, calendar: Calendar) -> Date? {
         guard let m = text.wholeMatch(of: /([0-9]{4})-([0-9]{2})-([0-9]{2})/),
-              let year = Int(m.1), let month = Int(m.2), let day = Int(m.3),
+              let year = Int(m.1), let month = Int(m.2), let day = Int(m.3), years.contains(year),
               let date = calendar.date(from: DateComponents(year: year, month: month, day: day))
         else { return nil }
         let back = calendar.dateComponents([.year, .month, .day], from: date)

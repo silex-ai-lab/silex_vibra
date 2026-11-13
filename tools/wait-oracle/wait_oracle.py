@@ -35,6 +35,7 @@ CODEX_WRAPPERS = {
 
 TIMESTAMP = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})")
 MAX_DAYS = 36_500
+FIRST_YEAR, LAST_YEAR = 1970, 9998
 DISPATCH = re.compile(r"Dispatch `?[\w.-]+`?:")
 SCHEDULED = re.compile(r'^\s*<scheduled-task name="([A-Za-z0-9._-]{1,64})"')
 PASTES = re.compile(r"</?pasted_content[^>]*>")
@@ -85,7 +86,7 @@ def parse_window(argv, now_ms):
             raise ValueError("--from and --to go together, each with a date")
         first, last = local_date(frm[0]), local_date(to[0])
         if first is None or last is None:
-            raise ValueError("dates must be real YYYY-MM-DD dates")
+            raise ValueError("dates must be real YYYY-MM-DD dates from %d to %d" % (FIRST_YEAR, LAST_YEAR))
         if first > last:
             raise ValueError("--from must not be after --to")
         return local_midnight_ms(first), local_midnight_ms(last + datetime.timedelta(days=1))
@@ -99,7 +100,7 @@ def parse_window(argv, now_ms):
 
 
 def local_date(text):
-    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text) or not FIRST_YEAR <= int(text[:4]) <= LAST_YEAR:
         return None
     try:
         return datetime.date(int(text[:4]), int(text[5:7]), int(text[8:]))
@@ -114,9 +115,13 @@ def local_midnight_ms(date):
 # ---- reading --------------------------------------------------------------
 
 def jsonl_lines(path):
-    """Complete, non-empty, valid UTF-8 lines only, as IncrementalLineReader returns them."""
-    with open(path, "rb") as fh:
-        data = fh.read()
+    """Complete, non-empty, valid UTF-8 lines only, as IncrementalLineReader returns them.
+    A file that cannot be read yields nothing, as Vibra's reader does, and its path is never printed."""
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError:
+        return
     for raw in data.split(b"\n")[:-1]:
         if not raw:
             continue

@@ -42,8 +42,7 @@ window and time zone, in both orders (`pilot/agreement-run.txt`, taken
 An earlier recorded run at 14:50 UTC used a binary left over from before the
 round-1 code fixes (`make test` builds only the test target), so it is not
 cited; the script now builds the app itself and prints the commit and the
-binary's hash. That earlier run agreed too, and timed Swift at 81 s and the
-oracle at 6 s, so run time varies with machine load.
+binary's hash. Its output and timings are not used here.
 
 Swift reports reading 2,565,160,036 bytes, more than the snapshot holds. The
 line reader counts every chunk it reads, and a read that stops at 2,000 lines
@@ -53,17 +52,17 @@ cost of the Swift path; its cause is not measured (inferred: each line is
 parsed as JSON twice, once for History and once for the wait rules, and the
 History wrapper regexes are compiled on every call).
 
-**The window sits at the retention edge.** An earlier snapshot of the same
-window, taken at 11:23 UTC the same day by the code at `e3b6540`, also
-agreed in both orders but gave 101 Claude Code sessions and 750 turn waits
-(22 Codex sessions, 132 waits; its output is the version of
+**Two snapshots of the same window gave different counts.** An earlier
+snapshot, taken at 11:23 UTC the same day and read by the code at `e3b6540`,
+also agreed in both orders but gave 101 Claude Code sessions and 750 turn
+waits (22 Codex sessions, 132 waits; its output is the version of
 `pilot/wait-stats-2026-10-14_2026-11-12.txt` committed at `94659b9`) against
-99, 701, 21 and 130 here. A window
-that ended the day before cannot gain or lose waits, so transcripts left the
-disk between the two snapshots. The likely cause is Claude Code's 30-day
-cleanup of old transcripts (the window starts 30 days back) and Codex moving
-rollouts out of `sessions/`; that cause is inferred, not verified. The
-numbers below are from the later run, which is the one whose output is
+99, 701, 21 and 130 here. Why they differ was not established. Possible
+explanations, none verified: transcripts of the window's first days removed
+by Claude Code's 30-day cleanup (the window starts 30 days back) or by Codex
+archiving; later edits to those files; the round-1 rule changes between the
+two code versions (the two-element shell command and the all-object list
+rules). The numbers below are from the later run, whose output is
 committed.
 
 Supporting evidence: the oracle and the Swift tests pass the same eight
