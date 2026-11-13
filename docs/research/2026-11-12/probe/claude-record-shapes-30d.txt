@@ -1,0 +1,18 @@
+2026-11-13T10:51:32Z
+('mode', ('mode', 'sessionId', 'type')) 16394
+('pm', ('permissionMode', 'sessionId', 'type')) 8448
+[('auto', 8326), ('bypassPermissions', 76), ('default', 46)]
+[('normal', 16394)]
+[(('before-pm', 'mode'), 8448)]
+('rejected', False) 39969
+('is_error', False) 30869
+('is_error', None) 7946
+('userkeys', ('cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'serverClassifierContext', 'sessionId', 'session_id', 'slug', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 6109
+('userkeys', ('agentId', 'cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'serverClassifierContext', 'sessionId', 'slug', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 5603
+('userkeys', ('cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'sandboxed', 'serverClassifierContext', 'sessionId', 'session_id', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 5446
+('userkeys', ('cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'sandboxed', 'serverClassifierContext', 'sessionId', 'session_id', 'slug', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 3768
+('userkeys', ('agentId', 'cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'sandboxed', 'serverClassifierContext', 'sessionId', 'slug', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 3235
+('userkeys', ('cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'serverClassifierContext', 'sessionId', 'session_id', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 3222
+('userkeys', ('agentId', 'cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'sandboxed', 'serverClassifierContext', 'sessionId', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 2732
+('userkeys', ('agentId', 'cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'serverClassifierContext', 'sessionId', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 2662
+('userkeys', ('cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'permissionDecision', 'promptId', 'sessionId', 'session_id', 'sourceToolAssistantUUID', 'timestamp', 'toolUseResult', 'type', 'userType', 'uuid', 'version')) 1521
