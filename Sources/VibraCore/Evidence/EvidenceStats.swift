@@ -14,20 +14,31 @@ public enum EvidenceStats {
             sessions["sessions agent=\(name)", default: 0] += 1
             let evidence = DeliveryEvidence.build(events: fold.events, sawToolRecords: fold.sawToolRecords)
             cases["case agent=\(name) case=\(evidence.caseName)", default: 0] += 1
-            if case .checkedAfterLastChange(let check) = evidence {
+            if case .checkedAfterLastChange(let check, _) = evidence {
                 reported["reported agent=\(name) kind=\(check.kind.rawValue) result=\(check.result.statsName)", default: 0] += 1
             }
             for event in fold.events {
                 switch event {
                 case .check(let check):
                     checks["check agent=\(name) kind=\(check.kind.rawValue) result=\(check.result.statsName)", default: 0] += 1
-                case .codeChange:
-                    changes["change agent=\(name)", default: 0] += 1
+                case .codeChange(let change):
+                    changes["change agent=\(name) target=\(change.target.statsName)", default: 0] += 1
                 }
             }
         }
         return [sessions, cases, reported, checks, changes]
             .flatMap { group in group.sorted { $0.key < $1.key }.map { "\($0.key) n=\($0.value)\n" } }
             .joined()
+    }
+}
+
+extension CodeChangeTarget {
+    /// `test.compared`: pattern counts present; `test.unseen`: not available.
+    var statsName: String {
+        switch self {
+        case .source: "source"
+        case .test(_, before: .some, after: .some): "test.compared"
+        case .test: "test.unseen"
+        }
     }
 }

@@ -7,17 +7,67 @@ public enum CheckResult: Sendable, Equatable {
 }
 
 public struct ObservedCheck: Sendable, Equatable {
-    public let at: Date, kind: CheckKind, result: CheckResult
+    /// When the command was issued.
+    public let at: Date
+    /// When its result was recorded; nil when the transcript has none.
+    public let completedAt: Date?
+    public let kind: CheckKind, result: CheckResult
 
-    public init(at: Date, kind: CheckKind, result: CheckResult) {
+    public init(at: Date, completedAt: Date?, kind: CheckKind, result: CheckResult) {
         self.at = at
+        self.completedAt = completedAt
         self.kind = kind
         self.result = result
     }
 }
 
+public enum TestEditEffect: String, Sendable, CaseIterable {
+    case fewerAssertionMatches, moreSkipMatches, moreFocusMatches, moreExpectedFailureMatches, fewerTestFunctionMatches
+}
+
+/// Pattern-match counts in an edit's removed and inserted text. Numbers only.
+public struct PatternCounts: Sendable, Equatable {
+    public var assertion, skip, focus, expectedFailure, testFunction: Int
+
+    public init(assertion: Int, skip: Int, focus: Int, expectedFailure: Int, testFunction: Int) {
+        self.assertion = assertion
+        self.skip = skip
+        self.focus = focus
+        self.expectedFailure = expectedFailure
+        self.testFunction = testFunction
+    }
+}
+
+/// Identifies one file within a session so its edits can be netted. Holds a
+/// hash of the path, never the path, and is never printed.
+public struct PathKey: Sendable, Hashable {
+    private let hash: Int
+
+    init(path: String) { hash = path.hashValue }
+}
+
+public enum CodeChangeTarget: Sendable, Equatable {
+    case source
+    /// Counts are nil when the edit's text is not available.
+    case test(path: PathKey, before: PatternCounts?, after: PatternCounts?)
+}
+
+public struct CodeChange: Sendable, Equatable {
+    /// When the edit call opened.
+    public let at: Date
+    /// When its successful result was recorded.
+    public let completedAt: Date?
+    public let target: CodeChangeTarget
+
+    public init(at: Date, completedAt: Date?, target: CodeChangeTarget) {
+        self.at = at
+        self.completedAt = completedAt
+        self.target = target
+    }
+}
+
 public enum EvidenceEvent: Sendable, Equatable {
-    case codeChange(Date)
+    case codeChange(CodeChange)
     case check(ObservedCheck)
 }
 
@@ -28,7 +78,7 @@ public enum DeliveryEvidence: Sendable, Equatable {
     case noCodeChangeSeen
     case changedWithoutCheck(lastChange: Date)
     case changedAfterLastCheck(lastChange: Date, check: ObservedCheck)
-    case checkedAfterLastChange(ObservedCheck)
+    case checkedAfterLastChange(ObservedCheck, testEdits: Set<TestEditEffect>)
 
     public var caseName: String {
         switch self {
@@ -48,7 +98,7 @@ public enum DeliveryEvidence: Sendable, Equatable {
         var checks: [ObservedCheck] = []
         for event in events {
             switch event {
-            case .codeChange(let date): lastChange = max(lastChange ?? date, date)
+            case .codeChange(let change): lastChange = max(lastChange ?? change.at, change.at)
             case .check(let check): checks.append(check)
             }
         }
@@ -66,7 +116,7 @@ public enum DeliveryEvidence: Sendable, Equatable {
                 if case .failed = check.result { return true }
                 return false
             }
-            if let pick = latest.first(where: isFailure) ?? latest.first { return .checkedAfterLastChange(pick) }
+            if let pick = latest.first(where: isFailure) ?? latest.first { return .checkedAfterLastChange(pick, testEdits: []) }
         }
         guard let previous = checks.reduce(nil as ObservedCheck?, { best, next in
             best.map { $0.at > next.at ? $0 : next } ?? next
@@ -89,7 +139,7 @@ public enum DeliveryEvidence: Sendable, Equatable {
         case .changedAfterLastCheck(let change, let check):
             return "Code changed \(ago(change)), after the last \(check.kind.rawValue) command was issued \(ago(check.at)). "
                 + "No check seen since. \(Self.limit)"
-        case .checkedAfterLastChange(let check):
+        case .checkedAfterLastChange(let check, _):
             return "\(check.kind.rawValue.capitalized) command issued \(ago(check.at)), after the last code change. "
                 + "\(check.result.sentence) \(Self.limit)"
         }

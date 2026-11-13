@@ -79,3 +79,48 @@ enum EvidenceFixtures {
         ])
     }
 }
+
+// MARK: Issue-time views
+//
+// Most tests are about issue order. They build events without completion
+// times and compare extractor output with those times dropped; completion
+// times have their own tests.
+
+extension ObservedCheck {
+    init(at: Date, kind: CheckKind, result: CheckResult) {
+        self.init(at: at, completedAt: nil, kind: kind, result: result)
+    }
+
+    var issueOnly: ObservedCheck { ObservedCheck(at: at, completedAt: nil, kind: kind, result: result) }
+}
+
+extension EvidenceEvent {
+    static func codeChange(at date: Date) -> EvidenceEvent {
+        .codeChange(CodeChange(at: date, completedAt: nil, target: .source))
+    }
+
+    var issueOnly: EvidenceEvent {
+        switch self {
+        case .check(let check): .check(check.issueOnly)
+        case .codeChange(let change): .codeChange(CodeChange(at: change.at, completedAt: nil, target: change.target))
+        }
+    }
+}
+
+extension EvidenceFold {
+    var issueOnly: EvidenceFold { EvidenceFold(events: events.map(\.issueOnly), sawToolRecords: sawToolRecords) }
+}
+
+extension DeliveryEvidence {
+    static func checkedAfterLastChange(_ check: ObservedCheck) -> DeliveryEvidence {
+        .checkedAfterLastChange(check, testEdits: [])
+    }
+
+    var issueOnly: DeliveryEvidence {
+        switch self {
+        case .changedAfterLastCheck(let change, let check): .changedAfterLastCheck(lastChange: change, check: check.issueOnly)
+        case .checkedAfterLastChange(let check, let edits): .checkedAfterLastChange(check.issueOnly, testEdits: edits)
+        default: self
+        }
+    }
+}

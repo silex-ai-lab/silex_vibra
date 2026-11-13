@@ -124,7 +124,7 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
             for block in blocks {
                 switch block["type"] as? String {
                 case "tool_use": open(block, at: stamp)
-                case "tool_result": close(block)
+                case "tool_result": close(block, at: stamp)
                 default: continue
                 }
             }
@@ -152,18 +152,18 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
         }
     }
 
-    private mutating func close(_ block: [String: Any]) {
+    private mutating func close(_ block: [String: Any], at completedAt: Date?) {
         guard let id = block["tool_use_id"] as? String, let call = pending.removeValue(forKey: id) else { return }
         let text = Self.text(of: block["content"])
         let isError = block["is_error"] as? Bool ?? false
         guard !(isError && Self.neverRan.contains(where: text.hasPrefix)) else { return }
         switch call {
         case .edit(let at):
-            if !isError { result.events.append(.codeChange(at)) }
+            if !isError { result.events.append(.codeChange(CodeChange(at: at, completedAt: completedAt, target: .source))) }
         case .check(let kind, let sole, let at):
             let outcome = checkResult(
                 soleCommand: sole, exit: Self.observedExit(isError: isError, text: text), outputTail: text, kind: kind)
-            result.events.append(.check(ObservedCheck(at: at, kind: kind, result: outcome)))
+            result.events.append(.check(ObservedCheck(at: at, completedAt: completedAt, kind: kind, result: outcome)))
         }
     }
 
@@ -192,7 +192,7 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
 
     mutating func finish() -> EvidenceFold {
         for case .check(let kind, _, let at) in pending.values {
-            result.events.append(.check(ObservedCheck(at: at, kind: kind, result: .unknown)))
+            result.events.append(.check(ObservedCheck(at: at, completedAt: nil, kind: kind, result: .unknown)))
         }
         pending = [:]
         return result
@@ -236,14 +236,15 @@ struct CodexEvidenceExtractor: EvidenceExtractor {
         let exit = (item["exit_code"] as? NSNumber).map { ObservedExit(code: $0.intValue) } ?? .notReported
         let outcome = checkResult(
             soleCommand: found.soleCommand, exit: exit, outputTail: item["aggregated_output"] as? String ?? "", kind: found.kind)
-        result.events.append(.check(ObservedCheck(at: stamp.addingTimeInterval(-seconds), kind: found.kind, result: outcome)))
+        result.events.append(.check(ObservedCheck(
+            at: stamp.addingTimeInterval(-seconds), completedAt: stamp, kind: found.kind, result: outcome)))
     }
 
     private mutating func change(_ item: [String: Any], at stamp: Date) {
         guard let changes = item["changes"] as? [String: Any] else { return }
         result.sawToolRecords = true
         guard item["status"] as? String == "completed", changes.keys.contains(where: isCodePath) else { return }
-        result.events.append(.codeChange(stamp))
+        result.events.append(.codeChange(CodeChange(at: stamp, completedAt: stamp, target: .source)))
     }
 
     mutating func finish() -> EvidenceFold { result }

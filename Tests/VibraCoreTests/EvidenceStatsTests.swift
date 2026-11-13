@@ -11,13 +11,13 @@ struct EvidenceStatsTests {
 
     @Test func printsExactlyTheFiveLineFamiliesSortedAndCountsOnly() {
         let rows: [(agent: AgentKind, fold: EvidenceFold)] = [
-            (.codex, EvidenceFold(events: [.codeChange(t), check(5, .test, .failed(.runnerSummary))], sawToolRecords: true)),
+            (.codex, EvidenceFold(events: [.codeChange(at: t), check(5, .test, .failed(.runnerSummary))], sawToolRecords: true)),
             (.claudeCode, EvidenceFold(events: [], sawToolRecords: false)),
             (.claudeCode, EvidenceFold(
-                events: [.codeChange(t), .codeChange(t.addingTimeInterval(1)),
+                events: [.codeChange(at: t), .codeChange(at: t.addingTimeInterval(1)),
                          check(9, .build, .passed(.exitStatus)), check(10, .build, .unknown)],
                 sawToolRecords: true)),
-            (.claudeCode, EvidenceFold(events: [.codeChange(t)], sawToolRecords: true)),
+            (.claudeCode, EvidenceFold(events: [.codeChange(at: t)], sawToolRecords: true)),
         ]
 
         let text = EvidenceStats.format(rows)
@@ -34,8 +34,8 @@ struct EvidenceStatsTests {
         check agent=claudeCode kind=build result=passed.exitStatus n=1
         check agent=claudeCode kind=build result=unknown n=1
         check agent=codex kind=test result=failed.runnerSummary n=1
-        change agent=claudeCode n=3
-        change agent=codex n=1
+        change agent=claudeCode target=source n=3
+        change agent=codex target=source n=1
 
         """)
     }

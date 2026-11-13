@@ -11,11 +11,33 @@ struct EvidenceExtractorTests {
         return extractor.finish()
     }
 
-    private func claude(_ batches: [String]...) -> EvidenceFold { fold(ClaudeEvidenceExtractor(), batches: batches) }
-    private func codex(_ batches: [String]...) -> EvidenceFold { fold(CodexEvidenceExtractor(), batches: batches) }
+    private func claude(_ batches: [String]...) -> EvidenceFold { fold(ClaudeEvidenceExtractor(), batches: batches).issueOnly }
+    private func codex(_ batches: [String]...) -> EvidenceFold { fold(CodexEvidenceExtractor(), batches: batches).issueOnly }
 
     private func check(_ kind: CheckKind, _ result: CheckResult, at seconds: TimeInterval) -> EvidenceEvent {
         .check(ObservedCheck(at: F.at(seconds), kind: kind, result: result))
+    }
+
+    // MARK: Completion times
+
+    @Test func completionTimesComeFromTheResultRecord() {
+        let claude = fold(ClaudeEvidenceExtractor(), batches: [[
+            F.claudeEdit("e", at: 1), F.claudeResult("e", text: "ok", at: 3),
+            F.claudeBash("t", "swift test", at: 4), F.claudeResult("t", text: "ok", at: 9),
+            F.claudeBash("u", "swift test", at: 10),
+        ]])
+        #expect(claude.events == [
+            .codeChange(CodeChange(at: F.at(1), completedAt: F.at(3), target: .source)),
+            .check(ObservedCheck(at: F.at(4), completedAt: F.at(9), kind: .test, result: .passed(.exitStatus))),
+            .check(ObservedCheck(at: F.at(10), completedAt: nil, kind: .test, result: .unknown)),
+        ])
+        let codex = fold(CodexEvidenceExtractor(), batches: [[
+            F.codexChange(["/work/a.swift"], at: 5), F.codexCommand("swift test", exit: 0, durationSeconds: 4, at: 12),
+        ]])
+        #expect(codex.events == [
+            .codeChange(CodeChange(at: F.at(5), completedAt: F.at(5), target: .source)),
+            .check(ObservedCheck(at: F.at(8), completedAt: F.at(12), kind: .test, result: .passed(.exitStatus))),
+        ])
     }
 
     // MARK: Claude Code
@@ -168,7 +190,7 @@ struct EvidenceExtractorTests {
 
     @Test func claudeEditCountsOnlyWithASuccessfulResult() {
         let ok = claude([F.claudeEdit("e", at: 1), F.claudeResult("e", text: "updated", at: 2)])
-        #expect(ok.events == [.codeChange(F.at(1))])
+        #expect(ok.events == [.codeChange(at: F.at(1))])
         let failed = claude([F.claudeEdit("e", at: 1), F.claudeResult("e", text: "no", isError: true, at: 2)])
         #expect(failed.events.isEmpty)
         let unanswered = claude([F.claudeEdit("e", at: 1)])
@@ -183,7 +205,7 @@ struct EvidenceExtractorTests {
             F.claudeUse("e", name: name, input: [key: "/work/a.ipynb"], at: 1),
             F.claudeResult("e", text: "ok", at: 2),
         ])
-        #expect(fold.events == [.codeChange(F.at(1))])
+        #expect(fold.events == [.codeChange(at: F.at(1))])
     }
 
     @Test(arguments: [
@@ -203,7 +225,7 @@ struct EvidenceExtractorTests {
             [F.claudeResult("e", text: "ok", at: 5)])
         #expect(fold.events.count == 2)
         #expect(fold.events.contains(check(.test, .passed(.exitStatus), at: 1)))
-        #expect(fold.events.contains(.codeChange(F.at(3))))
+        #expect(fold.events.contains(.codeChange(at: F.at(3))))
     }
 
     @Test func claudeReplayedToolUseDoesNotReopenAFinishedCall() {
@@ -277,7 +299,7 @@ struct EvidenceExtractorTests {
             F.codexChange(["/work/c.swift"], status: "failed", at: 4),
             F.codexChange(["/tmp/d.swift"], at: 5),
         ])
-        #expect(fold.events == [.codeChange(F.at(1)), .codeChange(F.at(2))])
+        #expect(fold.events == [.codeChange(at: F.at(1)), .codeChange(at: F.at(2))])
         #expect(fold.sawToolRecords)
     }
 
