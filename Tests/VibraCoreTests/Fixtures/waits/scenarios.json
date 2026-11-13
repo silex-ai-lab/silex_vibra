@@ -17,13 +17,13 @@
    "name": "codex-turns",
    "tz": "UTC",
    "args": "--from 2026-11-10 --to 2026-11-10",
-   "expected": "sessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=codex kind=turn n=1\nseconds agent=codex kind=turn p25=240 p50=240 p75=240 n=1\nblocked agent=codex scope=all unit=min p25=4 p50=4 p75=4 total=4 n=1\nblocked agent=codex scope=within_cap unit=min p25=4 p50=4 p75=4 total=4 n=1\n"
+   "expected": "sessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=codex kind=turn n=2\nseconds agent=codex kind=turn p25=240 p50=240 p75=240 n=2\nblocked agent=codex scope=all unit=min p25=8 p50=8 p75=8 total=8 n=1\nblocked agent=codex scope=within_cap unit=min p25=8 p50=8 p75=8 total=8 n=1\n"
   },
   {
    "name": "both",
    "tz": "UTC",
    "args": "--from 2026-11-10 --to 2026-11-10",
-   "expected": "sessions agent=claudeCode n=1\nsessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=claudeCode kind=approval answer=accept n=1\nwaits agent=claudeCode kind=turn n=1\nwaits agent=codex kind=turn n=1\nseconds agent=claudeCode kind=approval p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=turn p25=240 p50=240 p75=240 n=1\nseconds agent=codex kind=turn p25=240 p50=240 p75=240 n=1\nseconds agent=claudeCode kind=approval ordinal=1 p25=60 p50=60 p75=60 n=1\nblocked agent=claudeCode scope=all unit=min p25=5 p50=5 p75=5 total=5 n=1\nblocked agent=claudeCode scope=within_cap unit=min p25=5 p50=5 p75=5 total=5 n=1\nblocked agent=codex scope=all unit=min p25=4 p50=4 p75=4 total=4 n=1\nblocked agent=codex scope=within_cap unit=min p25=4 p50=4 p75=4 total=4 n=1\n"
+   "expected": "sessions agent=claudeCode n=1\nsessions agent=codex n=1\nopen agent=codex n=1\nwaits agent=claudeCode kind=approval answer=accept n=1\nwaits agent=claudeCode kind=turn n=1\nwaits agent=codex kind=turn n=2\nseconds agent=claudeCode kind=approval p25=60 p50=60 p75=60 n=1\nseconds agent=claudeCode kind=turn p25=240 p50=240 p75=240 n=1\nseconds agent=codex kind=turn p25=240 p50=240 p75=240 n=2\nseconds agent=claudeCode kind=approval ordinal=1 p25=60 p50=60 p75=60 n=1\nblocked agent=claudeCode scope=all unit=min p25=5 p50=5 p75=5 total=5 n=1\nblocked agent=claudeCode scope=within_cap unit=min p25=5 p50=5 p75=5 total=5 n=1\nblocked agent=codex scope=all unit=min p25=8 p50=8 p75=8 total=8 n=1\nblocked agent=codex scope=within_cap unit=min p25=8 p50=8 p75=8 total=8 n=1\n"
   },
   {
    "name": "window-edges",

@@ -168,6 +168,8 @@ codex_main = [
     xm(T(D, "08:26:00.000"), "task_complete"),
     xuser(T(D, "08:30:00.000"), "fin"),
     xm(T(D, "08:31:00.000"), "task_complete"),
+    xuser(T(D, "08:35:00.000"), "<environment_context>x</environment_context>", "<user_shell_command>git status</user_shell_command>"),
+    xm(T(D, "08:36:00.000"), "task_complete"),
 ]
 codex_sub = [xmeta(T(D, "08:00:00.000"), source={"subagent": {"other": "guardian"}}),
              xuser(T(D, "08:00:01.000"), "check this"), xm(T(D, "08:01:00.000"), "task_complete"),
