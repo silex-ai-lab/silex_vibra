@@ -676,3 +676,20 @@ tokens, USD 0.2770).
 
 The agreement run was repeated at `187e1f5` (after the oracle trim change):
 identical in both orders and on live data, the committed output unchanged.
+
+**Round 3** at `67e444d`, diff hash `afa268e6f2b2476740a1b3bcc1522bc96c329cf0`
+(67 paths). reviewer-sol: IMPL-REJECTED, 2 blocking (100,504 input and 2,968
+output tokens, USD 0.2538). reviewer-claude: its round-3 reply had not
+arrived when the fixes below began; it is superseded by round 4, and its
+round-3 dispatch is closed as superseded.
+
+| Objection | From | Change |
+|---|---|---|
+| Where DST skips midnight, Swift's upper end was the start of `--to` plus a calendar day, which kept 01:00 and added an hour (`America/Sao_Paulo`, 2018-11-04) | sol 1 | Each end is now the local midnight of its own civil date, resolved independently, in both. Shared fixture `midnight-dst` holds a wait ending in the extra hour (now out) and one at `lo` (in); `WaitWindowTests` pins both ends. An oracle mutation reproducing the old Swift rule fails on that fixture |
+| A local day that does not exist (`Pacific/Apia`, 2011-12-30) was rejected by Swift and accepted by the oracle | sol 2 | Shared policy: a `--from` date, or the day after `--to`, whose local day does not exist is a usage error (exit 2) in both; checked by a local round trip. Pinned in both suites, with 2011-12-31 accepted; a mutation removing the oracle's check fails |
+| Non-blocking folded | sol 2 | The oracle's unreadable-file test injects a `PermissionError` instead of relying on `chmod 000` |
+| Non-blocking answered | sol 1 | CI on Swift 6.1.2 before merge, as recorded above |
+
+The agreement run was repeated at `f7ca514`: identical in both orders and on
+live data; the committed output changed only in `open agent=claudeCode`
+(83 to 82), the line the plan expects to move.

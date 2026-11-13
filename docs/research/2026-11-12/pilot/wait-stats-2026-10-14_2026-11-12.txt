@@ -1,6 +1,6 @@
 sessions agent=claudeCode n=99
 sessions agent=codex n=21
-open agent=claudeCode n=83
+open agent=claudeCode n=82
 open agent=codex n=19
 waits agent=claudeCode kind=approval answer=accept n=7
 waits agent=claudeCode kind=question answer=accept n=43

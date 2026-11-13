@@ -26,26 +26,26 @@ a pilot measurement, not a result about anyone else.
 
 ## Agreement (the correctness gate)
 
-Vibra built from `187e1f5` by the run script itself and the independent
+Vibra built from `f7ca514` by the run script itself and the independent
 Python oracle (`tools/wait-oracle/wait_oracle.py`) ran on the same snapshot,
 window and time zone, in both orders (`pilot/agreement-run.txt`, taken
-2026-11-13 15:22 UTC):
+2026-11-13 15:35 UTC):
 
 | Check | Result |
 |---|---|
-| Snapshot | 951 files, 2,555,978,415 bytes (sum of file sizes) |
+| Snapshot | 952 files, 2,568,443,924 bytes (sum of file sizes) |
 | Swift then oracle | identical, 28 lines each |
 | Oracle then Swift | identical; Swift run 1 equals run 2 |
-| Live transcripts, same window (diagnostic only) | Swift and oracle identical, and identical to the snapshot this time (earlier runs differed only in `open agent=claudeCode`, the one line the plan expected to move while a session is still live) |
-| Time | Swift 89.5 s and 83.6 s (its own `read … in` line); the oracle 6.5 s and 5.9 s wall clock |
+| Live transcripts, same window (diagnostic only) | Swift and oracle identical; live differs from the snapshot only in `open agent=claudeCode` (83 vs 82), the one line the plan expected to move while a session is still live |
+| Time | Swift 95.5 s and 101.3 s (its own `read … in` line); the oracle 6.8 s and 7.1 s wall clock |
 
-Two earlier recorded runs agreed too: one at 14:50 UTC used a binary left
-over from before the round-1 code fixes (`make test` builds only the test target), so it is not
-cited; the script now builds the app itself and prints the commit and the
-binary's hash; one at 15:00 UTC preceded the round-3 oracle change. Neither
-run's output or timings are used here.
+Three earlier recorded runs (14:50, 15:00 and 15:22 UTC) agreed too. The
+first used an app binary left over from before the round-1 code fixes
+(`make test` builds only the test target); the script now builds the app
+itself and prints the commit and the binary's hash. The other two preceded
+later code changes. None of their outputs or timings are used here.
 
-Swift reports reading 2,573,218,201 bytes, more than the snapshot holds. The
+Swift reports reading 2,585,909,211 bytes, more than the snapshot holds. The
 line reader counts every chunk it reads, and a read that stops at 2,000 lines
 re-reads the rest of that chunk on the next call (`IncrementalLineReader`,
 inferred from its code, not measured). The 14x gap to the oracle is a measured
@@ -80,7 +80,7 @@ fails when a fold keeps prompt text or a wait keeps tool input
 ```
 sessions agent=claudeCode n=99
 sessions agent=codex n=21
-open agent=claudeCode n=83
+open agent=claudeCode n=82
 open agent=codex n=19
 waits agent=claudeCode kind=approval answer=accept n=7
 waits agent=claudeCode kind=question answer=accept n=43
@@ -120,7 +120,7 @@ Each line below is arithmetic on the output above, or labelled.
    4,554 (66%). The within-cap median per Claude Code session is 70 min
    (IQR 12-163). Any headline figure depends on the cap, so it would need to
    show `within_cap` or say what the cap is.
-3. **Most sessions end waiting.** 83 of 99 Claude Code sessions and 19 of 21
+3. **Most sessions end waiting.** 82 of 99 Claude Code sessions and 19 of 21
    Codex sessions end on a turn wait that was never closed; those final waits
    are not counted.
 4. **Approvals are rare here, questions are not.** 7 human-decided approvals

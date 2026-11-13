@@ -360,7 +360,7 @@ twice; a fleet seat with only dispatched prompts, and a session driven only
 by slash commands, are left out; and you can wait on several sessions at
 once, so session minutes overlap in wall time. The definitions and their
 measured sizes are in `docs/PLAN-2026-11-13-wait-minutes.md`. Reading 30 days
-of transcripts (2.6 GB) took about 85 s on the owner's machine
+of transcripts (2.6 GB) took about 100 s on the owner's machine
 (`docs/research/2026-11-12/pilot/agreement-run.txt`). `--days` takes 1 to
 36500, and `--from/--to` take dates from 1970 to 9998.
 

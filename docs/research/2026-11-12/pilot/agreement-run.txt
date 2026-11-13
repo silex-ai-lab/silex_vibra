@@ -1,13 +1,17 @@
-agreement_run.sh at 187e1f5
-binary built from 187e1f5, sha256 c64be07e50a21181
-snapshot taken 2026-11-13T15:22:08Z: 951 files, 2555978415 bytes (sum of file sizes)
-swift-oracle run swift: exit 0, 28 lines, 89.6 s wall, stderr: read 2573218201 bytes in 89.49 s
-swift-oracle run oracle: exit 0, 28 lines, 6.5 s wall, stderr: 
+agreement_run.sh at f7ca514
+binary built from f7ca514, sha256 a79c4b5d6367d3c0
+snapshot taken 2026-11-13T15:35:54Z: 952 files, 2568443924 bytes (sum of file sizes)
+swift-oracle run swift: exit 0, 28 lines, 95.9 s wall, stderr: read 2585909211 bytes in 95.50 s
+swift-oracle run oracle: exit 0, 28 lines, 6.8 s wall, stderr: 
 swift-oracle: swift and oracle identical
-oracle-swift run oracle: exit 0, 28 lines, 5.9 s wall, stderr: 
-oracle-swift run swift: exit 0, 28 lines, 83.8 s wall, stderr: read 2573218201 bytes in 83.64 s
+oracle-swift run oracle: exit 0, 28 lines, 7.1 s wall, stderr: 
+oracle-swift run swift: exit 0, 28 lines, 101.5 s wall, stderr: read 2585909211 bytes in 101.27 s
 oracle-swift: swift and oracle identical
 swift run 1 == swift run 2
 live: swift and oracle identical
 live vs snapshot (diagnostic):
-snapshot deleted 2026-11-13T15:26:49Z
+3c3
+< open agent=claudeCode n=82
+---
+> open agent=claudeCode n=83
+snapshot deleted 2026-11-13T15:41:10Z
