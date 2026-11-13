@@ -217,6 +217,26 @@ struct CodexUsageSampler: UsageSampler {
     mutating func finish() -> [UsageSample] { [] }
 }
 
+// MARK: - Codex session predicates
+
+/// `session_meta` payload: true when `payload.source` is an object with a
+/// `subagent` key, i.e. a thread Codex spawned inside a session (the approval
+/// guardian, a spawned thread). Its prompts come from the parent agent, not a
+/// person. Shared by `CodexCheckpoint`, History and the wait extractor so the
+/// three agree on what a subagent session is.
+func codexSourceIsSubagent(_ payload: [String: Any]) -> Bool {
+    (payload["source"] as? [String: Any])?["subagent"] != nil
+}
+
+/// `task_started` payload: true when the turn was started by an automation
+/// (a Codex app heartbeat, a scheduler) rather than a person or a fleet
+/// dispatch. A rollout without `turn_attribution` is a person's turn.
+func codexTurnIsAutomation(_ payload: [String: Any]) -> Bool {
+    let attribution = payload["turn_attribution"] as? [String: Any]
+    let trigger = attribution?["turn_trigger"] as? String ?? "user"
+    return trigger.hasPrefix("automation")
+}
+
 // MARK: - Codex checkpoint
 
 /// Per-file running summary for a Codex rollout. `thread_token_usage` is
@@ -254,9 +274,7 @@ struct CodexCheckpoint: AdapterCheckpoint {
            let eventType = payload["type"] as? String {
             lastEventKind = eventType
             if eventType == "task_started" {
-                let attribution = payload["turn_attribution"] as? [String: Any]
-                let trigger = attribution?["turn_trigger"] as? String ?? "user"
-                lastTurnIsHumans = !trigger.hasPrefix("automation")
+                lastTurnIsHumans = !codexTurnIsAutomation(payload)
             }
         }
 
@@ -280,7 +298,7 @@ struct CodexCheckpoint: AdapterCheckpoint {
         case "session_meta":
             if sessionID == nil {
                 sessionID = payload["session_id"] as? String
-                isSubagent = (payload["source"] as? [String: Any])?["subagent"] != nil
+                isSubagent = codexSourceIsSubagent(payload)
             }
             if cwd == nil { cwd = payload["cwd"] as? String }
             if model == nil { model = Self.findModel(in: payload) }
