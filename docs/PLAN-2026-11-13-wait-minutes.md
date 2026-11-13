@@ -585,3 +585,35 @@ separate the banner's effect from these; the comparison is descriptive.
 | Non-blocking: task 5 still said "attended by prompt" (claude r3 2) | Task 5 now names the v0.4 rule (a human event or a wait in the window) and pins the dialog-only case |
 | Non-blocking: say which tag-led Codex prompts remain (claude r3 3) | The pilot write-up lists them after the task 3 rerun |
 
+
+## Plan gate record
+
+Round 4 reviewed v0.5 at `2dcedb3` (`$SCRATCH/interdiff-plan-r4.txt`).
+
+| Round | reviewer-claude (`claude-fable-5-2`) | reviewer-sol (`us.openai.gpt-6.1-sol`) |
+|---|---|---|
+| 1 (v0.1 `fe32277`) | PLAN-REJECTED, 4 blocking | PLAN-REJECTED, 6 blocking |
+| 2 (v0.3 `52ed678`) | PLAN-REJECTED, 1 blocking | PLAN-REJECTED, 3 blocking |
+| 3 (v0.4 `15a651b`) | PLAN-APPROVED | PLAN-REJECTED, 1 blocking |
+| 4 (v0.5 `2dcedb3`) | **PLAN-APPROVED** (`$SCRATCH/claude-plan-r4.md`) | **PLAN-APPROVED** (`$SCRATCH/sol-plan-r4.md`) |
+
+Sol spend for the four plan rounds: USD 0.062, 0.108, 0.100, 0.0925 (from
+each call's returned usage, `$SCRATCH/sol-plan-r*.log`). reviewer-claude ran
+in auto permission mode from round 1 on (chosen at its first permission
+dialog); `git status` after every round showed no change by it.
+
+Round-4 non-blocking notes, carried into implementation, changing no rule,
+test or acceptance in the approved plan:
+
+- Shared fixtures gain a wrapper-only notification that quotes a
+  `<command-name>` element after its leading tag (no command) (sol 1).
+- At task 7 the probe counts `<user_shell_command>` closures separately, and
+  the execution record corrects the preview row's "3 of them by a
+  `<user_shell_command>`" to what it measures (sol 2).
+- Preview rows quote an earlier run of the live probe (for example the
+  stop-reason row says `tool_use` 43,435 and `end_turn` 2,934). They are
+  previews; task 7's snapshot governs every reported number, and the pilot
+  write-up quotes only its own outputs (claude 1).
+
+PLANNER (claude): PLAN-APPROVED, plan v0.5 at `2dcedb3`. Both reviewers'
+literal approvals were read in their reply files.
