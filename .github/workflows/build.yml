@@ -39,3 +39,69 @@ jobs:
             echo "exited early with status $?"
             exit 1
           fi
+
+  package-dry-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Package and check the DMG
+        run: tools/release/package.sh --dry-run
+      - name: Upload the DMG
+        if: matrix.os == 'macos-15'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Vibra-dmg
+          path: |
+            build/Vibra-*.dmg
+            build/Vibra-*.dmg.sha256
+          retention-days: 7
+          if-no-files-found: error
+      # The throwaway identity signs nothing: the dry run already built the
+      # DMG ad hoc. It exists so the keychain and the search-list restore run
+      # on a branch, where a first tag would otherwise be their first run.
+      - name: Generate a throwaway code-signing identity
+        if: matrix.os == 'macos-15'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          cat > throwaway.cnf <<'EOF'
+          [ req ]
+          distinguished_name = dn
+          x509_extensions = ext
+          prompt = no
+          [ dn ]
+          CN = Vibra CI Throwaway
+          [ ext ]
+          keyUsage = critical,digitalSignature
+          extendedKeyUsage = critical,codeSigning
+          EOF
+          /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout throwaway.key -out throwaway.crt -config throwaway.cnf
+          MACOS_CERT_PASSWORD=$(/usr/bin/openssl rand -hex 16)
+          MACOS_KEYCHAIN_PASSWORD=$(/usr/bin/openssl rand -hex 16)
+          echo "::add-mask::$MACOS_CERT_PASSWORD"
+          echo "::add-mask::$MACOS_KEYCHAIN_PASSWORD"
+          {
+            echo "MACOS_CERT_PASSWORD=$MACOS_CERT_PASSWORD"
+            echo "MACOS_KEYCHAIN_PASSWORD=$MACOS_KEYCHAIN_PASSWORD"
+          } >>"$GITHUB_ENV"
+          /usr/bin/openssl pkcs12 -export -inkey throwaway.key -in throwaway.crt \
+            -out throwaway.p12 -name "Vibra CI Throwaway" \
+            -passout "pass:$MACOS_CERT_PASSWORD"
+      - name: Keychain setup
+        if: matrix.os == 'macos-15'
+        run: tools/release/keychain.sh setup "$RUNNER_TEMP/throwaway.p12" "Vibra CI Throwaway" any
+      - name: Keychain teardown
+        if: always() && matrix.os == 'macos-15'
+        run: |
+          tools/release/keychain.sh teardown
+          rm -f "$RUNNER_TEMP/throwaway.key" "$RUNNER_TEMP/throwaway.crt" \
+            "$RUNNER_TEMP/throwaway.p12" "$RUNNER_TEMP/throwaway.cnf"
