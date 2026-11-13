@@ -143,5 +143,23 @@ for name, sess, want in cases:
 expect("change at exactly P.at", Session().test(1, 2, False).edit(5, 5.5, "assert x", "").test(5, 6).run()[1],
        ["case agent=claudeCode case=changedAfterLastCheck n=1"])
 
+expect("CRLF old text keeps both assertions", o.pattern_counts("    assert a == 1\r\n    assert b == 2")["assertion"], 2)
+expect("CRLF new text with a leading comment keeps both assertions",
+       o.pattern_counts("    # check both\r\n    assert a == 1\r\n    assert b == 2")["assertion"], 2)
+
+
+def codex_changes(name):
+    h = tempfile.mkdtemp()
+    p = os.path.join(h, "rollout.jsonl")
+    with open(p, "w") as f:
+        f.write(json.dumps({"type": "session_meta", "payload": {"cwd": "/work"}}) + "\n")
+        f.write(json.dumps({"type": "event_msg", "timestamp": stamp(3), "payload": {"type": "item_completed", "item": {
+            "type": "FileChange", "status": "completed", "changes": {name: {"type": "update"}}}}}) + "\n")
+    return [e for e in o.fold_codex(p, None, h)[0] if e[1] == "change"]
+
+
+for name in ("session_meta", "turn_context"):
+    expect(f"Codex FileChange to a file named {name} is a change", len(codex_changes(name)), 1)
+
 print("\n".join(failures) if failures else f"OK {len(shared['classify'])} classify and {len(shared['summary'])} summary cases and contracts")
 sys.exit(1 if failures else 0)

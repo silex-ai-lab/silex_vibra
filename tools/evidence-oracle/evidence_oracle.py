@@ -494,22 +494,19 @@ def fold_claude(path, truth, home):
 def fold_codex(path, truth, home):
     events, saw, cwd = [], False, None
     for line in open(path, errors="replace"):
-        if '"session_meta"' in line or '"turn_context"' in line:
-            try:
-                r = json.loads(line)
-            except Exception:
-                continue
-            p = r.get("payload")
-            if r.get("type") in ("session_meta", "turn_context") and isinstance(p, dict) and isinstance(p.get("cwd"), str) and p["cwd"]:
-                cwd = p["cwd"]
-            continue
-        if '"item_completed"' not in line:
+        meta = '"session_meta"' in line or '"turn_context"' in line
+        if not meta and '"item_completed"' not in line:
             continue
         try:
             r = json.loads(line)
         except Exception:
             continue
         p = r.get("payload")
+        # The substrings only prefilter: a FileChange can name a file "session_meta".
+        if r.get("type") in ("session_meta", "turn_context"):
+            if isinstance(p, dict) and isinstance(p.get("cwd"), str) and p["cwd"]:
+                cwd = p["cwd"]
+            continue
         if r.get("type") != "event_msg" or not isinstance(p, dict) or p.get("type") != "item_completed":
             continue
         it = p.get("item")
