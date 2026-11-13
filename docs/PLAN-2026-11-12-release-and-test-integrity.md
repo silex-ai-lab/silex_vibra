@@ -1,6 +1,6 @@
 # Plan: notarized release pipeline, and test-weakening evidence in Code checks
 
-Version: v0.1. Status: draft for the plan gate. Date: 2026-11-12.
+Version: v0.2. Status: draft for the plan gate, round 2. Date: 2026-11-12.
 
 ## What the owner asked for
 
@@ -24,11 +24,12 @@ advanced since 2026-10-01 while distribution has not: P3.1 Developer ID has been
 |---|---|
 | Fleet | orca-agent-fleet, standard roster, transport Orca (own handle resolved, runtime reachable) |
 | Planner | Claude Code, `claude-opus-5-5`, calling pane |
-| coder-deepseek | OpenCode 2.0.20, `deepseek/deepseek-flash` (footer to be checked: DeepSeek V4.1 Flash) |
-| reviewer-codex | Codex CLI 0.167.2 |
+| coder-deepseek | OpenCode 2.0.20, `deepseek/deepseek-flash`, footer shows DeepSeek V4.1 Flash |
+| reviewer-codex | Codex CLI 0.167.2, TUI shows GPT-6-Sol medium Fast; weekly limit 22% left at start |
 | Branch | `feat/release-and-test-integrity` from `origin/main` at `35fdc05` |
 | Not stacked on | PR #13 (`docs/swift-6.1-floor`, README only, open). This run edits no README, so the two do not conflict |
 | `$SCRATCH` | `/var/folders/x3/8mdzc51d11j_z0l1mt77lpmr0000gn/T//fleet-MVz3zM` |
+| Baseline | `make test`: 513 tests (last local `build/test.log` at 0.4.2; task 1 re-measures before its change) |
 | Review base | Written here at Step 5 |
 | Data rule | Repo is public. Seats read the repo and `$SCRATCH` only, never `~/.claude`, `~/.codex`, `~/Library`, or any transcript. Probes over real transcripts are run by the planner only and print counts only |
 
@@ -36,7 +37,7 @@ advanced since 2026-10-01 while distribution has not: P3.1 Developer ID has been
 
 Three research passes, each with a URL per claim, are committed in
 `docs/research/2026-11-12/`. The planner re-checked the claims this plan rests
-on at the source; two corrections are marked.
+on at the source; corrections are in that directory's errata.
 
 1. **Landscape** (`research-landscape.md`). The field is crowded: menu-bar
    session monitors (cc-status-bar 89 stars, Claudoscope 274), quota bars
@@ -60,51 +61,59 @@ on at the source; two corrections are marked.
 4. **Literature** (`research-literature.md`). ImpossibleBench (ICLR 2026): of
    the cheating runs of Claude models and Qwen3-Coder, over 79% modified tests.
    Developers treat passing tests as proof of correctness (Dhanorkar et al.
-   2026). **Correction 1:** ImpossibleBench released no labelled transcripts,
-   only the task datasets and an LLM judge
-   ([repo](https://github.com/safety-research/impossiblebench)), so it cannot be
-   used as a free recall set. **Correction 2:** a later audit found current
-   Claude 5.5 and GPT-6 models almost never cheat on it under other scaffolds
-   ([LessWrong](https://www.lesswrong.com/posts/qnrjAhiqire7JeoN2/good-evals-are-hard-an-impossiblebench-audit)),
-   so prevalence had to be measured locally.
+   2026). ImpossibleBench released no labelled transcripts, and a later audit
+   found current Claude 5.5 and GPT-6 models almost never cheat on it, so
+   prevalence had to be measured locally.
 
 ### Local measurements (planner-only probes, counts only)
 
 Scripts and outputs: `docs/research/2026-11-12/probe/`. Window 30 days,
 run 2026-11-12. They reuse `tools/evidence-oracle` for check classification.
+They are token-pattern counts, not confirmed test weakening, and they use a
+looser rule than the spec below (union of effects, fixture directories counted
+as test paths, no comment stripping, issue time not completion time).
 
 | Measure | Claude Code | Codex | Source |
 |---|---|---|---|
 | Sessions | 204 | 35 | `tamper-30d.txt` |
-| Failed test run followed by a passing one | 107 | 2 | `tamper-30d.txt` |
+| Failed test run whose next test run passed | 107 | 2 | `tamper-30d.txt` |
 | ... with a test-file edit in between | 11 | 0 | `tamper-30d.txt` |
 | ... with only test-file edits in between | 8 (3 sessions) | 0 | `tamper-30d.txt` |
-| Test-edit recoveries whose edit has fewer assertions, an added skip, or fewer test functions | 3 (1 only-test, 2 mixed) | n/a | `weaken-30d.txt` |
+| ... whose test edits matched fewer assertion, more skip, or fewer test-function tokens | 3 (1 only-test, 2 mixed) | n/a | `weaken-30d.txt` |
 | Human answers in Review Agent Activity (`incidents.json`) | 0 | | `incidents.json` read for shape and count |
 
-Reading: a pass that followed a weakened test is rare (3 of 107 recoveries,
-2.8%, one machine, one month) but present. Whether those 3 were legitimate is
-unknown; the owner can label them (task 13). The zero answers mean any
-"evidence count from human answers" has no data yet, so it is out of scope.
+Reading: a pass right after edited-out assertion text is rare (3 of 107
+recoveries, one machine, one month) but present. Whether those 3 were
+legitimate is unknown (task 13). The zero answers mean any "evidence count from
+human answers" has no data yet, so it is out of scope. The rule shipped is
+measured on real data again in task 4 before any public claim uses it.
 
 ## The pick
 
 **Evidence (60%). Test-weakening evidence in Code checks.** Today Code checks
 can say "Test command issued 2 m ago, after the last code change. It exited
-with status 0." When that pass came right after a failed run and a test file
-edit that removed assertions or added a skip, that sentence is true and
-misleading: it is exactly the shortcut ImpossibleBench measures and the
-heuristic developers rely on. The row gains one factual clause naming what the
-edit did. It is evidence, not an accusation: no notification, no incident, no
-verdict. Plus a small standards alignment: each Review Agent Activity kind
-carries its OWASP Agentic Top 10 id in the JSON and the vendor-report draft.
+with status 0." When that pass came right after a failed run and an edit that
+took assertion calls out of a test or added a skip, that sentence is true and
+misleading: it is the shortcut ImpossibleBench measures and the heuristic
+developers rely on. The row gains one clause that says what the edited text
+shows, and that it compares only the edited text. It is evidence, not an
+accusation: no notification, no incident, no verdict. Plus a small standards
+alignment: each Review Agent Activity kind carries its OWASP Agentic Top 10 id
+in the JSON and the vendor-report draft.
 
-**Distribution (40%).** A tag-triggered GitHub Actions release that builds a
-universal, hardened-runtime, Developer ID signed, notarized, stapled DMG, with
-a dry-run of every non-Apple step on every push so it is proven before the
-secrets exist. The Apple account side is a runbook for the owner's external
-agent. Then a launch kit for the owner to post once the first notarized build
-is published.
+Why this over "minutes your agents waited on you", which would show every
+session: that metric is new surface (a new figure, a new window section, a new
+measurement method), while the clause corrects a sentence Vibra already shows
+and can be wrong about today. Correcting an existing claim comes first; the
+waiting metric is the next plan.
+
+**Distribution (40%).** One packaging script, used by a CI dry run on every
+push and by a tag-triggered release, that builds a universal, hardened-runtime
+DMG and checks the app inside the mounted DMG. In release mode it signs with
+Developer ID, notarizes, staples and creates a draft release. The Apple account
+side is a runbook for the owner's external agent. A real tagged release is its
+own gated task, and P3.1 stays open until it passes. Then a launch kit for the
+owner to post.
 
 ### Considered and not picked
 
@@ -113,7 +122,7 @@ is published.
 | Local OTLP-JSON export of agent and tool spans | The GenAI conventions are Development status with no release; we would chase a moving schema. Revisit at its first release |
 | Agent Trace records | RFC v0.1.0; needs line ranges, which needs reconstructing file contents Vibra does not read |
 | Per-rule evidence counts from human answers | 0 answers on the planner's machine |
-| "Minutes your agents waited on you" | Strong next candidate (no prior study measured it, and it sells the README's claim). Kept for the next plan to keep this one small |
+| "Minutes your agents waited on you" | Next plan (see above) |
 | Quota panel | The popular ones read the keychain or call vendors; conflicts with zero network |
 | Auto-update | Cut in ROADMAP P3.2: an updater is network egress |
 
@@ -124,10 +133,19 @@ is published.
 Types (task 1, the foundation):
 
 ```swift
-public enum TestEditEffect: String, Sendable, CaseIterable { case fewerAssertions, skipAdded, fewerTests }
+public enum TestEditEffect: String, Sendable, CaseIterable {
+    case assertionCallsRemoved, skipMarkerAdded, focusMarkerAdded, expectedFailureMarkerAdded, testFunctionsRemoved
+}
+/// Pattern-match counts in an edit's removed and inserted text. Numbers only.
+public struct PatternCounts: Sendable, Equatable { public var assertion, skip, focus, expectedFailure, testFunction: Int }
 public enum CodeChangeTarget: Sendable, Equatable {
     case source
-    case test(seen: Set<TestEditEffect>?)   // nil: the edit's before/after text was not available
+    case test(path: PathKey, before: PatternCounts?, after: PatternCounts?)   // nil: text not available
+}
+public struct ObservedCheck: Sendable, Equatable {
+    public let at: Date            // issued, as today
+    public let completedAt: Date?  // result record's time; nil when not reported
+    public let kind: CheckKind, result: CheckResult
 }
 public enum EvidenceEvent: Sendable, Equatable {
     case codeChange(Date, CodeChangeTarget)
@@ -135,63 +153,92 @@ public enum EvidenceEvent: Sendable, Equatable {
 }
 ```
 
+`PathKey` is an opaque per-session key for "the same file" (a hash of the path,
+computed in the extractor, never printed). It exists only so edits to one file
+can be netted; no path reaches any output.
+
+`completedAt` comes from the `tool_result` record's timestamp (Claude Code) and
+the `item_completed` record's timestamp (Codex).
+
 **Test path.** A changed path is a test path when a directory component is one
 of `test`, `tests`, `__tests__`, `spec`, `specs`, `Tests`, `testing`, or the
 file name matches `test_*.py`, `*_test.{py,go,rs,rb}`, `*.test.{js,jsx,ts,tsx}`,
 `*.spec.{js,jsx,ts,tsx}`, `*Test.{swift,java,kt}`, `*Tests.{swift,java,kt}`,
-`conftest.py`. A path with a `fixtures`, `Fixtures`, `testdata` or
-`__snapshots__` component is never a test path, even under `tests/` (editing a
-fixture is not editing a test's assertions). The probe counted fixture
-directories as test paths, so its figures may differ slightly from what the
-spec yields. Paths already excluded from code changes (docs, temp dirs) stay
-excluded.
+`conftest.py`. A path with a `fixtures`, `Fixtures`, `testdata`, `test_data` or
+`__snapshots__` component is never a test path. Paths already excluded from
+code changes (docs, temp dirs) stay excluded.
 
-**Effects, Claude Code only.** Computed when the edit opens, from the tool
-input, and only the enum is kept:
+**Counting, Claude Code only.** At the edit's open, from the tool input:
+`Edit` counts `old_string` (before) and `new_string` (after); `MultiEdit` the
+joined `old_string`s and the joined `new_string`s. `Write`, `NotebookEdit` and
+Codex `FileChange` to a test path carry `before: nil, after: nil`.
 
-- `Edit`: compare `old_string` with `new_string`. `MultiEdit`: the joined
-  `old_string`s with the joined `new_string`s.
-- `fewerAssertions`: fewer matches in new than old of the assertion pattern
-  (`assert*`, `XCTAssert*`, `#expect`, `#require`, `expect(`, `assert_eq!`,
-  `assert!`, `t.Error`/`t.Fatal`, `require.X(`, `.should`).
-- `skipAdded`: more matches in new than old of the skip pattern
-  (`pytest.mark.skip`/`xfail`, `.skip(`, `xit(`, `xdescribe(`, `.only(`,
-  `XCTSkip`, `@Disabled`, `.disabled`, `t.Skip`, `#[ignore]`, `@unittest.skip`,
-  `.todo(`, `withKnownIssue`).
-- `fewerTests`: fewer matches in new than old of the test-function pattern
-  (`def test_`, `func test…`, `@Test`, `it(`, `test(`, `#[test]`, `func Test…(`).
-- `Write` and `NotebookEdit` to a test path: `.test(seen: nil)` (the old text
-  is not in the transcript). Codex `FileChange` to a test path:
-  `.test(seen: nil)`.
+Before counting, drop every line matching `^\s*(//|/\*|\*|#(\s|$))` (a comment
+line; `#expect`, `#require`, `#[test]` and `#[ignore]` are kept because `#` is
+followed by a non-space). So commenting an assertion out counts as removing it.
 
-The exact patterns are the ones in `docs/research/2026-11-12/probe/weaken_probe.py`;
-Swift and the oracle must implement this list, and the plan text wins if they
-differ.
+The patterns are normative, verbatim, case-sensitive, matched with
+non-overlapping leftmost search (Python `re.findall`, Swift `NSRegularExpression`
+`matches`):
 
-**When the clause shows.** Only when the row is `checkedAfterLastChange` and the
-reported check is a **passed test**. Let F be the latest failed test check
-issued before that pass. If any code change in the open interval (F.at,
-pass.at) is `.test(seen: s)` with `s` non-empty, the row carries the union of
-those effects. No failed test check before the pass: no clause. A same-instant
-change counts as before the check, as today.
+| Count | Regex |
+|---|---|
+| assertion | `\bassert\w*\b\|\bXCTAssert\w*\|#expect\b\|#require\b\|\bexpect\(\|\.should\b\|\bt\.(?:Error\|Fatal)f?\(\|\brequire\.\w+\(` |
+| skip | `pytest\.mark\.skip\w*\|\.skip\(\|\bxit\(\|\bxdescribe\(\|\bXCTSkip\w*\|@Disabled\b\|\.disabled\b\|\bt\.Skip\w*\(\|#\[ignore\]\|@unittest\.skip\w*` |
+| focus | `\.only\(\|\bfit\(\|\bfdescribe\(` |
+| expectedFailure | `pytest\.mark\.xfail\b\|\bwithKnownIssue\b\|@unittest\.expectedFailure\b\|\.failing\(` |
+| testFunction | `\bdef test_\w*\|\bfunc test\w*\|@Test\b\|\bit\(\|\btest\(\|#\[test\]\|\bfunc Test\w+\(` |
+
+(`\|` above is a table escape for `|`.) The oracle implements the same table.
+
+**When the clause shows.** All of these must hold:
+
+1. The row is `checkedAfterLastChange` and the reported check P is a **passed
+   test** check.
+2. The test check immediately before P (no other test check between them) is F,
+   and F **failed**. Build and lint checks between them do not break adjacency.
+3. F has a `completedAt`.
+4. Consider test-path changes with `F.completedAt < change.at < P.at` (both
+   strict). Group them by `PathKey`. A file with any change whose counts are
+   nil is dropped (no claim about it). For each remaining file, net =
+   sum(after) − sum(before) per count.
+5. An effect is present when, for at least one file: assertion net < 0
+   (`assertionCallsRemoved`), skip net > 0 (`skipMarkerAdded`), focus net > 0
+   (`focusMarkerAdded`), expectedFailure net > 0
+   (`expectedFailureMarkerAdded`), testFunction net < 0
+   (`testFunctionsRemoved`). No effect: no clause.
+
+Netting per file makes "skip added, then removed before the pass" and "assertion
+moved within the file" produce no clause.
+
+The existing rule is unchanged: a check at the same instant as a change counts
+as before it, so a change at exactly P.at makes the row `changedAfterLastCheck`
+and no clause can show.
 
 **Wording.**
-`… It exited with status 0. Between a failed test run (12 m ago) and this pass, a test file was edited: fewer assertions, a skip added.`
-Effects list in `TestEditEffect.allCases` order: "fewer assertions", "a skip
-added", "fewer tests". The existing limit sentence stays last.
+`… It exited with status 0. Between a failed test run that finished 12 m ago and this run, edits to a test file left fewer assertion calls in the edited text and added a skip marker. Vibra compares only the edited text, not the whole file.`
+Effect phrases, in `TestEditEffect.allCases` order, joined with commas and a
+final "and": "left fewer assertion calls in the edited text", "added a skip
+marker", "added a focus marker (.only)", "added an expected-failure marker",
+"left fewer test functions in the edited text". The existing limit sentence
+stays last.
 
 **Shape change.** `DeliveryEvidence.checkedAfterLastChange(ObservedCheck)`
 becomes `checkedAfterLastChange(ObservedCheck, testEdits: Set<TestEditEffect>)`.
-Every caller migrates; `caseName` is unchanged. `--evidence-stats` gains lines
-`qualified agent=<a> effect=<e> n=<k>` (one per effect present in a reported
-row) and `change agent=<a> target=<source|test.seen|test.unseen>` replaces
-`change agent=<a>`.
+Every caller migrates; `caseName` is unchanged. `--evidence-stats`: `change
+agent=<a>` becomes `change agent=<a> target=<source|test.compared|test.unseen>`
+(`test.compared` = counts present, `test.unseen` = nil), and each reported row
+with effects adds one `qualified agent=<a> effect=<e>` line per effect.
+
+**Known limits, written in `docs/features.md` and `docs/privacy.md`.** A
+whole-file `Write`, a notebook edit, a shell edit and every Codex edit produce
+no clause. Strings containing the pattern words count like code.
 
 **Privacy.** Edit text is read only to count pattern matches, in the extractor,
-and dropped. `evidenceSentinelsNeverLeak` gains edits whose `old_string` and
-`new_string` hold the sentinels, on a test path, and asserts no sentinel reaches
-the row text, `--evidence-stats`, or any other output it already checks.
-`docs/privacy.md` says so.
+and dropped; the path is reduced to an opaque key. `evidenceSentinelsNeverLeak`
+gains edits on a test path whose `old_string`, `new_string` and path hold the
+sentinels, and asserts no sentinel reaches the row text, `--evidence-stats`, or
+any other output it already checks.
 
 ### Evidence: OWASP Agentic Top 10 ids
 
@@ -214,47 +261,69 @@ is unchanged.
 **Makefile** (defaults unchanged, so the tap formula's `make app SIGN_IDENTITY=`
 builds exactly as today):
 
-- `ARCHS ?=` empty builds the host arch as now. `ARCHS="arm64 x86_64"` builds
-  each arch and `lipo`s one universal `VibraApp`.
+- `ARCHS ?=` empty: host arch, `.build/release/VibraApp`, as now.
+  `ARCHS="arm64 x86_64"`: the `build` target runs, per arch,
+  `swift build -c release --product VibraApp --triple <arch>-apple-macosx14.0 --scratch-path .build/<arch>`,
+  then `lipo -create` into `.build/universal/VibraApp`, and `BIN_SRC` points
+  there. (`swift build --help` on Swift 6.4 lists `--triple` and
+  `--scratch-path`, not `--arch`.)
 - `HARDENED ?=` empty as now. `HARDENED=1` signs with
   `--options runtime --entitlements packaging/Vibra.entitlements`, and adds
   `--timestamp` when `SIGN_IDENTITY` is a real identity.
 - `packaging/Vibra.entitlements` holds only
-  `com.apple.security.automation.apple-events` (terminal jump-back uses
-  `NSAppleScript`; `Info.plist` already has `NSAppleEventsUsageDescription`).
-- `make dmg` builds `build/Vibra-$(VERSION).dmg` (UDZO, `Vibra.app` plus an
-  `Applications` link) from the built bundle, and signs the DMG when
-  `SIGN_IDENTITY` is a real identity.
+  `com.apple.security.automation.apple-events`. A reviewer questioned whether a
+  non-sandboxed hardened app needs it; task 11 decides by test both ways
+  (Return to Session with and without it) and drops it if it is not needed.
+- `make dmg` is **packaging only**: no prerequisite, fails if
+  `build/Vibra.app` is missing, never rebuilds. It writes
+  `build/Vibra-$(VERSION).dmg` (UDZO, `Vibra.app` plus an `Applications` link),
+  and signs the DMG when `SIGN_IDENTITY` is a real identity.
 
-**CI dry run** (`build.yml`, new job, every push): `make app ARCHS="arm64
-x86_64" HARDENED=1 SIGN_IDENTITY=`, `make dmg`, assert `lipo -archs` lists both,
-assert the signature has the runtime flag and the entitlement, mount the DMG
-read-only and launch the app from it for 20 s as the existing launch check
-does. Upload the DMG as a workflow artifact (7-day retention).
+**`tools/release/package.sh --dry-run | --release`**, the one script both
+workflows run:
+
+1. `make app ARCHS="arm64 x86_64" HARDENED=1 SIGN_IDENTITY=<"" in dry run, $MACOS_SIGN_IDENTITY in release>`
+2. `codesign --verify --strict` on the bundle; `make dmg`.
+3. Mount the DMG read-only and check the **mounted** app: `lipo -archs` lists
+   `x86_64 arm64`; `codesign -d --verbose` flags include `runtime`; the
+   entitlements (if kept) are present; its CDHash equals the pre-DMG bundle's.
+   Release only: `TeamIdentifier` equals `$APPLE_TEAM_ID`.
+4. Release only: `xcrun notarytool submit --wait` with the API key; on a
+   non-Accepted status print `notarytool log` and fail. Then `xcrun stapler
+   staple` and `xcrun stapler validate` on the DMG; remount the stapled DMG and
+   require `spctl -a -t open --context context:primary-signature -vv` on the DMG
+   and `spctl -a -vv` on the mounted app to report accepted, source Notarized
+   Developer ID.
+5. Dry run: launch the mounted app for 20 s as the existing launch check does.
+6. Write `Vibra-<ver>.dmg.sha256` from the final (stapled, in release) DMG.
+
+**CI dry run** (`build.yml`, new job, every push): `tools/release/package.sh
+--dry-run` on `macos-15`; upload the DMG as an artifact (7-day retention).
 
 **Release** (`release.yml`):
 
-- Triggers: `push` of tags `v*`, and `workflow_dispatch` with input
-  `dry_run` (default true) that skips every step needing a secret.
-- Job uses `environment: release` (owner sets required reviewer and a `v*`
-  tag rule), `runs-on: macos-15`, `permissions: contents: write` on this job
-  only, top-level `permissions: contents: read`.
+- Trigger: `push` of tags `v*` only. One job, `environment: release` (owner
+  sets a required reviewer and a `v*` tag rule), `runs-on: macos-15`,
+  `permissions: contents: write` on this job only, top-level
+  `permissions: contents: read`. No `workflow_dispatch`: the dry run lives in
+  `build.yml`, so it runs on branches without the protected environment.
 - No third-party actions except `actions/checkout`, pinned by full commit SHA.
-- Fails unless the tag equals `v$(VERSION)` from the Makefile.
-- Imports `MACOS_CERT_P12_BASE64` into a temporary keychain made with
-  `MACOS_KEYCHAIN_PASSWORD`, sets the partition list, and deletes the keychain
-  and every decoded key file in an `if: always()` step.
-- `make app ARCHS="arm64 x86_64" HARDENED=1 SIGN_IDENTITY="$MACOS_SIGN_IDENTITY"`,
-  `codesign --verify --strict`, `make dmg`.
-- `xcrun notarytool submit --wait` with the API key (`NOTARY_KEY_P8_BASE64`,
-  `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`); on a non-Accepted status, prints
-  `notarytool log` and fails.
-- `xcrun stapler staple` then `xcrun stapler validate` on the DMG;
-  `spctl -a -t open --context context:primary-signature -vv` on the DMG and
-  `spctl -a -vv` on the mounted app must both say accepted, source Notarized
-  Developer ID.
-- Writes `Vibra-<ver>.dmg.sha256` and creates a **draft** GitHub release with
-  both files via `gh`. The owner publishes it.
+- Fails unless the tag equals `v$(VERSION)` from the Makefile and
+  `docs/releases/v$(VERSION).md` exists.
+- Keychain: create `$RUNNER_TEMP/release.keychain-db` with
+  `MACOS_KEYCHAIN_PASSWORD`, `security set-keychain-settings -lut 21600`,
+  `security unlock-keychain`, import the `.p12` decoded into `$RUNNER_TEMP`,
+  `security set-key-partition-list -S apple-tool:,apple:,codesign:`, and
+  `security list-keychains -d user -s "$KEYCHAIN" <the existing list>` so
+  `codesign` finds the identity. Check `security find-identity -v -p
+  codesigning` lists `$MACOS_SIGN_IDENTITY` before building.
+- The `.p8` is decoded into `$RUNNER_TEMP`. An `if: always()` final step
+  deletes the keychain, restores the search list, and removes every decoded
+  file; a step before `gh release create` removes the decoded files too, so no
+  key exists when assets upload.
+- Runs `tools/release/package.sh --release`, then `gh release create v<ver>
+  --draft --notes-file docs/releases/v<ver>.md` with the DMG and its `.sha256`.
+  The owner publishes it.
 - Secret names match the runbook exactly: `MACOS_CERT_P12_BASE64`,
   `MACOS_CERT_PASSWORD`, `MACOS_KEYCHAIN_PASSWORD`, `MACOS_SIGN_IDENTITY`,
   `APPLE_TEAM_ID`, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`, `NOTARY_KEY_P8_BASE64`.
@@ -262,50 +331,50 @@ does. Upload the DMG as a workflow artifact (7-day retention).
 **Runbook.** `docs/RUNBOOK-developer-id.md`: enrolment, the Developer ID
 Application certificate, the App Store Connect API key, the `release`
 environment and its secrets, with "the human takes over" at every login,
-payment and key step, and a key-free hand-back checklist. Draft already given
-to the owner; committed with this run.
+payment and key step, and a key-free hand-back checklist. Given to the owner;
+committed with this run.
 
-**Launch kit.** `plan/LAUNCH-KIT.md`, for the owner to use after the first
-notarized release is published: a Show HN draft on the audit angle ("which of
-my agents read ~/.ssh, force-pushed, or passed its tests by deleting
-assertions, with no hooks and no network"), the awesome-claude-code one-liner
-(the list requires a human submitter), a 20-second demo shot list, and the
-README and tap changes to make once the DMG exists. `plan/STATUS.md` brought up
-to date. No README edit in this run: the README must not claim a DMG before one
-is published, and PR #13 owns the README now.
+**Launch kit.** `plan/LAUNCH-KIT.md`, for the owner after task 14 passes: a
+Show HN draft on the audit angle ("which of my agents read ~/.ssh or
+force-pushed, with no hooks and no network"), plus the test-edit line only if
+task 4 finds the clause on real data; the awesome-claude-code one-liner (the
+list requires a human submitter); a 20-second demo shot list; and the README
+and tap changes to make once the DMG is published. `plan/STATUS.md` brought up
+to date (it still says 1 star). No README edit in this run.
 
 ## Tasks
 
 | # | Owner | Task | Depends on | Acceptance |
 |---|---|---|---|---|
-| 1 | planner | Foundation: the three types above, every caller migrated, behaviour unchanged (`.source` for every change, empty `testEdits`) | — | `make test` passes with the same test count as baseline; `--evidence-stats` output unchanged on the planner's data apart from the renamed change line |
-| 2 | deepseek | Claude and Codex extractors emit `CodeChangeTarget` per the spec; synthetic fixtures for each pattern and for a non-test path | 1 | New tests in `EvidenceExtractorTests` for every effect, each pattern family, `Write`/`NotebookEdit`/Codex as `seen: nil`, a fixture-directory path as `.source`; `make test` green |
-| 3 | deepseek | `DeliveryEvidence.build` attaches `testEdits` per "When the clause shows"; wording; `--evidence-stats` lines | 1 | `DeliveryEvidenceTests`: clause on fail → weakening test edit → pass; none without a prior failure; none when the weakening edit is before F; none for a passed build; union of two effects; same-instant rule. `EvidenceStatsTests` updated |
-| 4 | planner | Oracle mirrors tasks 2-3 in `tools/evidence-oracle`; selftest | 1 | `oracle_selftest.py` passes; on the planner's real 30-day data, `diff <(Vibra --evidence-stats --days 30) <(evidence_oracle.py --days 30)` is empty |
-| 5 | planner | Check the OWASP ids against the OWASP PDF; amend the mapping table in this plan (a change here needs a confirmation round before task 6 starts) | — | The table cites the PDF page for each id |
+| 1 | planner | Foundation: the types above, every caller migrated, behaviour unchanged (`.source` for every change, `completedAt` filled where available, empty `testEdits`) | — | `make test` count equals the count measured just before the change; `--evidence-stats --days 30` on the planner's data identical apart from the renamed change line |
+| 2 | deepseek | Claude and Codex extractors: test path, `PathKey`, comment stripping, counts, `completedAt`; synthetic fixtures | 1 | `EvidenceExtractorTests`: each regex family; boundary non-matches `wait(`, `exit(`, `split(`, `.shoulder`, `latest(`, `asser`; a commented-out assertion counted as removed; `#expect` kept; `conftest.py` and `tests/test_x.py` test paths; `tests/fixtures/a.py` and `test_data/x` not; `Write`, `NotebookEdit`, Codex as nil counts; `completedAt` from the result record for both agents; `make test` green |
+| 3 | deepseek | `DeliveryEvidence.build` per "When the clause shows"; wording; `--evidence-stats` lines | 2 | `DeliveryEvidenceTests`: clause on fail → assertion-removing edit → pass; no clause when a passed or unknown test check sits between F and P; no clause when the edit is before `F.completedAt` (made while F ran); no clause when F has no `completedAt`; skip added then removed → none; assertion removed then restored → none; assertion moved within one file → none; nil-count edit on the only file → none; passed build → none; two effects in order; a build check between F and P keeps adjacency; change at exactly P.at → case `changedAfterLastCheck`. `EvidenceStatsTests` updated |
+| 4 | planner | Oracle mirrors tasks 2-3 in `tools/evidence-oracle`; selftest with the task 3 cases; real-data run | 3 | `oracle_selftest.py` passes; on the planner's 30-day data `diff <(Vibra --evidence-stats --days 30) <(evidence_oracle.py --days 30)` is empty; the `qualified … n=` lines are recorded here (the probe's 3 is an upper-bound guide only, the rule differs), and one rendered clause from a real row is quoted here (content-free by construction); if the count is 0, that is recorded and the launch kit drops the test-edit line |
+| 5 | planner | Check the OWASP ids against the OWASP PDF; amend the mapping table (a change here needs a confirmation round before task 6) | — | The table cites the PDF page for each id |
 | 6 | deepseek | `IncidentKind.owaspAgentic`, the JSON field, the vendor-report line | 5 | Tests pin the mapping for every kind and the JSON field; `incidentSentinelsNeverLeak` still passes |
-| 7 | deepseek | Privacy canary extension for edit text | 2 | The extended `evidenceSentinelsNeverLeak` fails when the extractor is changed to put `new_string` in the row text (planner runs this mutation), passes otherwise |
-| 8 | deepseek | Makefile `ARCHS`, `HARDENED`, `dmg`; `packaging/Vibra.entitlements` | — | On this Mac: `make app` unchanged (`codesign -d` shows ad-hoc, no runtime flag); `make app ARCHS="arm64 x86_64" HARDENED=1` gives `lipo -archs` = `x86_64 arm64`, `codesign -d --entitlements -` shows the entitlement, flags include `runtime`; `make dmg` mounts and holds `Vibra.app` |
-| 9 | deepseek | `build.yml` dry-run job | 8 | Green on the branch's CI run, both steps visible in the log |
-| 10 | deepseek | `release.yml` per spec | 8 | `actionlint` clean; a `workflow_dispatch` run with `dry_run: true` on the branch is green |
-| 11 | planner | Live check of a hardened build on this Mac: install the ad-hoc hardened universal app, confirm the menu fills, Return to Session works in iTerm and Orca (Apple Events under hardened runtime), `--query` exits 0 | 8 | Recorded here with the date and what was seen |
-| 12 | planner | Docs: CHANGELOG, `docs/features.md`, `docs/privacy.md`, ROADMAP P3.1 and P1.4 rows, `docs/RUNBOOK-developer-id.md`, `plan/LAUNCH-KIT.md`, `plan/STATUS.md` | 3, 6, 10 | `tools/readme-anchors.sh` exits 0; every claim in the new text matches a probe or test named here |
-| 13 | owner (optional) | Label the 3 weakening recoveries from the probe as legitimate or not; the planner prints session ids and timestamps only | — | Result recorded here; it informs wording later, it does not gate this run |
+| 7 | deepseek | Privacy canary extension for edit text and test paths | 2 | The extended `evidenceSentinelsNeverLeak` passes, and fails when the planner mutates the extractor to put `new_string` in the row text (mutation run recorded) |
+| 8 | deepseek | Makefile `ARCHS`, `HARDENED`, packaging-only `dmg`; `packaging/Vibra.entitlements`; `tools/release/package.sh` | — | On this Mac: plain `make app` unchanged (`codesign -d` shows ad-hoc, no runtime flag); `make dmg` without a bundle fails and builds nothing; `package.sh --dry-run` passes all its mounted-app checks if Command Line Tools here can build x86_64, otherwise the task 9 CI log is the proof and the local failure is recorded; `shellcheck tools/release/package.sh` clean |
+| 9 | deepseek | `build.yml` dry-run job | 8 | Green on the branch's CI run; the log shows the mounted-app checks and the 20 s launch |
+| 10 | deepseek | `release.yml` per spec | 8 | `actionlint` clean; the release path of `package.sh` reviewed line by line against the spec in the code gate. Its real proof is task 14 |
+| 11 | planner | Live check of the hardened build on this Mac, with and without the entitlement: menu fills, Return to Session in iTerm and Orca, `--query` exits 0 | 8 | Recorded here with date and what was seen; entitlement kept only if Return to Session fails without it |
+| 12 | planner | Docs: CHANGELOG, `docs/features.md`, `docs/privacy.md`, ROADMAP (P3.1 "pipeline built, awaiting certificate"; P1.4 untouched), `docs/RUNBOOK-developer-id.md`, `docs/releases/v0.5.0.md` (draft notes), `plan/LAUNCH-KIT.md`, `plan/STATUS.md` | 3, 6, 10 | `tools/readme-anchors.sh` exits 0; every claim in the new text names a probe, test or task here |
+| 13 | owner (optional) | Label the 3 probe recoveries legitimate or not; the planner prints session ids and timestamps only | — | Result recorded here; informs wording later, gates nothing |
+| 14 | planner, with the owner | Real release, after the code gate, the merge, the owner's go-ahead and the secrets: bump to 0.5.0, tag `v0.5.0`, `release.yml` runs | 12, secrets | The run log shows notarization Accepted, `stapler validate` ok, both `spctl` checks accepted as Notarized Developer ID, `lipo` both arches, `TeamIdentifier` match; the draft release carries the DMG, its `.sha256` (checked against a fresh download) and `docs/releases/v0.5.0.md` as body; a downloaded copy with `com.apple.quarantine` opens without the unidentified-developer block, Vibra's Setup reports notification authorization granted. Only then ROADMAP P3.1 becomes Done and the launch kit applies |
 
-After the code gate, with the owner's go-ahead and the secrets in place: push,
-open the PR, merge, bump to 0.5.0, tag, run `release.yml`, and the owner
-publishes the draft. A cask in `silex-ai-lab/homebrew-tap` pointing at the
-notarized DMG is a separate change to that repo after the first published
-release; the source formula stays.
+The cask in `silex-ai-lab/homebrew-tap` pointing at the notarized DMG is a
+separate change to that repo after task 14; the source formula stays.
 
 ## File ownership
 
 - **planner:** `Sources/VibraCore/Evidence/DeliveryEvidence.swift`,
   `Sources/VibraCore/Evidence/EvidenceExtractor.swift`,
-  `Sources/VibraCore/Evidence/EvidenceStats.swift` (task 1 only, then handed to
-  deepseek); `tools/evidence-oracle/*`; this plan; `docs/research/2026-11-12/*`;
-  `CHANGELOG.md`, `docs/features.md`, `docs/privacy.md`, `docs/ROADMAP.md`,
-  `docs/RUNBOOK-developer-id.md`, `plan/LAUNCH-KIT.md`, `plan/STATUS.md`.
+  `Sources/VibraCore/Evidence/EvidenceStats.swift`,
+  `Sources/VibraApp/SessionDetailWindowController.swift`,
+  `Sources/VibraApp/MenuBarController.swift` (task 1 only, then the three
+  Evidence files go to deepseek); `tools/evidence-oracle/*`; this plan;
+  `docs/research/2026-11-12/*`; `CHANGELOG.md`, `docs/features.md`,
+  `docs/privacy.md`, `docs/ROADMAP.md`, `docs/RUNBOOK-developer-id.md`,
+  `docs/releases/v0.5.0.md`, `plan/LAUNCH-KIT.md`, `plan/STATUS.md`.
 - **deepseek:** after task 1, the three Evidence files above;
   `Sources/VibraCore/Incidents/Incident.swift`,
   `Sources/VibraCore/Incidents/IncidentJSON.swift`,
@@ -317,12 +386,27 @@ release; the source formula stays.
   `Tests/VibraCoreTests/EvidenceStatsTests.swift`,
   `Tests/VibraCoreTests/VendorReportTests.swift`,
   `Tests/VibraCoreTests/IncidentExtractorTests.swift`;
-  `Makefile`, `packaging/Vibra.entitlements`, `.github/workflows/build.yml`,
-  `.github/workflows/release.yml`.
+  `Makefile`, `packaging/Vibra.entitlements`, `tools/release/package.sh`,
+  `.github/workflows/build.yml`, `.github/workflows/release.yml`.
 - One shared working tree. DeepSeek tasks run one at a time in the order
   8, 9, 10, 2, 3, 7, 6; task 2 starts only after task 1 is committed.
   Nothing in `tools/evidence-oracle/` changes while a review round is open.
 
-## Round-N objections → changes
+## Round-1 objections → changes
 
-(none yet)
+Round 1 on v0.1 (`6dc87e0`): codex PLAN-REJECTED (5), deepseek PLAN-REJECTED (9).
+
+| Objection (who) | Change |
+|---|---|
+| F may not be adjacent to the pass; issue time is not result time (codex 1) | F is the test check immediately before P; `ObservedCheck.completedAt`; edits must follow `F.completedAt`; tests for both |
+| Union of effects reports edits undone before the pass (deepseek 2) | Net per file across the interval; tests for skip added-then-removed, assertion removed-then-restored, assertion moved |
+| Same-instant sentence contradicts the code (deepseek 3) | Rewritten to the shipped rule; a test asserts the case name |
+| Glob rendering of the patterns is wrong; "plan wins" is incoherent (deepseek 4) | Normative regex table pasted verbatim; boundary tests listed |
+| Labels overclaim: snippet counts, comments, xfail/.only are not skips (codex 2, deepseek 5) | Five effects (assertion calls, skip, focus, expected-failure, test functions); comment lines stripped; wording says "in the edited text" and "compares only the edited text"; Show HN line conditional on task 4 |
+| Nothing proves the clause fires on real data (deepseek 6) | Task 4 records real `qualified` counts and quotes a real rendered clause; 0 drops the launch claim |
+| Dry run cannot run on a branch through a protected environment and `workflow_dispatch` (codex 3, deepseek 1) | Dry run moved to `build.yml` via the shared `package.sh`; `release.yml` is tag-only |
+| `make dmg` may rebuild the default bundle; checks only pre-DMG (codex 4) | `dmg` is packaging only; `package.sh` checks the mounted app, including CDHash equality |
+| No real signed-run proof; P3.1 could be marked done early (codex 5, deepseek 7) | Task 14 with the full real-release acceptance; P3.1 Done only after it; release notes file required by the workflow |
+| `codesign` will not see the temporary keychain (deepseek 8) | Search-list, unlock, partition-list and `find-identity` steps specified; decoded keys in `$RUNNER_TEMP`, removed before upload and in `always()` |
+| Research file still claims ImpossibleBench transcripts (deepseek 9) | Corrected in `research-literature.md`, errata added (`docs/research/2026-11-12`) |
+| Folded non-blocking | `--triple`/`--scratch-path` cross-build (codex); prevalence framed as token counts (codex); why the clause beats the waiting metric, Write/Codex limits stated, three stats labels, baseline count, entitlement decided by test, CI fallback for x86_64, runbook CSR step fixed, `APPLE_TEAM_ID` used for TeamIdentifier, `test_data` excluded, STATUS star count (deepseek). Runbook "G2 Sub-CA" kept with its "if the page offers it" guard |

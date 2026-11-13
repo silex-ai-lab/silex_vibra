@@ -43,7 +43,7 @@
    - 私钥会留在这台 Mac 的登录钥匙串里。
 2. 打开 https://developer.apple.com/account/resources/certificates/add 。
 3. 选 **Developer ID** 下的 **Developer ID Application**，点 Continue。
-4. Profile Type 选 **G2 Sub-CA**（若页面有此选项），上传第 1 步的 CSR，点 Continue。
+4. Profile Type 选 **G2 Sub-CA**（若页面有此选项），上传本步骤第 1 项生成的 CSR，点 Continue。
 5. 下载 `developerID_application.cer`，**人接管**：双击导入钥匙串。
 6. **人接管**：在「钥匙串访问」→「我的证书」里找到 `Developer ID Application: … (<TEAMID>)`，展开确认下面挂着私钥。右键 →「导出」→ 格式 `.p12`，设一个强密码。
    - 把 `.p12` 和密码存进密码管理器，作为唯一备份。
@@ -92,7 +92,7 @@ xcrun notarytool history --key ~/path/AuthKey_<KEYID>.p8 --key-id <KEYID> --issu
 | `MACOS_CERT_PASSWORD` | 第 2 步设的 `.p12` 密码 | 密码管理器 |
 | `MACOS_KEYCHAIN_PASSWORD` | 新的随机串，仅 CI 临时钥匙串用 | `openssl rand -base64 32 \| pbcopy` |
 | `MACOS_SIGN_IDENTITY` | 第 2 步检查输出的完整身份名 | 例：`Developer ID Application: Example Inc (ABCDE12345)` |
-| `APPLE_TEAM_ID` | 第 1 步的 Team ID | Membership 页 |
+| `APPLE_TEAM_ID` | 第 1 步的 Team ID（发版时用来核对签名的 TeamIdentifier） | Membership 页 |
 | `NOTARY_KEY_ID` | 第 3 步的 Key ID | App Store Connect |
 | `NOTARY_ISSUER_ID` | 第 3 步的 Issuer ID | App Store Connect |
 | `NOTARY_KEY_P8_BASE64` | 第 3 步的 `.p8` | `base64 -i AuthKey_<KEYID>.p8 \| pbcopy` |
