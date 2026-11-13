@@ -26,28 +26,29 @@ a pilot measurement, not a result about anyone else.
 
 ## Agreement (the correctness gate)
 
-Vibra built from `f2b421f` by the run script itself and the independent
+Vibra built from `187e1f5` by the run script itself and the independent
 Python oracle (`tools/wait-oracle/wait_oracle.py`) ran on the same snapshot,
 window and time zone, in both orders (`pilot/agreement-run.txt`, taken
-2026-11-13 15:00 UTC):
+2026-11-13 15:22 UTC):
 
 | Check | Result |
 |---|---|
-| Snapshot | 950 files, 2,547,920,250 bytes (sum of file sizes) |
+| Snapshot | 951 files, 2,555,978,415 bytes (sum of file sizes) |
 | Swift then oracle | identical, 28 lines each |
 | Oracle then Swift | identical; Swift run 1 equals run 2 |
-| Live transcripts, same window (diagnostic only) | Swift and oracle identical; live differs from the snapshot only in `open agent=claudeCode` (82 vs 83), the one line the plan expected to move while a session is still live |
-| Time | Swift 115.9 s and 113.6 s (its own `read … in` line); the oracle 8.1 s and 8.6 s wall clock |
+| Live transcripts, same window (diagnostic only) | Swift and oracle identical, and identical to the snapshot this time (earlier runs differed only in `open agent=claudeCode`, the one line the plan expected to move while a session is still live) |
+| Time | Swift 89.5 s and 83.6 s (its own `read … in` line); the oracle 6.5 s and 5.9 s wall clock |
 
-An earlier recorded run at 14:50 UTC used a binary left over from before the
-round-1 code fixes (`make test` builds only the test target), so it is not
+Two earlier recorded runs agreed too: one at 14:50 UTC used a binary left
+over from before the round-1 code fixes (`make test` builds only the test target), so it is not
 cited; the script now builds the app itself and prints the commit and the
-binary's hash. Its output and timings are not used here.
+binary's hash; one at 15:00 UTC preceded the round-3 oracle change. Neither
+run's output or timings are used here.
 
-Swift reports reading 2,565,160,036 bytes, more than the snapshot holds. The
+Swift reports reading 2,573,218,201 bytes, more than the snapshot holds. The
 line reader counts every chunk it reads, and a read that stops at 2,000 lines
 re-reads the rest of that chunk on the next call (`IncrementalLineReader`,
-inferred from its code, not measured). The 13-14x gap to the oracle is a measured
+inferred from its code, not measured). The 14x gap to the oracle is a measured
 cost of the Swift path; its cause is not measured (inferred: each line is
 parsed as JSON twice, once for History and once for the wait rules, and the
 History wrapper regexes are compiled on every call).

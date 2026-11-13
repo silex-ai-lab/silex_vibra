@@ -660,3 +660,19 @@ prompt went as `sol-impl-r1-a2`: IMPL-REJECTED, 5 blocking (88,600 input and
 | The pilot's limits list was incomplete | sol 5 | The pilot lists every known limit from the plan |
 | Non-blocking folded | sol, claude 2, 4, 5, 6 | Privacy wording names what a dropped record is searched for; only ASCII digits parse, and year 0 is not a timestamp, in both; a run that hits the 600 s deadline says so on stderr; the pilot gives bytes, not KB; the oracle, like Swift, reads a content list only when every element is an object, with a shared fixture and a mutation |
 | Non-blocking answered | claude 3, sol | The canary mutations exercise the reflected-value check: `WaitStats.format` receives only `WaitFold` values, which carry no text, id or path, so an output-text leak needs a type change first, which is what the two recorded mutations make. CI on Swift 6.1.2 runs when the branch is pushed after the gate, and is recorded before merge |
+
+**Round 2** at `75ce745`, diff hash `95ca7a5b7798c44ba22b7e3ace89b6236bf32abd`
+(67 paths). reviewer-claude: IMPL-APPROVED, four non-blocking notes.
+reviewer-sol: IMPL-REJECTED, 3 blocking (107,236 input and 3,731 output
+tokens, USD 0.2770).
+
+| Objection | From | Change |
+|---|---|---|
+| An unreadable transcript made the oracle raise a traceback that prints its path | sol 1 | `jsonl_lines` yields nothing for a file it cannot read, as Vibra's reader does (`try?`), and prints nothing. The selftest makes a `chmod 000` file whose path carries sentinels and asserts exit 0 with empty stdout and stderr |
+| `--from 9999-12-31` overflowed the oracle's date type | sol 2 | Both implementations accept `--from/--to` years 1970 to 9998 and exit 2 outside it; `oracle_selftest.py` and `WaitWindowTests` pin 9998-12-31, 9999-12-31, 1969-12-31 and 1970-01-01. `features.md` states the range |
+| The pilot cited the discarded run's timings and stated a cause for the snapshot difference | sol 3 | The discarded runs' numbers are gone; the difference between the two snapshots is stated as observed, with possible explanations labelled unverified, including the round-1 rule changes |
+| Non-blocking folded | claude 1, 2, 3, 4 | The oracle trims whitespace with Foundation's `whitespacesAndNewlines` set instead of `str.strip()` (U+001C-U+001F stay), pinned in the selftest; the task 7 row points here; `agreement_run.sh` prints each run's real exit code; this entry |
+| Non-blocking answered | sol 1, 2 | CI on Swift 6.1.2 runs when the branch is pushed after the gate and is recorded before merge. The snapshot copies from two days before `from`, a superset of the one-day ingestion cutoff; both programs apply the cutoff themselves, so the extra files change nothing, and the superset avoids `find -newer` dropping a file whose time equals the marker |
+
+The agreement run was repeated at `187e1f5` (after the oracle trim change):
+identical in both orders and on live data, the committed output unchanged.
