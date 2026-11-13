@@ -18,6 +18,27 @@ struct EvidenceExtractorTests {
         .check(ObservedCheck(at: F.at(seconds), kind: kind, result: result))
     }
 
+    // MARK: Test-path and count helpers
+
+    private func firstChange(_ fold: EvidenceFold) -> CodeChange? {
+        for event in fold.events {
+            if case .codeChange(let change) = event { return change }
+        }
+        return nil
+    }
+
+    private func firstTarget(_ fold: EvidenceFold) -> CodeChangeTarget? { firstChange(fold)?.target }
+
+    private func pathKey(_ target: CodeChangeTarget) -> PathKey? {
+        guard case .test(path: let key, before: _, after: _) = target else { return nil }
+        return key
+    }
+
+    private func compared(_ target: CodeChangeTarget) -> (before: PatternCounts, after: PatternCounts)? {
+        guard case .test(_, before: let before?, after: let after?) = target else { return nil }
+        return (before, after)
+    }
+
     // MARK: Completion times
 
     @Test func completionTimesComeFromTheResultRecord() {
@@ -312,5 +333,284 @@ struct EvidenceExtractorTests {
     @Test func codexNonCheckCommandStillSetsToolRecords() {
         let fold = codex([F.codexCommand("ls", exit: 0, at: 1)])
         #expect(fold == EvidenceFold(events: [], sawToolRecords: true))
+    }
+
+    // MARK: Pattern counts
+
+    @Test(arguments: [
+        "assert x == 1", "XCTAssertEqual(a, b)", "#expect(x)", "#require(y)", "expect(z)",
+        "value.should == 1", "t.Error(\"boom\")", "t.Fatalf(\"boom %v\", v)", "require.NoError(t, err)",
+    ])
+    func assertionFamilyMatches(text: String) {
+        #expect(patternCounts(in: text).assertion == 1)
+    }
+
+    @Test(arguments: [
+        "pytest.mark.skip", "pytest.mark.skipif(cond)", "it.skip(\"x\", f)", "test.skip(\"x\", f)",
+        "describe.skip(\"x\", f)", "context.skip(\"x\")", "suite.skip(\"x\")", "pytest.skip(\"x\")",
+        "this.skip()", "self.skipTest(\"x\")", "xit(\"x\", f)", "xdescribe(\"x\")", "XCTSkip(\"x\")",
+        "@Disabled", ".disabled(\"x\")", "t.SkipNow()", "#[ignore]", "@unittest.skip(\"x\")",
+    ])
+    func skipFamilyMatches(text: String) {
+        #expect(patternCounts(in: text).skip == 1)
+    }
+
+    @Test(arguments: [
+        "it.only(\"x\", f)", "test.only(\"x\", f)", "describe.only(\"x\")", "context.only(\"x\")",
+        "suite.only(\"x\")", "fit(\"x\", f)", "fdescribe(\"x\")",
+    ])
+    func focusFamilyMatches(text: String) {
+        #expect(patternCounts(in: text).focus == 1)
+    }
+
+    @Test(arguments: [
+        "pytest.mark.xfail", "withKnownIssue(\"x\") { }", "XCTExpectFailure(\"x\")",
+        "@unittest.expectedFailure", "it.failing(\"x\", f)", "test.failing(\"x\", f)",
+    ])
+    func expectedFailureFamilyMatches(text: String) {
+        #expect(patternCounts(in: text).expectedFailure == 1)
+    }
+
+    @Test(arguments: [
+        "def test_foo():", "func testFoo() {", "@Test", "it(\"x\", f)", "test(\"x\", f)",
+        "#[test]", "func TestFoo(t *testing.T) {",
+    ])
+    func testFunctionFamilyMatches(text: String) {
+        #expect(patternCounts(in: text).testFunction == 1)
+    }
+
+    /// Ordinary code that contains one of the pattern words without being a
+    /// test call. Every one of these must count nothing in every family.
+    @Test(arguments: [
+        "wait(", "exit(", "split(", ".shoulder", "latest(", "asser", "button.disabled",
+        "iter().skip(1)", "stream.skip(n)", "re.test(x)", "require.resolve(", "qs.only(\"id\")",
+        "model.fit(x)",
+    ])
+    func ordinaryCodeMatchesNoFamily(text: String) {
+        #expect(patternCounts(in: text)
+            == PatternCounts(assertion: 0, skip: 0, focus: 0, expectedFailure: 0, testFunction: 0))
+    }
+
+    /// The exact strings the plan lists as matches, each in its own family.
+    @Test func thePinnedMatchesCount() {
+        #expect(patternCounts(in: "require.NoError(").assertion == 1)
+        #expect(patternCounts(in: "@Test(.disabled(\"x\"))").skip == 1)
+        #expect(patternCounts(in: "@Test(.disabled(\"x\"))").testFunction == 1)
+        #expect(patternCounts(in: "XCTExpectFailure(").expectedFailure == 1)
+        #expect(patternCounts(in: "it.skip(").skip == 1)
+        #expect(patternCounts(in: "self.skipTest(").skip == 1)
+        #expect(patternCounts(in: "test.only(").focus == 1)
+        #expect(patternCounts(in: "fit(").focus == 1)
+        #expect(patternCounts(in: "test.failing(").expectedFailure == 1)
+    }
+
+    @Test func commentLinesAreDroppedBeforeCounting() {
+        #expect(patternCounts(in: "// assert(x)").assertion == 0)
+        #expect(patternCounts(in: "/* assert(x) */").assertion == 0)
+        #expect(patternCounts(in: " * assert(x)").assertion == 0)
+        #expect(patternCounts(in: "   # assert(x)").assertion == 0)
+        #expect(patternCounts(in: "// assert(x)\nassert(y)").assertion == 1)
+        #expect(patternCounts(in: "#expect(x)").assertion == 1)
+        #expect(patternCounts(in: "#[test]").testFunction == 1)
+        #expect(patternCounts(in: "#[ignore]").skip == 1)
+        // No space after `#`, so the line is code to this rule: a known miss.
+        #expect(patternCounts(in: "#assert(x)").assertion == 1)
+        // `\s` in the pattern covers Unicode spaces, not just ASCII ones.
+        #expect(patternCounts(in: "\u{00A0}// XCTAssert(x)").assertion == 0)
+    }
+
+    // MARK: Test paths
+
+    @Test(arguments: [
+        ("/Users/test/app/src/main.py", false),
+        ("/Users/test/app/tests/test_x.py", true),
+        ("/Users/test/app/conftest.py", true),
+        ("/Users/test/app/tests/fixtures/a.py", false),
+        ("/Users/test/app/test_data/x.py", false),
+        ("/Users/test/app/Sources/App.swift", false),
+        ("/Users/test/app/Sources/AppTests.swift", true),
+        ("/Users/test/app/src/widget.spec.tsx", true),
+        ("/Users/test/app/src/handler_test.go", true),
+        ("tests/test_x.py", true),
+        ("/Users/test/other/tests/main.py", false),
+    ])
+    func testPathBelowTheRoot(path: String, expected: Bool) {
+        #expect(isTestPath(path, root: "/Users/test/app") == expected)
+    }
+
+    @Test(arguments: [
+        ("/x/tests/main.py", false),
+        ("/x/spec/main.js", false),
+        ("/x/main_test.py", true),
+        ("/x/conftest.py", true),
+    ])
+    func testPathWithNoRootIsDecidedByFileName(path: String, expected: Bool) {
+        #expect(isTestPath(path, root: nil) == expected)
+    }
+
+    /// A repo whose own path contains a test word must not turn every file
+    /// into a test edit.
+    @Test func testPathIgnoresTheRootsOwnComponents() {
+        #expect(isTestPath("/Users/jian/code/testing/app/main.py", root: "/Users/jian/code/testing/app") == false)
+        #expect(isTestPath("/Users/jian/code/testing/app/tests/main.py", root: "/Users/jian/code/testing/app"))
+    }
+
+    // MARK: Claude Code test edits
+
+    @Test func claudeTestEditCarriesCountsAndCompletionTime() throws {
+        let fold = self.fold(ClaudeEvidenceExtractor(), batches: [[
+            F.claudeEdit(
+                "e", path: "tests/a.swift", old: "XCTAssertEqual(a, b)",
+                new: "// XCTAssertEqual(a, b)", cwd: "/work/app", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ]])
+        let change = try #require(firstChange(fold))
+        #expect(change.completedAt == F.at(2))
+        let counts = try #require(compared(change.target))
+        #expect(counts.before.assertion == 1)
+        #expect(counts.after == PatternCounts(assertion: 0, skip: 0, focus: 0, expectedFailure: 0, testFunction: 0))
+        #expect(change.target.statsName == "test.compared")
+    }
+
+    @Test(arguments: ["Write", "NotebookEdit"])
+    func aWholeFileEditOnATestPathHasNoCounts(name: String) throws {
+        let key = name == "NotebookEdit" ? "notebook_path" : "file_path"
+        let fold = claude([
+            F.claudeUse("e", name: name, input: [key: "tests/a.swift"], cwd: "/work/app", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        let target = try #require(firstTarget(fold))
+        #expect(compared(target) == nil)
+        #expect(target.statsName == "test.unseen")
+    }
+
+    @Test func aReplaceAllEditOnATestPathDropsItsCounts() throws {
+        let fold = claude([
+            F.claudeEdit(
+                "e", path: "tests/a.swift", old: "assert(x)", new: "assert(y)",
+                replaceAll: true, cwd: "/work/app", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        let target = try #require(firstTarget(fold))
+        #expect(compared(target) == nil)
+        #expect(target.statsName == "test.unseen")
+    }
+
+    @Test func aMultiEditWithAReplaceAllDropsItsCounts() throws {
+        let fold = claude([
+            F.claudeMultiEdit(
+                "e", path: "tests/a.swift", edits: [(old: "assert(x)", new: "assert(y)")],
+                replaceAll: true, cwd: "/work/app", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        let target = try #require(firstTarget(fold))
+        #expect(target.statsName == "test.unseen")
+        #expect(compared(target) == nil)
+    }
+
+    @Test func multiEditJoinsItsEditsBeforeCounting() throws {
+        let fold = claude([
+            F.claudeMultiEdit(
+                "e", path: "tests/a.swift",
+                edits: [(old: "assert(a)", new: "assert(a)\nassert(b)"),
+                        (old: "it(\"x\")", new: "it.skip(\"x\")")],
+                cwd: "/work/app", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        let target = try #require(firstTarget(fold))
+        let counts = try #require(compared(target))
+        #expect(counts.before == PatternCounts(assertion: 1, skip: 0, focus: 0, expectedFailure: 0, testFunction: 1))
+        #expect(counts.after == PatternCounts(assertion: 2, skip: 1, focus: 0, expectedFailure: 0, testFunction: 0))
+    }
+
+    @Test func editsToOneFileShareAKeyAndAnotherFileDoesNot() throws {
+        let fold = claude([
+            F.claudeEdit("a", path: "tests/a.swift", old: "assert(x)", new: "assert(y)", cwd: "/work/app", at: 1),
+            F.claudeResult("a", text: "ok", at: 2),
+            F.claudeEdit("b", path: "tests/a.swift", old: "assert(y)", new: "assert(z)", cwd: "/work/app", at: 3),
+            F.claudeResult("b", text: "ok", at: 4),
+            F.claudeEdit("c", path: "tests/b.swift", old: "assert(x)", new: "assert(y)", cwd: "/work/app", at: 5),
+            F.claudeResult("c", text: "ok", at: 6),
+        ])
+        let keys = fold.events.compactMap { event -> PathKey? in
+            guard case .codeChange(let change) = event else { return nil }
+            return pathKey(change.target)
+        }
+        try #require(keys.count == 3)
+        #expect(keys[0] == keys[1])
+        #expect(keys[0] != keys[2])
+    }
+
+    @Test func claudeResolvesATestPathAgainstTheRecordsCwd() throws {
+        let withRoot = claude([
+            F.claudeEdit("e", path: "tests/a.swift", old: "assert(x)", new: "assert(y)", cwd: "/work/app", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        let withRootTarget = try #require(firstTarget(withRoot))
+        #expect(withRootTarget.statsName == "test.compared")
+
+        let withoutRoot = claude([
+            F.claudeEdit("e", path: "tests/a.swift", old: "assert(x)", new: "assert(y)", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        let withoutRootTarget = try #require(firstTarget(withoutRoot))
+        #expect(withoutRootTarget == .source)
+        #expect(withoutRootTarget.statsName == "source")
+    }
+
+    @Test func aScratchOrDocumentationPathStaysExcludedEvenIfItLooksLikeATest() {
+        let scratch = claude([
+            F.claudeEdit("e", path: "/tmp/tests/a.swift", old: "assert(x)", new: "", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        #expect(scratch.events.isEmpty)
+        let docs = claude([
+            F.claudeEdit("e", path: "docs/test_guide.md", old: "assert(x)", new: "", cwd: "/work/app", at: 1),
+            F.claudeResult("e", text: "ok", at: 2),
+        ])
+        #expect(docs.events.isEmpty)
+    }
+
+    // MARK: Codex test edits
+
+    @Test func codexTestChangeHasNoCountsButKeepsItsCompletionTime() throws {
+        let fold = self.fold(CodexEvidenceExtractor(), batches: [[
+            F.codexMeta(cwd: "/work/app", at: 0),
+            F.codexChange(["tests/a.swift"], at: 5),
+        ]])
+        let change = try #require(firstChange(fold))
+        #expect(change.completedAt == F.at(5))
+        #expect(change.target.statsName == "test.unseen")
+        #expect(compared(change.target) == nil)
+    }
+
+    @Test func codexTakesTheFirstTestPathInSortedOrder() throws {
+        let fold = codex([
+            F.codexMeta(cwd: "/work/app", at: 0),
+            F.codexChange(["tests/z.swift", "tests/a.swift", "src/main.swift"], at: 1),
+        ])
+        let target = try #require(firstTarget(fold))
+        let key = try #require(pathKey(target))
+        #expect(key == PathKey(path: "/work/app/tests/a.swift"))
+    }
+
+    @Test func codexResolvesATestPathAgainstTheLatestWorkspaceRoot() throws {
+        let fold = codex([
+            F.codexMeta(cwd: "/work/app", at: 0),
+            F.codexChange(["/work/app/tests/a.swift"], at: 1),
+            F.codexTurnContext(cwd: "/work/app/tests", at: 2),
+            F.codexChange(["/work/app/tests/b.swift"], at: 3),
+            F.codexTurnContext(cwd: "/work/app", at: 4),
+            F.codexChange(["/work/app/tests/b.swift"], at: 5),
+        ])
+        let targets = fold.events.compactMap { event -> CodeChangeTarget? in
+            guard case .codeChange(let change) = event else { return nil }
+            return change.target
+        }
+        try #require(targets.count == 3)
+        #expect(targets[0].statsName == "test.unseen")
+        // cd-ed into tests/: the directory is the root now, so it does not count.
+        #expect(targets[1] == .source)
+        #expect(targets[2].statsName == "test.unseen")
     }
 }

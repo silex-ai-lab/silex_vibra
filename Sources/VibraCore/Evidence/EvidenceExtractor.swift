@@ -42,6 +42,96 @@ func isCodePath(_ path: String) -> Bool {
     return !documentationExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased())
 }
 
+// MARK: - Test paths
+
+private let testDirectories: Set<String> = [
+    "test", "tests", "__tests__", "spec", "specs", "Tests", "testing",
+]
+private let neverTestDirectories: Set<String> = [
+    "fixtures", "Fixtures", "testdata", "test_data", "__snapshots__",
+]
+
+/// A changed path is a test path when a directory component below the workspace
+/// root names one, or its file name fits a test naming convention. Components
+/// at or above the root never count, or a checkout under `~/code/testing`
+/// would turn every file into a test.
+///
+/// The root is the `cwd` in effect at the edit, so a mid-session `cd` moves it
+/// with the agent. A path outside the root, or any path when no root is known,
+/// is decided by its file name alone.
+func isTestPath(_ rawPath: String, root rawRoot: String?) -> Bool {
+    let root = rawRoot.flatMap { IncidentPaths.absolute($0, cwd: nil) }
+    let path = IncidentPaths.absolute(rawPath, cwd: rawRoot) ?? rawPath
+    if let root, let below = components(below: root, of: path) {
+        let directories = below.dropLast()
+        if directories.contains(where: neverTestDirectories.contains) { return false }
+        if directories.contains(where: testDirectories.contains) { return true }
+    }
+    let name = (path as NSString).lastPathComponent
+    let range = NSRange(name.startIndex..., in: name)
+    return testFileName.firstMatch(in: name, range: range) != nil
+}
+
+private func components(below root: String, of path: String) -> [String]? {
+    if root == "/" { return path.split(separator: "/").map(String.init) }
+    guard path.hasPrefix(root + "/") else { return nil }
+    return path.dropFirst(root.count + 1).split(separator: "/").map(String.init)
+}
+
+// MARK: - Pattern counts
+
+/// Counted per edit, in the extractor, and dropped: no text survives the fold.
+///
+/// The patterns are normative and pinned against an independent oracle, so
+/// they are copied character for character and never "tidied".
+func patternCounts(in text: String) -> PatternCounts {
+    let counted = uncommented(text)
+    let range = NSRange(counted.startIndex..., in: counted)
+    func count(_ pattern: NSRegularExpression) -> Int { pattern.numberOfMatches(in: counted, range: range) }
+    return PatternCounts(
+        assertion: count(assertionPattern),
+        skip: count(skipPattern),
+        focus: count(focusPattern),
+        expectedFailure: count(expectedFailurePattern),
+        testFunction: count(testFunctionPattern))
+}
+
+/// Drops every line that is entirely a comment: an assertion commented out with
+/// `//` counts as removed, while `#expect`, `#require`, `#[test]` and
+/// `#[ignore]` survive because `#` is followed by a non-space.
+///
+/// The strip is the plan's pattern verbatim, so it agrees with the oracle on
+/// exotic whitespace too.
+private let commentLine = regex(#"^\s*(?://|/\*|\*|#(?:\s|$))"#)
+
+private func uncommented(_ text: String) -> String {
+    text.split(separator: "\n", omittingEmptySubsequences: false)
+        .map(String.init)
+        .filter { line in
+            let range = NSRange(line.startIndex..., in: line)
+            return commentLine.firstMatch(in: line, range: range) == nil
+        }
+        .joined(separator: "\n")
+}
+
+private let assertionPattern = regex(
+    #"\bassert\w*\b|\bXCTAssert\w*|#expect\b|#require\b|\bexpect\(|\.should\b|\bt\.(?:Error|Fatal)f?\(|\brequire\.[A-Z]\w*\("#)
+private let skipPattern = regex(
+    #"pytest\.mark\.skip\w*|\b(?:it|test|describe|context|suite|pytest|this)\.skip\(|\.skipTest\(|(?<![.\w])xit\(|(?<![.\w])xdescribe\(|\bXCTSkip\w*|@Disabled\b|\.disabled\(|\bt\.Skip\w*\(|#\[ignore\]|@unittest\.skip\w*"#)
+private let focusPattern = regex(
+    #"\b(?:it|test|describe|context|suite)\.only\(|(?<![.\w])fit\(|(?<![.\w])fdescribe\("#)
+private let expectedFailurePattern = regex(
+    #"pytest\.mark\.xfail\b|\bwithKnownIssue\b|\bXCTExpectFailure\b|@unittest\.expectedFailure\b|\b(?:it|test)\.failing\("#)
+private let testFunctionPattern = regex(
+    #"\bdef test_\w*|\bfunc test\w*|@Test\b|(?<![.\w])it\(|(?<![.\w])test\(|#\[test\]|\bfunc Test\w+\("#)
+private let testFileName = regex(
+    #"^(?:test_.*\.py|.*_test\.(?:py|go|rs|rb)|.*\.test\.(?:js|jsx|ts|tsx)|.*\.spec\.(?:js|jsx|ts|tsx)|.*Test\.(?:swift|java|kt)|.*Tests\.(?:swift|java|kt)|conftest\.py)$"#)
+
+/// A malformed literal is a programmer error that the pattern tests exercise.
+private func regex(_ pattern: String) -> NSRegularExpression {
+    try! NSRegularExpression(pattern: pattern)
+}
+
 /// What a finished tool call reported about its process.
 enum ObservedExit: Sendable {
     case zero, nonZero
@@ -96,7 +186,7 @@ func checkResult(soleCommand: Bool, exit: ObservedExit, outputTail: String, kind
 struct ClaudeEvidenceExtractor: EvidenceExtractor {
     private enum Pending {
         case check(CheckKind, soleCommand: Bool, at: Date)
-        case edit(at: Date)
+        case edit(at: Date, target: CodeChangeTarget)
     }
 
     private static let editTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
@@ -121,9 +211,10 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
                   let blocks = (record["message"] as? [String: Any])?["content"] as? [[String: Any]]
             else { continue }
             let stamp = (record["timestamp"] as? String).flatMap(parseISODate)
+            let cwd = record["cwd"] as? String
             for block in blocks {
                 switch block["type"] as? String {
-                case "tool_use": open(block, at: stamp)
+                case "tool_use": open(block, at: stamp, cwd: cwd)
                 case "tool_result": close(block, at: stamp)
                 default: continue
                 }
@@ -131,7 +222,7 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
         }
     }
 
-    private mutating func open(_ block: [String: Any], at stamp: Date?) {
+    private mutating func open(_ block: [String: Any], at stamp: Date?, cwd: String?) {
         guard let id = block["id"] as? String, let stamp, !tracked.contains(id),
               let name = block["name"] as? String,
               let input = block["input"] as? [String: Any]
@@ -148,7 +239,7 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
             result.sawToolRecords = true
             guard isCodePath(path) else { return }
             tracked.insert(id)
-            pending[id] = .edit(at: stamp)
+            pending[id] = .edit(at: stamp, target: Self.target(name: name, input: input, path: path, root: cwd))
         }
     }
 
@@ -158,13 +249,52 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
         let isError = block["is_error"] as? Bool ?? false
         guard !(isError && Self.neverRan.contains(where: text.hasPrefix)) else { return }
         switch call {
-        case .edit(let at):
-            if !isError { result.events.append(.codeChange(CodeChange(at: at, completedAt: completedAt, target: .source))) }
+        case .edit(let at, let target):
+            if !isError {
+                result.events.append(.codeChange(CodeChange(at: at, completedAt: completedAt, target: target)))
+            }
         case .check(let kind, let sole, let at):
             let outcome = checkResult(
                 soleCommand: sole, exit: Self.observedExit(isError: isError, text: text), outputTail: text, kind: kind)
             result.events.append(.check(ObservedCheck(at: at, completedAt: completedAt, kind: kind, result: outcome)))
         }
+    }
+
+    /// Classified when the call opens: the counts are what the text said then,
+    /// and only numbers and a key wait for the result.
+    private static func target(
+        name: String, input: [String: Any], path: String, root: String?
+    ) -> CodeChangeTarget {
+        guard isTestPath(path, root: root) else { return .source }
+        let key = PathKey(path: IncidentPaths.absolute(path, cwd: root) ?? path)
+        switch name {
+        case "Edit":
+            guard input["replace_all"] as? Bool != true else { return .test(path: key, before: nil, after: nil) }
+            return .test(
+                path: key,
+                before: (input["old_string"] as? String).map(patternCounts(in:)),
+                after: (input["new_string"] as? String).map(patternCounts(in:)))
+        case "MultiEdit":
+            guard let edits = input["edits"] as? [[String: Any]], !edits.isEmpty,
+                  !edits.contains(where: { $0["replace_all"] as? Bool == true })
+            else { return .test(path: key, before: nil, after: nil) }
+            return .test(
+                path: key,
+                before: joined(edits, "old_string").map(patternCounts(in:)),
+                after: joined(edits, "new_string").map(patternCounts(in:)))
+        default:
+            // Write and NotebookEdit replace text this transcript never shows.
+            return .test(path: key, before: nil, after: nil)
+        }
+    }
+
+    private static func joined(_ edits: [[String: Any]], _ key: String) -> String? {
+        var parts: [String] = []
+        for edit in edits {
+            guard let text = edit[key] as? String else { return nil }
+            parts.append(text)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 
     /// `is_error` also marks timeouts and aborts. Only a result that opens with
@@ -203,14 +333,26 @@ struct ClaudeEvidenceExtractor: EvidenceExtractor {
 
 /// Codex: one `item_completed` event per finished command or file change.
 /// A command carries its own exit code, duration and output, so no state
-/// crosses a record.
+/// crosses a record. The workspace root does cross records: `session_meta` and
+/// `turn_context` each name the current `cwd`, and an edit is read relative to
+/// the latest one before it.
 struct CodexEvidenceExtractor: EvidenceExtractor {
+    private var cwd: String?
     private var result = EvidenceFold()
 
     mutating func fold(_ lines: [String]) {
-        for line in lines where lineContains(line, "\"item_completed\"")
-            && (lineContains(line, "\"CommandExecution\"") || lineContains(line, "\"FileChange\"")) {
-            guard let record = jsonObject(line),
+        for line in lines {
+            if lineContains(line, "\"session_meta\"") || lineContains(line, "\"turn_context\"") {
+                if let record = jsonObject(line),
+                   let payload = record["payload"] as? [String: Any],
+                   let path = payload["cwd"] as? String, !path.isEmpty {
+                    cwd = path
+                }
+                continue
+            }
+            guard lineContains(line, "\"item_completed\"")
+                    && (lineContains(line, "\"CommandExecution\"") || lineContains(line, "\"FileChange\"")),
+                  let record = jsonObject(line),
                   record["type"] as? String == "event_msg",
                   let payload = record["payload"] as? [String: Any],
                   payload["type"] as? String == "item_completed",
@@ -243,8 +385,18 @@ struct CodexEvidenceExtractor: EvidenceExtractor {
     private mutating func change(_ item: [String: Any], at stamp: Date) {
         guard let changes = item["changes"] as? [String: Any] else { return }
         result.sawToolRecords = true
-        guard item["status"] as? String == "completed", changes.keys.contains(where: isCodePath) else { return }
-        result.events.append(.codeChange(CodeChange(at: stamp, completedAt: stamp, target: .source)))
+        guard item["status"] as? String == "completed" else { return }
+        let paths = changes.keys.filter(isCodePath)
+        guard !paths.isEmpty else { return }
+        var target = CodeChangeTarget.source
+        // One test path is enough to make the change a test edit; the key comes
+        // from the first of them in sorted order so a set never picks at random.
+        for path in paths.sorted() where isTestPath(path, root: cwd) {
+            target = .test(
+                path: PathKey(path: IncidentPaths.absolute(path, cwd: cwd) ?? path), before: nil, after: nil)
+            break
+        }
+        result.events.append(.codeChange(CodeChange(at: stamp, completedAt: stamp, target: target)))
     }
 
     mutating func finish() -> EvidenceFold { result }

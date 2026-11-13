@@ -22,22 +22,51 @@ enum EvidenceFixtures {
     // MARK: Claude Code
 
     static func claudeUse(
-        _ id: String, name: String = "Bash", input: [String: Any], at seconds: TimeInterval
+        _ id: String, name: String = "Bash", input: [String: Any], cwd: String? = nil,
+        at seconds: TimeInterval
     ) -> String {
-        json([
+        var record: [String: Any] = [
             "type": "assistant", "timestamp": stamp(seconds),
             "message": ["role": "assistant", "content": [
                 ["type": "tool_use", "id": id, "name": name, "input": input] as [String: Any],
             ]] as [String: Any],
-        ])
+        ]
+        if let cwd { record["cwd"] = cwd }
+        return json(record)
     }
 
     static func claudeBash(_ id: String, _ command: String, at seconds: TimeInterval) -> String {
         claudeUse(id, input: ["command": command], at: seconds)
     }
 
-    static func claudeEdit(_ id: String, path: String = "/work/App.swift", name: String = "Edit", at seconds: TimeInterval) -> String {
-        claudeUse(id, name: name, input: ["file_path": path], at: seconds)
+    static func claudeEdit(
+        _ id: String, path: String = "/work/App.swift", name: String = "Edit",
+        old: String? = nil, new: String? = nil, replaceAll: Bool = false, cwd: String? = nil,
+        at seconds: TimeInterval
+    ) -> String {
+        var input: [String: Any] = ["file_path": path]
+        if let old { input["old_string"] = old }
+        if let new { input["new_string"] = new }
+        if replaceAll { input["replace_all"] = true }
+        return claudeUse(id, name: name, input: input, cwd: cwd, at: seconds)
+    }
+
+    static func claudeNotebookEdit(
+        _ id: String, path: String, cwd: String? = nil, at seconds: TimeInterval
+    ) -> String {
+        claudeUse(id, name: "NotebookEdit", input: ["notebook_path": path], cwd: cwd, at: seconds)
+    }
+
+    static func claudeMultiEdit(
+        _ id: String, path: String, edits: [(old: String, new: String)], replaceAll: Bool = false,
+        cwd: String? = nil, at seconds: TimeInterval
+    ) -> String {
+        let entries: [[String: Any]] = edits.map {
+            var entry: [String: Any] = ["old_string": $0.old, "new_string": $0.new]
+            if replaceAll { entry["replace_all"] = true }
+            return entry
+        }
+        return claudeUse(id, name: "MultiEdit", input: ["file_path": path, "edits": entries], cwd: cwd, at: seconds)
     }
 
     static func claudeResult(
@@ -77,6 +106,18 @@ enum EvidenceFixtures {
             "type": "event_msg", "timestamp": stamp(seconds),
             "payload": ["type": "item_completed", "item": item] as [String: Any],
         ])
+    }
+
+    /// Codex names the workspace root in these two record types only.
+    static func codexMeta(cwd: String, at seconds: TimeInterval) -> String {
+        json([
+            "type": "session_meta", "timestamp": stamp(seconds),
+            "payload": ["session_id": "s", "id": "s", "cwd": cwd],
+        ])
+    }
+
+    static func codexTurnContext(cwd: String, at seconds: TimeInterval) -> String {
+        json(["type": "turn_context", "timestamp": stamp(seconds), "payload": ["cwd": cwd]])
     }
 }
 
