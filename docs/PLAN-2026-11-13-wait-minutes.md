@@ -29,7 +29,7 @@ pick") deferred this metric to "the next plan".
 | Gates | Both reviewers' literal approvals plus the planner's written sign-off |
 | Branch | `feat/wait-stats` from `origin/main` at `eb08b6c` |
 | `$SCRATCH` | `/var/folders/x3/8mdzc51d11j_z0l1mt77lpmr0000gn/T//fleet-kC4dbe` |
-| Review base | Recorded when the plan gate passes |
+| Review base | `BASE=e75aa84` (plan gate passed; Step 5 started 2026-11-13). Layout: one shared working tree, coder-deepseek in its own pane |
 | Data rule | Repo is public. Seats read the repo and `$SCRATCH` only, never `~/.claude`, `~/.codex`, `~/Library` or any transcript. Probes over real transcripts are run by the planner only and print counts and durations only. Nothing in a Sol prompt comes from a transcript |
 | Toolchain floor | CI builds on Swift 6.1.2 (the repo's floor). Code must compile there |
 

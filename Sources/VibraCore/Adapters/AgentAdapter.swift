@@ -56,6 +56,10 @@ public protocol AgentAdapter: Sendable {
     /// Every transcript that belongs to `session`: its own and its subagents'.
     func evidenceSources(for session: Session) -> [URL]
 
+    /// A fresh per-transcript extractor for `--wait-stats`, or nil when this
+    /// adapter's transcripts record no wait Vibra reads.
+    func waitExtractor() -> (any WaitExtractor)?
+
     /// A fresh per-transcript extractor for the incident monitor, or nil when
     /// this adapter has no transcript the monitor can read.
     func incidentExtractor() -> (any IncidentExtractor)?
@@ -90,6 +94,9 @@ public extension AgentAdapter {
 
     /// Default: no evidence transcripts.
     func evidenceSources(for session: Session) -> [URL] { [] }
+
+    /// Default: no waits.
+    func waitExtractor() -> (any WaitExtractor)? { nil }
 
     /// Default: not monitored.
     func incidentExtractor() -> (any IncidentExtractor)? { nil }
