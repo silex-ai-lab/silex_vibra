@@ -1,0 +1,4 @@
+2026-11-13T10:30:57Z
+attended sessions 221 turn waits 764 over 2h 80 open at end 204
+turn wait seconds p25/50/75 [157.7, 596.3, 3268.3]
+blocked minutes per session p25/50/75 [0.0, 0.0, 84.2] sum 23052

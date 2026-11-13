@@ -1,0 +1,26 @@
+2026-11-13T10:31:15Z
+33005 {"decision": "accept", "reasonType": "classifier", "source": "config"}
+3716 {"decision": "accept", "reasonType": "mode", "source": "config"}
+1085 {"decision": "accept", "reasonType": "other", "source": "config"}
+455 {"decision": "accept", "source": "config"}
+211 {"decision": "accept", "reasonType": "rule", "ruleSource": "cliArg", "source": "config"}
+88 {"decision": "accept", "reasonType": "subcommandResults", "source": "config"}
+45 {"decision": "reject", "reasonCode": "bashMiss:no-rule-match", "source": "config"}
+32 {"decision": "accept", "grantScope": "once", "reasonCode": "unknown", "source": "user_temporary"}
+28 {"decision": "reject", "reasonType": "classifier", "source": "config"}
+17 {"decision": "accept", "source": "user_temporary"}
+15 {"decision": "reject", "reasonCode": "bashMiss:too-complex", "source": "config"}
+8 {"circuitBreaker": "dangerousRemoval", "decision": "reject", "reasonCode": "safetyCheck", "reasonType": "safetyCheck", "source": "config"}
+7 {"decision": "reject", "reasonType": "safetyCheck", "source": "config"}
+7 {"classifierCategory": "<str>", "decision": "reject", "reasonCode": "classifier:auto-mode", "reasonType": "classifier", "source": "config"}
+6 {"decision": "reject", "reasonCode": "unknown", "source": "config"}
+5 {"decision": "reject", "reasonCode": "unknown", "source": "user_reject"}
+5 {"decision": "accept", "grantScope": "session", "reasonCode": "bashMiss:no-rule-match", "source": "user_temporary"}
+4 {"decision": "reject", "reasonCode": "safetyCheck", "reasonType": "safetyCheck", "source": "config"}
+3 {"decision": "reject", "reasonCode": "classifier:auto-mode", "reasonType": "classifier", "source": "config"}
+3 {"decision": "reject", "reasonCode": "bashMiss:cd-git-compound", "source": "config"}
+2 {"decision": "reject", "source": "user_reject"}
+2 {"classifierCategory": "code_from_external", "decision": "reject", "reasonCode": "classifier:auto-mode", "reasonType": "classifier", "source": "config"}
+2 {"classifierCategory": "external_system_writes", "decision": "reject", "reasonCode": "classifier:auto-mode", "reasonType": "classifier", "source": "config"}
+2 {"classifierCategory": "git_destructive", "decision": "reject", "reasonCode": "classifier:auto-mode", "reasonType": "classifier", "source": "config"}
+2 {"classifierCategory": "merge_without_review", "decision": "reject", "reasonCode": "classifier:auto-mode", "reasonType": "classifier", "source": "config"}
