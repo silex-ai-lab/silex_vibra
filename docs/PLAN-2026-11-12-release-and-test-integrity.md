@@ -507,3 +507,39 @@ reviewer-claude PLAN-REJECTED (2).
 | Four patterns match ordinary code: `.disabled`, `.skip(`, `test(`/`it(`, `require.X(` (claude 2) | Receivers named for `.skip(`, `.only(`, `.failing(`; `(?<![.\w])` for receiver-free calls (also `xit(`, `xdescribe(`, `fit(`, `fdescribe(`); `.disabled(`; `require.[A-Z]`; `.skipTest(` added. Pinned non-matches add `qs.only(...)` and `model.fit(...)`. Checked with Python `re` and Swift `NSRegularExpression` on the table text: 16 non-matches, 28 matches, no disagreement (`$SCRATCH/regex-check.py`, `regex-check.swift`) |
 | Folded non-blocking (claude) | Oracle half first as task 4a, its real `qualified` count recorded before task 2; `replace_all` → nil counts; cross-file net sign required (assertion moved between files → none); streak start, F/P different commands and `#assert` listed as known limits; task 3 source-only and source-plus-test fixtures; task 1 back-to-back runs; release.yml `timeout-minutes` and notary `--timeout`, tag commit must be on `origin/main`, secrets only in step `env:`, no `set -x`, DMG `--timestamp`; dry run on both runners and a throwaway keychain identity via shared `keychain.sh`; masked `TeamIdentifier` wording; runbook closing paragraph and "Prevent self-review" note; OWASP line worded as a related category; 0.5.0 bump in a release PR |
 | Not taken | Gating the dry-run job to `push` only: it follows the existing jobs' triggers; the duplicate PR run costs minutes, not correctness |
+
+## Plan gate record
+
+Round 4 reviewed v0.4 at `dc3168c` (`$SCRATCH/interdiff-plan-r4.txt`).
+
+| Seat | Model (self-reported) | Verdict | Reply |
+|---|---|---|---|
+| reviewer-codex | GPT-6-Sol | PLAN-APPROVED | `$SCRATCH/codex-plan-r4.md` |
+| reviewer-claude | claude-fable-5-2 | PLAN-APPROVED | `$SCRATCH/claude-plan-r4.md` |
+
+Non-blocking suggestions from round 4, carried into implementation as task
+notes and checked at the code gate (no change to the approved rules):
+
+- Spec "Test path": the helper is `IncidentPaths.absolute(_:cwd:)` (in
+  `IncidentExtractor.swift`), not `IncidentExtractor.absolute` (both).
+- Task 8: resolve each slice's binary with `swift build --show-bin-path` using
+  the same `--triple` and `--scratch-path` (codex).
+- Task 12 Known limits gain: an agent that has `cd`-ed into `tests/` or `src/`
+  turns some test files into source (a miss, never a false claim); assertions
+  moved into a file written whole with `Write` still show "fewer assertion
+  matches"; `\.disabled\(` also matches the SwiftUI modifier; an edit still in
+  flight on a live transcript is absent, not nil, until its result arrives, so
+  the clause can show until the next refresh (accepted) (claude 2-5). Task 3
+  adds the `Write` fixture pinning that behaviour.
+- Task 8: `keychain.sh setup` takes the `find-identity` validity flag as an
+  argument (release `-v`, dry run without); the throwaway certificate carries
+  the codeSigning EKU; OpenSSL 3 `.p12` export uses `-legacy` if `security
+  import` needs it (claude 6).
+- Task 10: checkout with `fetch-depth: 0` for the ancestor check, which
+  compares `$GITHUB_SHA` (claude 7). Task 12 runbook troubleshooting: import
+  `DeveloperIDG2CA.cer` if signing reports "unable to build chain" (claude 8,
+  marked by the reviewer as unverified).
+
+PLANNER (claude): PLAN-APPROVED, plan v0.4 at `dc3168c`. Both reviewers'
+literal approvals were read in their reply files. The appended notes above
+change no rule, test or acceptance in the approved plan.
