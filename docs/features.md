@@ -320,6 +320,48 @@ Each session has `agent`, `id`, `project`, `cwd`, `gitBranch`, `state`,
 titles either. [docs/skills/vibra-query/SKILL.md](skills/vibra-query/SKILL.md)
 tells a coding agent how to use it.
 
+### How long sessions waited on you: `--wait-stats`
+
+```sh
+/Applications/Vibra.app/Contents/MacOS/Vibra --wait-stats                       # last 30 days
+/Applications/Vibra.app/Contents/MacOS/Vibra --wait-stats --from 2026-11-01 --to 2026-11-07
+```
+
+For Claude Code and Codex it reads the transcripts and prints, per agent, how
+long sessions sat waiting on you. Three kinds of wait:
+
+- **turn**: the agent finished its turn; the wait ends at your next prompt, or
+  at a slash command or `!` shell run. A turn a fleet planner dispatched
+  (`Dispatch <id>:`) or a Codex automation started is not a wait on you.
+- **question** (Claude Code): the agent called `AskUserQuestion`; the wait
+  ends at your answer.
+- **approval** (Claude Code): a tool call whose permission you decided; the
+  wait ends when the tool's result is written, so it includes the tool's own
+  run time.
+
+Each wait counts at most 2 h, the default point after which the menu stops calling a
+finished session "your turn". The lines are `sessions`, `open` (sessions whose
+transcript ends on a turn nobody answered), `waits` by kind and answer,
+`over_cap`, `seconds` (25th, 50th and 75th percentile of the capped length,
+also by how many questions or approvals came earlier in the session), and
+`blocked` (minutes per session as the union of its waits, with `scope=all`
+and `scope=within_cap`, which leaves out waits over the cap). A session
+counts when it has at least one prompt you typed; scheduled, `claude -p`,
+`codex exec` and subagent transcripts do not. Only complete days in your
+time zone are used with `--from/--to`. It prints counts and durations only.
+
+Known limits: a wait still open when the transcript ends is not counted; a
+turn that stops for another reason (a stop sequence, a refusal, a token
+limit) opens no wait, and neither does an interrupted one; a background
+notification that restarts the agent moves the wait's start to the later end
+of turn; a prompt queued while the agent works closes a wait of about zero
+seconds; a transcript copied into a second file by a resume or fork counts
+twice; a fleet seat with only dispatched prompts, and a session driven only
+by slash commands, are left out; and you can wait on several sessions at
+once, so session minutes overlap in wall time. The definitions and their
+measured sizes are in `docs/PLAN-2026-11-13-wait-minutes.md`. Reading 30 days
+of transcripts took 83 s on the owner's machine (2.55 GB).
+
 ### Asking Vibra from another agent
 
 A coding agent can answer "which of my sessions needs me?" without you
