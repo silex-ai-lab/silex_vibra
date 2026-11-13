@@ -37,7 +37,66 @@ one. A run that selected no tests reads as not visible. If
 nothing decides, the result reads as not visible. The row describes what this
 session did. It does not say a task is done, and edits made through shell
 commands are not counted. `Vibra --evidence-stats [--days N]` prints the same
-results as counts, with no commands or paths.
+results as counts, with no commands or paths. Its `change` lines carry
+`target=source`, `target=test.compared` (a test-file edit with counts) or
+`target=test.unseen` (a test-file edit whose text Vibra cannot see), and
+`qualified agent=<a> effect=<e>` lines count the rows whose test-edit sentence
+names that effect.
+
+**Test edits between a failed and a passing run.** When the row reports a
+passing test run, and the test run just before it failed, the row can add one
+sentence about edits to test files made in between. For example, "Between a
+failed test run that finished 12m ago and this run, edits to test files changed
+Vibra's text-pattern counts in the edited text: fewer assertion matches. Vibra
+matches text patterns in the edited text only; it does not parse code or read
+the whole file." The shell-edit sentence stays last.
+
+- A test file is one under a `test`, `tests`, `__tests__`, `spec`, `specs`,
+  `Tests` or `testing` directory below the session's working directory, or one
+  named like `test_*.py`, `*_test.go`, `*.test.ts`, `*.spec.js`, `*Tests.swift`
+  or `conftest.py`. A `fixtures`, `testdata`, `test_data` or `__snapshots__`
+  directory is never a test directory.
+- For each Claude Code `Edit` and `MultiEdit` on a test file, Vibra counts five
+  kinds of pattern match in the removed and the inserted text: assertions
+  (`assert…`, `XCTAssert…`, `#expect`, `expect(` and others), skips
+  (`it.skip(`, `XCTSkip`, `@Disabled` and others), focus (`it.only(`, `fit(`),
+  expected failures (`pytest.mark.xfail`, `XCTExpectFailure`, `withKnownIssue`
+  and others) and test functions (`def test_`, `func test…`, `@Test`, `it(`).
+  A line that is only a comment is dropped first, so commenting an assertion
+  out counts as removing it.
+- Only edits that started after the failed run finished and completed before
+  the passing run was issued count. A file is left out entirely if any of its
+  edits overlaps either end of that window, has no result, or cannot be counted.
+- The sentence names an effect only when at least one file moved that way and
+  the total across files did too. So a skip added and then removed, or an
+  assertion moved within a file or between files, names nothing.
+- It names pattern matches, not calls or functions, because a string that
+  contains a pattern word matches like code.
+
+**Known limits of the test-edit sentence.**
+
+- A whole-file `Write`, a notebook edit, a shell edit and every Codex edit give
+  no counts, so those files are left out.
+- Strings and identifiers that contain the pattern words count like code.
+- A second test run after the first pass, with no edit in between, hides the
+  sentence. Only the first passing run after the failure can carry it.
+- The window starts at the last failed run only. A test edit followed by another
+  failure and then a pass shows nothing.
+- The failed and the passing run may be different commands, for example a full
+  run that failed and a filtered run that passed.
+- A line commented out as `#assert x`, with no space after `#`, is not dropped,
+  so that removal is missed.
+- An `Edit` with `replace_all` leaves its file out.
+- Test files are recognized relative to the working directory in effect at the
+  edit. An agent that has changed into `tests/` or `src/` can make a test file
+  look like source. The sentence is then missed, never wrong.
+- Assertions moved out of an edited file into a file written whole with `Write`
+  still read as "fewer assertion matches", because the written file cannot be
+  counted.
+- The skip pattern `.disabled(` also matches SwiftUI's `.disabled(` modifier in
+  a Swift test file.
+- On a live session, an edit still in progress is not visible until its result
+  arrives. The sentence can show until the next refresh picks that edit up.
 
 When there is nothing to show, the menu says why: `No active sessions` when the
 sources are readable, a list of agents to start when none has state on disk,
@@ -192,6 +251,17 @@ saw and what else could explain it, and never says an agent was malicious or a k
 was stolen. You can copy it, open it as an email with no recipient, or open the
 vendor's page. Neither Claude Code's nor Codex's security policy publishes an
 email address, so Vibra does not invent one.
+
+**Related OWASP category.** Each finding kind names its related category in the
+OWASP Top 10 for Agentic Applications 2026. A credential read, this project's
+`.env` named and guardrails off relate to ASI03 (identity and privilege abuse).
+A denied call that ran later, a write outside the workspace and a force push
+relate to ASI02 (tool misuse and exploitation). A vendor credential rejection
+and vendor usage this Mac cannot explain relate to none. `--incidents --json`
+carries the ids in an `owasp` array on every row, empty for the last two. A
+report draft adds the line "Related OWASP category (Top 10 for Agentic
+Applications 2026): ASI03" after the facts. It names a related category for
+context. It is not a finding against the vendor.
 
 `Vibra --incidents [--days N] [--json]` prints the same closed values. It reads
 your answers and writes nothing.

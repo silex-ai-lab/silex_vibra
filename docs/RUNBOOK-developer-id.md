@@ -1,7 +1,7 @@
 # Runbook：为 Vibra 开通 Developer ID 签名与公证（交给 ChatGPT 执行）
 
 日期：2026-11-12。用途：完成 Apple 账号侧的全部准备，产出 GitHub Actions 发版所需的 8 个 secret。
-仓库侧的发版 workflow（签名、公证、staple、打包、cask）由 Vibra 的 fleet 计划另行实现，不在本 runbook 内。
+仓库侧的发版 workflow（签名、公证、staple、打包 DMG、起草 GitHub Release）由 Vibra 的 fleet 计划另行实现，不在本 runbook 内。
 
 ## 给 ChatGPT 的执行规则
 
@@ -83,6 +83,7 @@ xcrun notarytool history --key ~/path/AuthKey_<KEYID>.p8 --key-id <KEYID> --issu
 1. 打开 Settings → Environments → New environment，名称 `release`。
 2. 在 `release` 里设置：
    - Required reviewers：加仓库 owner。
+   - Prevent self-review：保持关闭。owner 既推 tag 又是唯一 reviewer 时，打开它会让 owner 无法批准自己的发版。
    - Deployment branches and tags：选 Selected branches and tags，添加 tag 规则 `v*`。
 3. 在 `release` environment 的 Environment secrets 里添加以下 8 项。**全部由人粘贴**，ChatGPT 只核对名称拼写：
 
@@ -114,4 +115,10 @@ GitHub environment `release`：已建，8 个 secret 名称核对一致，保护
 与本 runbook 不一致之处：…
 ```
 
-拿到这份清单后，Vibra 的 fleet 会接着实现并验证发版 workflow：hardened runtime 签名（带 Apple Events entitlement，因为终端跳转用 NSAppleScript）、`notarytool submit --wait`、`stapler staple`、上传到 GitHub Release，以及 Homebrew cask。
+## 排错（发版 workflow 第一次运行时）
+
+- `release.yml` 签名时报 "unable to build chain"：在 `tools/release/keychain.sh setup` 里额外导入 Apple 的中间证书 `DeveloperIDG2CA.cer`。这一条未经验证，来自计划评审的推测，第一次打 tag 时才能确认是否需要。
+
+## 之后由 fleet 做的事
+
+发版 workflow 已在仓库里实现（`tools/release/package.sh`、`tools/release/keychain.sh`、`.github/workflows/release.yml`），做 hardened runtime 签名、`notarytool submit --wait`、`stapler staple`，并起草 GitHub Release。分支 CI 的 dry run 已在 Apple Silicon 和 Intel runner 上通过（run 43382966703），但真正的签名和公证只能在拿到这份清单、8 个 secret 就位后第一次打 tag 时验证。Apple Events entitlement 是否保留，由计划的 task 11 实测决定（终端跳转用 NSAppleScript），目前尚未完成。Homebrew cask 不在这一轮计划内。

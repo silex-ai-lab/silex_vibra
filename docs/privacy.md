@@ -45,6 +45,17 @@ Vibra reads local files and sends nothing anywhere. Specifically:
   a command, a path and tool output for both agents and asserts it reaches no
   extractor state, result, row text or `--evidence-stats` output. `make test`
   fails if that test did not run.
+- **Test-file edits are counted, never kept.** For a Claude Code `Edit` or
+  `MultiEdit` on a test file, the removed and inserted text is read in memory
+  only to count pattern matches, in the extractor, and then dropped. The file's
+  path becomes an opaque in-memory hash key, used only to tell one file from
+  another. Nothing new is written to disk, and nothing is sent anywhere. The
+  `evidenceSentinelsNeverLeak` canary also plants sentinels in test-file paths
+  and in edit text for both agents. It requires the test-edit sentence to fire
+  first, so the text went through counting, and then asserts no sentinel
+  reaches any output. With a key that kept the raw path, or one built from the
+  edit text, the canary failed on the matching sentinel (plan task 7 mutation
+  run).
 - **Returning to a session in Orca reads one environment variable.** When you
   click a session running in an Orca terminal, Vibra asks the kernel for that
   agent process's start-up environment and keeps only `ORCA_TERMINAL_HANDLE`,

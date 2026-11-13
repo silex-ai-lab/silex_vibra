@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0 (unreleased)
+
+- **Code checks names test edits that weakened tests.** When the reported
+  check is a passing test run and the test run just before it failed, the row
+  now adds one sentence if edits to test files in between lowered Vibra's
+  assertion or test-function matches, or raised its skip, focus (`.only`) or
+  expected-failure matches. The sentence reads "Between a failed test run that
+  finished 12m ago and this run, edits to test files changed Vibra's
+  text-pattern counts in the edited text: fewer assertion matches. Vibra
+  matches text patterns in the edited text only; it does not parse code or read
+  the whole file." Only Claude Code `Edit` and `MultiEdit` edits are counted. A
+  file with an edit Vibra cannot see in full is left out. Pinned by
+  `DeliveryEvidenceTests` and `EvidenceExtractorTests`. `--evidence-stats`
+  gains `target=` on change lines and `qualified agent= effect=` lines.
+- **Review Agent Activity names a related OWASP category.** Each finding kind
+  maps to the OWASP Top 10 for Agentic Applications 2026. Credential reads, a
+  named `.env` and guardrails off map to ASI03. A denied call that ran later, a
+  write outside the workspace and a force push map to ASI02. Auth failures and
+  vendor usage map to none. `--incidents --json` carries an `owasp` array on
+  every row, and a vendor report draft adds one "Related OWASP category" line
+  after the facts. It names a related category, not a finding against the
+  vendor.
+- **Release pipeline, awaiting a Developer ID certificate.** `make app
+  ARCHS="arm64 x86_64" HARDENED=1` builds a universal app with the hardened
+  runtime. `make dmg` only packages an existing bundle.
+  `tools/release/package.sh --dry-run` builds, packages and checks the app
+  inside the mounted DMG, and CI runs it on Apple Silicon and Intel runners
+  (run 43382966703). A tag-only `release.yml` signs, notarizes and drafts a
+  GitHub release. It has not run yet, because the certificate does not exist
+  yet. Plain `make app` is unchanged.
+- **Verification.** 563 tests pass, including the four privacy canaries.
+
 ## 0.4.2
 
 - **Fix: a finished job no longer asks for you.** A Codex app scheduled task's
