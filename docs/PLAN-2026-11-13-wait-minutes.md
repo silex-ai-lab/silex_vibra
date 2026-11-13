@@ -688,9 +688,11 @@ the fixes below were under way, and the ledger closes that dispatch as
 |---|---|---|
 | Where DST skips midnight, Swift's upper end was the start of `--to` plus a calendar day, which kept 01:00 and added an hour (`America/Sao_Paulo`, 2018-11-04) | sol 1 | Each end is now the local midnight of its own civil date, resolved independently, in both. Shared fixture `midnight-dst` holds a wait ending in the extra hour (now out) and one at `lo` (in); `WaitWindowTests` pins both ends. An oracle mutation reproducing the old Swift rule fails on that fixture |
 | A local day that does not exist (`Pacific/Apia`, 2011-12-30) was rejected by Swift and accepted by the oracle | sol 2 | Shared policy: a `--from` date, or the day after `--to`, whose local day does not exist is a usage error (exit 2) in both; checked by a local round trip. Pinned in both suites, with 2011-12-31 accepted; a mutation removing the oracle's check fails |
-| Non-blocking folded | sol 2, claude 1, 2 | The oracle's unreadable-file test injects a `PermissionError` instead of relying on `chmod 000`; the oracle treats U+200B as whitespace, as Foundation does (the one scalar where the two sets differ, per the reviewer's enumeration), with a selftest case; `features.md` quotes the measured range of run times |
+| Non-blocking folded | sol 2, claude 1, 2 | The oracle's unreadable-file test injects a `PermissionError` instead of relying on `chmod 000`; the oracle treats U+200B as whitespace, as Foundation does (the one scalar where the two sets differ, per the reviewer's enumeration), with a selftest case; `features.md` quotes the run time from the cited run |
 | Non-blocking answered | sol 1 | CI on Swift 6.1.2 before merge, as recorded above |
 
 The agreement run was repeated at `f7ca514`: identical in both orders and on
 live data; the committed output changed only in `open agent=claudeCode`
-(83 to 82), the line the plan expects to move.
+(83 to 82), the line the plan expects to move. Repeated again at `b412c9a`
+after the oracle's U+200B change: identical in both orders and on live data,
+`open agent=claudeCode` back to 83.
