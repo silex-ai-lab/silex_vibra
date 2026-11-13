@@ -593,3 +593,22 @@ Bedrock (`us.openai.gpt-6.1-sol`, US Geo, Responses API, `store=False`), one
 bounded call per round through `sol-review.py` in the fleet dir, spend logged
 against the owner's standing Sol cap. It cannot open the repo, so its prompt
 embeds the diff and this plan; reviewer-claude gets the same prompt file.
+
+**Round 2** at `ea59e60`, diff hash `40a17181c4aad88c3084f2cdc6e1c9247bce30e0` (base `5005054`, 31 paths).
+reviewer-claude (`claude-fable-5-2`): IMPL-APPROVED, with its own runs of
+`make test` (564 tests), `oracle_selftest.py`, `actionlint` and
+`shellcheck`. GPT-6.1 Sol on Bedrock (`us.openai.gpt-6.1-sol`): IMPL-APPROVED,
+one call, 66090 input and 791 output tokens, USD 0.15; its reply is the
+verdict line only, with no stated basis. CI run 43393172081 at `ea59e60`: all
+four jobs green.
+
+Carried, not blocking (claude round 2): CHANGELOG, v0.5.0 notes and STATUS
+still say 563 tests; the count is 564 at `ea59e60`. Fixed in the task 11
+delta round or the 0.5.0 release PR, whichever comes first, so these approvals
+stay tied to this diff.
+
+PLANNER (claude): IMPL-APPROVED at `ea59e60`, diff hash `40a17181c4aad88c3084f2cdc6e1c9247bce30e0`. Both
+reviewers' literal approvals were read in their reply files. Task 11 (live
+hardened check) is deferred by the owner; if it removes
+`packaging/Vibra.entitlements`, that change gets its own delta round. Nothing
+merges to `main` without the owner's go-ahead.
