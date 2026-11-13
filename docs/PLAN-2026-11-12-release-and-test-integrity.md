@@ -546,6 +546,17 @@ change no rule, test or acceptance in the approved plan.
 
 ## Execution record
 
+Spec fix during task 3 (planner decision, 2026-11-13, for the code gate). The
+approved Wording names the failed run's finish time ("a failed test run that
+finished 12 m ago"), but the approved Shape change
+`checkedAfterLastChange(ObservedCheck, testEdits: Set<TestEditEffect>)` cannot
+carry it to `line(now:)`. DeepSeek raised this before writing code. The wording
+is kept; the payload becomes `testEdits: TestEdits?`, where `TestEdits` holds
+`failedRunFinishedAt` (F.completedAt) and a never-empty `effects` set, and nil
+means no clause. The case keeps two payloads and its `caseName`, so pattern
+matches elsewhere are unchanged. Rules 1-5 and every acceptance item are
+unchanged.
+
 | Task | Result | Evidence |
 |---|---|---|
 | 1 | Done, `0b9398e`. `make test`: 514 tests (513 at `BASE`, measured just before the change, plus one completion-time test). Existing extractor tests compare on issue time through test-only views in `EvidenceFixtures.swift`; completion times have their own test | `--evidence-stats --days 30`, both binaries built first, run back to back twice in opposite orders (05:07-05:19 UTC). Apart from the renamed `change ... target=source` lines, the only differences are check counts that grow with run time whichever binary ran later (live sessions were writing), so they are drift, not the change |
