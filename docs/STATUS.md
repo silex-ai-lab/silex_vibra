@@ -1,5 +1,14 @@
 # Vibra — current status
 
+**0.5.0** (2026-11-27). Source-only, as 0.4.2 was: the Developer ID
+certificate does not exist yet, so no signed DMG is attached. Adds, since
+0.4.2: `Vibra --wait-stats`, the test-edit sentence in **Code checks**, a
+related OWASP category on Review Agent Activity findings, and the release
+build scripts. Fixes Codex History listing subagent prompts as your questions,
+and a click on a session running as an Orca chat opening History instead of
+bringing Orca forward. CI passes 622 tests on macOS 15 (Swift 6.1.2), Apple
+Silicon and Intel.
+
 **0.4.2** (2026-11-12). Needs You lists only turns waiting on you. A Codex
 app automation run, or a fleet seat that finished a `Dispatch <id>:` prompt,
 ends idle. A "your turn" you go back to from the menu or a notification clears
