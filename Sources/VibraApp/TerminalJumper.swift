@@ -88,14 +88,14 @@ enum TerminalJumper {
         if let desktopID = found.desktopSessionID, openInClaudeApp(desktopID) {
             return .jumped(app: "Claude")
         }
-        // No terminal: the agent runs inside an app - the Codex app, or an
-        // IDE extension (Codex or Claude Code in VS Code or Cursor). Bring
-        // that app forward rather than report a dead end.
+        // No terminal: the agent runs inside an app - the Codex app, an Orca
+        // chat, or an IDE extension (Codex or Claude Code in VS Code or
+        // Cursor). Bring that app forward rather than report a dead end.
         guard let tty = found.tty else {
-            if let app = hostApp(of: found.pid), bringForward(app) {
-                return .jumped(app: app.localizedName ?? "its app")
-            }
-            return .noControllingTerminal
+            guard let app = hostApp(of: found.pid), bringForward(app) else { return .noControllingTerminal }
+            // After the app is forward: a wedged Orca server must not delay it.
+            if app.bundleIdentifier == OrcaLocator.bundleID { showOrcaChatWorkspace(pid: found.pid, in: app) }
+            return .jumped(app: app.localizedName ?? "its app")
         }
 
         let owner = ProcessInspector.ttyOwner(of: found.pid)
@@ -250,6 +250,19 @@ enum TerminalJumper {
               bringForward(app)
         else { return nil }
         return "Orca"
+    }
+
+    /// Switches a running Orca to the workspace holding the chat that `pid`
+    /// belongs to. Orca's CLI can select a workspace and not a chat tab, so a workspace
+    /// with several tabs shows the one it last had open. Nothing changes for a
+    /// folder workspace, which the CLI cannot activate.
+    private static func showOrcaChatWorkspace(pid: Int32, in app: NSRunningApplication) {
+        guard let cli = app.bundleURL?.appendingPathComponent("Contents/Resources/bin/orca").path,
+              let session = OrcaLocator.agentSessionID(of: pid),
+              let shown = runCLI(cli, ["agent", "show", "orca_session_id:\(session)", "--json"]),
+              let worktree = OrcaLocator.worktreeID(inAgentShow: shown)
+        else { return }
+        _ = runCLI(cli, ["worktree", "activate", "--worktree", "id:\(worktree)", "--json"])
     }
 
     // MARK: - herdr
