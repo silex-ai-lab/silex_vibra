@@ -434,7 +434,7 @@ The repository side is built (plan
 `tools/release/package.sh --dry-run` builds a universal, hardened app, packages
 it in a DMG and checks the mounted app. CI runs it on Apple Silicon and Intel
 (run 43382966703, green). `.github/workflows/release.yml` signs, notarizes and
-drafts a release on a `v*` tag. It has not run, because the owner's Apple
+drafts a release on a `v*` tag. It cannot sign yet, because the owner's Apple
 Developer enrollment and the eight secrets in `docs/RUNBOOK-developer-id.md`
 are pending. P3.1 is done only when the first tagged release passes plan task
 14.

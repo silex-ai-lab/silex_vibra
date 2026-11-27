@@ -25,6 +25,8 @@
   injected heartbeat, notification and shell-command text, as questions you
   typed. A Codex session spawned for a subagent (the approval guardian, a
   spawned thread) now counts as unattended, as `codex exec` already did.
+  Claude Code History also stops listing text wrapped in an
+  `artifact-content-authored-by-others` tag as a question.
   Pinned by `QueryAndHistoryTests`.
 - **Code checks says when test-file edits changed its test-pattern counts.** When the reported
   check is a passing test run and the test run just before it failed, the row
