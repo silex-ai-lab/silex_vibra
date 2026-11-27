@@ -1,7 +1,14 @@
 # Changelog
 
-## 0.5.0 (unreleased)
+## 0.5.0
 
+- **Fix: clicking a session that runs as an Orca chat brings Orca forward.**
+  Before, the click opened the History window. An Orca chat has no terminal
+  and runs under Orca's daemon host, so Vibra found no host app and reported
+  "process has no controlling terminal". Vibra now falls back to the running
+  Orca when the session's process ancestry names Orca. Orca's CLI has no
+  command to focus a chat tab, so the app comes forward and the tab is not
+  selected.
 - **`Vibra --wait-stats` measures how long sessions waited on you.** For
   Claude Code and Codex, from local transcripts, it prints per agent: sessions,
   waits by kind (a finished turn until your next prompt or slash command; an
@@ -18,6 +25,8 @@
   injected heartbeat, notification and shell-command text, as questions you
   typed. A Codex session spawned for a subagent (the approval guardian, a
   spawned thread) now counts as unattended, as `codex exec` already did.
+  Claude Code History also stops listing text wrapped in an
+  `artifact-content-authored-by-others` tag as a question.
   Pinned by `QueryAndHistoryTests`.
 - **Code checks says when test-file edits changed its test-pattern counts.** When the reported
   check is a passing test run and the test run just before it failed, the row
@@ -43,11 +52,11 @@
   ARCHS="arm64 x86_64" HARDENED=1` builds a universal app with the hardened
   runtime. `make dmg` only packages an existing bundle.
   `tools/release/package.sh --dry-run` builds, packages and checks the app
-  inside the mounted DMG, and CI runs it on Apple Silicon and Intel runners
-  (run 43382966703). A tag-only `release.yml` signs, notarizes and drafts a
-  GitHub release. It has not run yet, because the certificate does not exist
-  yet. Plain `make app` is unchanged.
-- **Verification.** 563 tests pass, including the four privacy canaries.
+  inside the mounted DMG, and CI runs it on Apple Silicon and Intel runners.
+  A tag-only `release.yml` signs, notarizes and drafts a GitHub release. It
+  cannot sign yet, because the certificate and its secrets do not exist. So
+  0.5.0 is a source-only release, as 0.4.2 was. Plain `make app` is unchanged.
+- **Verification.** 622 tests pass, including the five privacy canaries.
 
 ## 0.4.2
 
