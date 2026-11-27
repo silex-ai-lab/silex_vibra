@@ -92,7 +92,7 @@ enum TerminalJumper {
         // IDE extension (Codex or Claude Code in VS Code or Cursor). Bring
         // that app forward rather than report a dead end.
         guard let tty = found.tty else {
-            if let app = hostApp(of: found.pid), app.activate() {
+            if let app = hostApp(of: found.pid), bringForward(app) {
                 return .jumped(app: app.localizedName ?? "its app")
             }
             return .noControllingTerminal
@@ -218,10 +218,22 @@ enum TerminalJumper {
                app.bundleIdentifier != Bundle.main.bundleIdentifier {
                 return app
             }
-            guard let parent = table[current]?.ppid, parent > 1 else { return nil }
+            guard let parent = table[current]?.ppid, parent > 1 else { break }
             current = parent
         }
-        return nil
+        // An Orca chat runs under Orca's daemon host, which launchd adopts, so
+        // the walk above never reaches Orca.app.
+        guard ProcessInspector.ttyOwner(of: pid) == .multiplexer("Orca") else { return nil }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: OrcaLocator.bundleID).first
+    }
+
+    private static func bringForward(_ app: NSRunningApplication) -> Bool {
+        // Orca's `activate()` returned true and left another app in front.
+        guard app.bundleIdentifier == OrcaLocator.bundleID, let url = app.bundleURL else {
+            return app.activate()
+        }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        return true
     }
 
     // MARK: - Orca
@@ -234,10 +246,9 @@ enum TerminalJumper {
               let appURL = app.bundleURL,
               let handle = OrcaLocator.terminalHandle(of: pid),
               runCLI(appURL.appendingPathComponent("Contents/Resources/bin/orca").path,
-                     ["terminal", "switch", "--terminal", handle, "--json"]) != nil
+                     ["terminal", "switch", "--terminal", handle, "--json"]) != nil,
+              bringForward(app)
         else { return nil }
-        // `app.activate()` returned true here and left another app in front.
-        NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration())
         return "Orca"
     }
 
