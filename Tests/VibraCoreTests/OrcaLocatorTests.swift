@@ -76,4 +76,48 @@ struct OrcaLocatorTests {
     func rejectsAnythingElse(value: String) {
         #expect(OrcaLocator.validHandle(value) == nil)
     }
+
+    @Test func acceptsAnAgentSessionID() {
+        let id = "aaca57dd-9549-4e28-92b3-e9afe0988eb5"
+        #expect(OrcaLocator.validAgentSessionID(id) == id)
+    }
+
+    @Test(arguments: ["", "--json", "aaca57dd", "aaca57dd-9549-4e28-92b3-e9afe0988eb5 --json", "orca_session_id:aaca57dd-9549-4e28-92b3-e9afe0988eb5"])
+    func rejectsAnythingButAnAgentSessionID(value: String) {
+        #expect(OrcaLocator.validAgentSessionID(value) == nil)
+    }
+
+    private func agentShow(places: String) -> Data {
+        Data(#"{"ok":true,"result":{"orcaSessionId":"a","kind":"chat","places":[\#(places)]}}"#.utf8)
+    }
+
+    @Test func readsTheWorktreeAChatIsOpenIn() {
+        let reply = agentShow(places: #"{"kind":"chat","worktreeId":"1ecb0a55::/Users/me/code/app","paneKey":"p"}"#)
+        #expect(OrcaLocator.worktreeID(inAgentShow: reply) == "1ecb0a55::/Users/me/code/app")
+    }
+
+    @Test func aChatOpenInTwoWorktreesNamesNeither() {
+        let reply = agentShow(places: #"{"worktreeId":"a::/one"},{"worktreeId":"b::/two"}"#)
+        #expect(OrcaLocator.worktreeID(inAgentShow: reply) == nil)
+    }
+
+    @Test func aChatResumedInTwoPanesOfOneWorktreeNamesIt() {
+        let reply = agentShow(places: #"{"worktreeId":"a::/one"},{"worktreeId":"a::/one"}"#)
+        #expect(OrcaLocator.worktreeID(inAgentShow: reply) == "a::/one")
+    }
+
+    @Test(arguments: ["", #"{"worktreeId":"folder:fb165388-6814-4dc6-ae71-d3832637d549"}"#, #"{"paneKey":"p"}"#])
+    func aClosedChatOrAFolderWorkspaceNamesNoWorktree(places: String) {
+        #expect(OrcaLocator.worktreeID(inAgentShow: agentShow(places: places)) == nil)
+    }
+
+    @Test func aChatAlsoOpenInAFolderWorkspaceNamesNeither() {
+        let reply = agentShow(places: #"{"worktreeId":"a::/one"},{"worktreeId":"folder:fb165388"}"#)
+        #expect(OrcaLocator.worktreeID(inAgentShow: reply) == nil)
+    }
+
+    @Test func aReplyThatIsNotAnAgentNamesNoWorktree() {
+        #expect(OrcaLocator.worktreeID(inAgentShow: Data(#"{"ok":false,"error":{"code":"not_found"}}"#.utf8)) == nil)
+        #expect(OrcaLocator.worktreeID(inAgentShow: Data("not json".utf8)) == nil)
+    }
 }
